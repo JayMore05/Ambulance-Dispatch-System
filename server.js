@@ -10,17 +10,54 @@ app.use(express.json());
 const frontendPath = __dirname;
 app.use(express.static(frontendPath));
 
-app.get("/", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
-app.get("/index.html", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
-app.get("/driver.html", (req, res) => res.sendFile(path.join(frontendPath, "driver.html")));
+app.get('/api/hospitals', (req, res) => {
+    // category comes from the 11 buttons (e.g., ❤️ Heart Attack)
+    const { category, ayushman_only, lat, lng } = req.query;
+    
+    console.log(`🔎 Searching for: ${category} | Ayushman: ${ayushman_only}`);
 
-const getKmDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
-};
-const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A";
+    // Base Query
+    let query = `
+        SELECT h.*, hd.department 
+        FROM hospitals h 
+        JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
+        WHERE TRIM(hd.department) = TRIM(?)
+    `;
+    
+    let queryParams = [category];
 
+    // Handle Ayushman Filter
+    if (ayushman_only === 'true') {
+        query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
+    }
+
+    // Grouping to prevent duplicates
+    query += " GROUP BY h.hospital_id";
+
+    db.query(query, queryParams, (err, results) => {
+        if (err) {
+            console.error("❌ SQL Query Error:", err);
+            return res.status(500).json({ error: "Database Error", details: err.message });
+        }
+
+        if (!results || results.length === 0) {
+            console.log("⚠️ No hospitals found in DB for:", category);
+            return res.json({ hospitals: [] }); 
+        }
+
+        // Calculate distance and sort
+        const userLat = parseFloat(lat);
+        const userLng = parseFloat(lng);
+
+        const sortedHospitals = results.map(h => {
+            const distance = getKmDistance(userLat, userLng, parseFloat(h.latitude), parseFloat(h.longitude));
+            return { ...h, distance_km: distance.toFixed(2) };
+        }).sort((a, b) => a.distance_km - b.distance_km);
+
+        // Wrap in 'hospitals' object for your frontend
+        res.json({ hospitals: sortedHospitals });
+    });
+});
 // --- PATIENT ROUTES ---
 app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
