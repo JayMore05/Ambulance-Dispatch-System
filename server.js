@@ -10,29 +10,48 @@ app.use(express.json());
 const frontendPath = __dirname;
 app.use(express.static(frontendPath));
 
-app.get("/", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
-app.get("/index.html", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
-app.get("/driver.html", (req, res) => res.sendFile(path.join(frontendPath, "driver.html")));
+app.get("/api/hospitals", (req, res) => {
+    const { condition, ayushman_only, lat, lng } = req.query;
 
-// Safe distance calculator that forces inputs to be numbers
-const getKmDistance = (lat1, lon1, lat2, lon2) => {
-    const rLat1 = parseFloat(lat1) || 0;
-    const rLon1 = parseFloat(lon1) || 0;
-    const rLat2 = parseFloat(lat2) || 0;
-    const rLon2 = parseFloat(lon2) || 0;
+    if (!condition) {
+        return res.json({ hospitals: [] });
+    }
 
-    if (rLat1 === 0 || rLon1 === 0 || rLat2 === 0 || rLon2 === 0) return 0;
+    // 🛑 THE EMOJI STRIPPER: Removes emojis and keeps only text, spaces, and slashes
+    const cleanCondition = condition.replace(/[^\w\s\/\-]/gi, '').trim();
+    
+    console.log(`🔎 Safe Search: "${cleanCondition}"`);
 
-    const R = 6371; 
-    const dLat = (rLat2 - rLat1) * Math.PI / 180; 
-    const dLon = (rLon2 - rLon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rLat1 * Math.PI / 180) * Math.cos(rLat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
-};
+    let query = `
+        SELECT DISTINCT h.* FROM hospitals h 
+        JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
+        WHERE hd.department = ?
+    `;
+    
+    let queryParams = [cleanCondition];
 
-const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A";
+    if (ayushman_only === 'true') {
+        query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
+    }
 
-// ==========================================
+    db.query(query, queryParams, (err, rows) => {
+        if (err) {
+            console.error("❌ SQL Error:", err.message);
+            return res.status(500).json({ error: "Database Error", details: err.message });
+        }
+
+        if (!rows || rows.length === 0) {
+            return res.json({ hospitals: [] }); 
+        }
+
+        const sortedHospitals = rows.map(h => {
+            const distance = getKmDistance(lat, lng, h.latitude, h.longitude);
+            return { ...h, distance_km: distance.toFixed(2) };
+        }).sort((a, b) => a.distance_km - b.distance_km);
+
+        res.json({ hospitals: sortedHospitals });
+    });
+});// ==========================================
 // PATIENT ROUTES
 // ==========================================
 
