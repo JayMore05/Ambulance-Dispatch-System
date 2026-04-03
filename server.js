@@ -29,26 +29,61 @@ app.post("/api/save-user", (req, res) => {
     });
 });
 
-app.get("/api/hospitals", (req, res) => {
-    // 1. Base query
-    let query = `SELECT h.* FROM hospitals h JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id WHERE TRIM(hd.department) = TRIM(?)`;
+app.get('/hospitals', (req, res) => {
+    const { category, ayushman_only, lat, lng } = req.query;
     
-    // 2. THE MISSING LINE: Add the Ayushman filter if the toggle is ON!
-    if (req.query.ayushman_only === 'true') {
+    // 1. Log the search to the Render console so we can see what's happening
+    console.log(`🔎 Searching for: ${category} | Ayushman: ${ayushman_only}`);
+
+    // 2. Base Query (Matches your 11 conditions exactly)
+    let query = `
+        SELECT h.*, hd.department 
+        FROM hospitals h 
+        JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
+        WHERE hd.department = ?
+    `;
+    
+    let queryParams = [category];
+
+    // 3. Handle Ayushman Filter
+    if (ayushman_only === 'true') {
         query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
     }
-    
-    // 3. Grouping to prevent duplicates
-    query += " GROUP BY h.hospital_id";
 
-    db.query(query, [req.query.condition], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!rows) rows = [];
-        const result = rows.map(h => ({ ...h, distance_km: getKmDistance(req.query.lat, req.query.lng, h.latitude, h.longitude).toFixed(2) })).sort((a, b) => a.distance_km - b.distance_km);
-        res.json({ hospitals: result });
+    db.query(query, queryParams, (err, results) => {
+        if (err) {
+            console.error("❌ SQL Query Error:", err);
+            return res.status(500).json({ error: "Database Error", details: err.message });
+        }
+
+        if (results.length === 0) {
+            console.log("⚠️ No hospitals found for this category.");
+            return res.json([]); // Return empty list instead of crashing
+        }
+
+        // 4. Calculate Distance (The Haversine logic)
+        const userLat = parseFloat(lat);
+        const userLng = parseFloat(lng);
+
+        const sortedHospitals = results.map(h => {
+            const distance = calculateDistance(userLat, userLng, h.latitude, h.longitude);
+            return { ...h, distance: distance.toFixed(2) };
+        }).sort((a, b) => a.distance - b.distance);
+
+        res.json(sortedHospitals);
     });
 });
 
+// Helper function to prevent "ReferenceError"
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; 
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
 app.post("/api/bookings", (req, res) => {
     const { user_id, hospital_id, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
     db.query(`INSERT INTO bookings (user_id, hospital_id, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
