@@ -11,48 +11,26 @@ const frontendPath = __dirname;
 app.use(express.static(frontendPath));
 
 app.get("/api/hospitals", (req, res) => {
-    const { condition, ayushman_only, lat, lng } = req.query;
+    console.log("🚨 NUCLEAR TEST ROUTE HIT!");
+    console.log("Params received from phone:", req.query);
 
-    if (!condition) {
-        return res.json({ hospitals: [] });
-    }
-
-    // 🛑 THE EMOJI STRIPPER: Removes emojis and keeps only text, spaces, and slashes
-    const cleanCondition = condition.replace(/[^\w\s\/\-]/gi, '').trim();
-    
-    console.log(`🔎 Safe Search: "${cleanCondition}"`);
-
-    let query = `
-        SELECT DISTINCT h.* FROM hospitals h 
-        JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
-        WHERE hd.department = ?
-    `;
-    
-    let queryParams = [cleanCondition];
-
-    if (ayushman_only === 'true') {
-        query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
-    }
-
-    db.query(query, queryParams, (err, rows) => {
-        if (err) {
-            console.error("❌ SQL Error:", err.message);
-            return res.status(500).json({ error: "Database Error", details: err.message });
-        }
-
-        if (!rows || rows.length === 0) {
-            return res.json({ hospitals: [] }); 
-        }
-
-        const sortedHospitals = rows.map(h => {
-            const distance = getKmDistance(lat, lng, h.latitude, h.longitude);
-            return { ...h, distance_km: distance.toFixed(2) };
-        }).sort((a, b) => a.distance_km - b.distance_km);
-
-        res.json({ hospitals: sortedHospitals });
+    // WE ARE IGNORING THE DATABASE COMPLETELY.
+    // Forcing the server to send this exact data to your phone.
+    return res.json({
+        hospitals: [
+            {
+                hospital_id: 999,
+                name: "🚨 TEST HOSPITAL (DATABASE BYPASSED)",
+                city: "Mumbai",
+                latitude: 19.0760,
+                longitude: 72.8777,
+                distance_km: "1.50",
+                is_gov: 1,
+                accepts_ayushman: 1
+            }
+        ]
     });
-});// ==========================================
-// PATIENT ROUTES
+});// PATIENT ROUTES
 // ==========================================
 
 app.post("/api/save-user", (req, res) => {
