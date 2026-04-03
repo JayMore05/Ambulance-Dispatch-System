@@ -10,53 +10,32 @@ app.use(express.json());
 const frontendPath = __dirname;
 app.use(express.static(frontendPath));
 
-app.get('/api/hospitals', (req, res) => {
-    // 1. CHANGED BACK TO 'condition' TO MATCH YOUR FRONTEND
-    const { condition, ayushman_only, lat, lng } = req.query;
-    
-    console.log(`🔎 Searching for: ${condition} | Ayushman: ${ayushman_only}`);
+app.get("/", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
+app.get("/index.html", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
+app.get("/driver.html", (req, res) => res.sendFile(path.join(frontendPath, "driver.html")));
 
-    // 2. BULLETPROOF SQL: Removed 'hd.department' from SELECT to prevent GROUP BY crashes
-    let query = `
-        SELECT h.* FROM hospitals h 
-        JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
-        WHERE TRIM(hd.department) = TRIM(?)
-    `;
-    
-    let queryParams = [condition];
+// Safe distance calculator that forces inputs to be numbers
+const getKmDistance = (lat1, lon1, lat2, lon2) => {
+    const rLat1 = parseFloat(lat1) || 0;
+    const rLon1 = parseFloat(lon1) || 0;
+    const rLat2 = parseFloat(lat2) || 0;
+    const rLon2 = parseFloat(lon2) || 0;
 
-    // 3. Handle Ayushman Filter
-    if (ayushman_only === 'true') {
-        query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
-    }
+    if (rLat1 === 0 || rLon1 === 0 || rLat2 === 0 || rLon2 === 0) return 0;
 
-    // Grouping to prevent duplicates
-    query += " GROUP BY h.hospital_id";
+    const R = 6371; 
+    const dLat = (rLat2 - rLat1) * Math.PI / 180; 
+    const dLon = (rLon2 - rLon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rLat1 * Math.PI / 180) * Math.cos(rLat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
+};
 
-    db.query(query, queryParams, (err, results) => {
-        if (err) {
-            console.error("❌ SQL Query Error:", err.message);
-            return res.status(500).json({ error: "Database Error", details: err.message });
-        }
+const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A";
 
-        if (!results || results.length === 0) {
-            console.log("⚠️ No hospitals found in DB for:", condition);
-            return res.json({ hospitals: [] }); 
-        }
+// ==========================================
+// PATIENT ROUTES
+// ==========================================
 
-        // 4. Calculate distance safely (Fallbacks added to prevent NaN crashes)
-        const userLat = parseFloat(lat) || 0;
-        const userLng = parseFloat(lng) || 0;
-
-        const sortedHospitals = results.map(h => {
-            const distance = getKmDistance(userLat, userLng, parseFloat(h.latitude) || 0, parseFloat(h.longitude) || 0);
-            return { ...h, distance_km: distance.toFixed(2) };
-        }).sort((a, b) => a.distance_km - b.distance_km);
-
-        // Wrap in 'hospitals' object for your frontend
-        res.json({ hospitals: sortedHospitals });
-    });
-});// --- PATIENT ROUTES ---
 app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
         if (err) return res.status(500).json({ error: "DB Error" });
@@ -64,61 +43,49 @@ app.post("/api/save-user", (req, res) => {
     });
 });
 
-app.get('/hospitals', (req, res) => {
-    const { category, ayushman_only, lat, lng } = req.query;
+app.get("/api/hospitals", (req, res) => {
+    // Uses 'condition' to match what your frontend sends
+    const { condition, ayushman_only, lat, lng } = req.query;
     
-    // 1. Log the search to the Render console so we can see what's happening
-    console.log(`🔎 Searching for: ${category} | Ayushman: ${ayushman_only}`);
+    console.log(`🔎 Searching for: ${condition} | Ayushman: ${ayushman_only}`);
 
-    // 2. Base Query (Matches your 11 conditions exactly)
+    if (!condition) {
+        return res.json({ hospitals: [] });
+    }
+
+    // Uses DISTINCT to prevent MySQL Strict Mode crashes
     let query = `
-        SELECT h.*, hd.department 
-        FROM hospitals h 
+        SELECT DISTINCT h.* FROM hospitals h 
         JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
-        WHERE hd.department = ?
+        WHERE TRIM(hd.department) = TRIM(?)
     `;
     
-    let queryParams = [category];
+    let queryParams = [condition];
 
-    // 3. Handle Ayushman Filter
     if (ayushman_only === 'true') {
         query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
     }
 
-    db.query(query, queryParams, (err, results) => {
+    db.query(query, queryParams, (err, rows) => {
         if (err) {
-            console.error("❌ SQL Query Error:", err);
+            console.error("❌ SQL Query Error:", err.message);
             return res.status(500).json({ error: "Database Error", details: err.message });
         }
 
-        if (results.length === 0) {
-            console.log("⚠️ No hospitals found for this category.");
-            return res.json([]); // Return empty list instead of crashing
+        if (!rows || rows.length === 0) {
+            console.log("⚠️ No hospitals found in DB for:", condition);
+            return res.json({ hospitals: [] }); 
         }
 
-        // 4. Calculate Distance (The Haversine logic)
-        const userLat = parseFloat(lat);
-        const userLng = parseFloat(lng);
+        const sortedHospitals = rows.map(h => {
+            const distance = getKmDistance(lat, lng, h.latitude, h.longitude);
+            return { ...h, distance_km: distance.toFixed(2) };
+        }).sort((a, b) => a.distance_km - b.distance_km);
 
-        const sortedHospitals = results.map(h => {
-            const distance = calculateDistance(userLat, userLng, h.latitude, h.longitude);
-            return { ...h, distance: distance.toFixed(2) };
-        }).sort((a, b) => a.distance - b.distance);
-
-        res.json(sortedHospitals);
+        res.json({ hospitals: sortedHospitals });
     });
 });
 
-// Helper function to prevent "ReferenceError"
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; 
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
 app.post("/api/bookings", (req, res) => {
     const { user_id, hospital_id, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
     db.query(`INSERT INTO bookings (user_id, hospital_id, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
@@ -139,7 +106,6 @@ app.get("/api/user/eta", (req, res) => {
         
         const b = rows[0];
 
-        // 🛑 NEW LOGIC: If no driver has accepted yet, tell the frontend to keep waiting
         if (b.status === 'REQUESTED') {
             return res.json({ status: 'SEARCHING', message: "Still looking for drivers..." });
         }
@@ -152,7 +118,6 @@ app.get("/api/user/eta", (req, res) => {
             return res.json({ status: 'COMPLETED', final_cost: totalCost, distance: distKm.toFixed(2), hospital: b.hospital_name });
         }
 
-        // Only calculate ETA if we actually have a driver location
         const dist = (b.dLat && b.dLng) ? getKmDistance(b.dLat, b.dLng, b.user_latitude, b.user_longitude) : 0;
         res.json({ 
             status: b.status, 
@@ -161,7 +126,11 @@ app.get("/api/user/eta", (req, res) => {
         });
     });
 });
-// --- DRIVER AUTH ---
+
+// ==========================================
+// DRIVER ROUTES
+// ==========================================
+
 app.post("/api/driver/request-otp", (req, res) => {
     const { phone, isRegister } = req.body;
     db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
@@ -211,7 +180,6 @@ app.post("/api/driver/update-profile", (req, res) => {
     });
 });
 
-// --- DISPATCH LOGIC ---
 const activeQuery = `SELECT b.*, u.name AS user_name, u.phone AS user_phone, h.name AS hospital_name, h.latitude AS hosp_lat, h.longitude AS hosp_lng FROM bookings b JOIN users u ON b.user_id = u.user_id JOIN hospitals h ON b.hospital_id = h.hospital_id`;
 
 app.get("/api/driver/active-mission", (req, res) => {
@@ -231,7 +199,12 @@ app.get("/api/driver/radar", (req, res) => {
 
         const nearby = results.filter(b => getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude) <= 8).map(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            return { ...b, priorityStar: (b.emergency_category.includes('Heart') && (req.query.driverType === 'ALS' || req.query.driverType === 'ECG')), real_eta: Math.max(1, Math.round((dist / 40) * 60)), formatted_time: formatTime(b.booked_at) };
+            return { 
+                ...b, 
+                priorityStar: (b.emergency_category.includes('Heart') && (req.query.driverType === 'ALS' || req.query.driverType === 'ECG')), 
+                real_eta: Math.max(1, Math.round((dist / 40) * 60)), 
+                formatted_time: formatTime(b.booked_at) 
+            };
         });
         res.json({ bookings: nearby });
     });
