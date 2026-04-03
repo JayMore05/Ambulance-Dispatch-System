@@ -1,0 +1,24 @@
+{
+  "name": "jay88",
+  "version": "1.0.0",
+  "description": "Emergency Ambulance Booking System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "ambulance",
+    "emergency",
+    "nodejs"
+  ],
+  "author": "Jay More",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "mysql2": "^3.17.2",
+    "node": "^25.6.1",
+    "server.js": "^1.0.0"
+  }
+}
