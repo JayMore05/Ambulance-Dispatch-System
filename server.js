@@ -52,8 +52,7 @@ app.get("/api/hospitals", (req, res) => {
 
         res.json({ hospitals: sortedHospitals });
     });
-});// ==========================================
-
+});
 app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
         if (err) return res.status(500).json({ error: "DB Error" });
