@@ -10,49 +10,38 @@ app.use(express.json());
 const frontendPath = __dirname;
 app.use(express.static(frontendPath));
 
-app.get("/api/hospitals", (req, res) => {
-    const { condition, ayushman_only, lat, lng } = req.query;
+app.get("/", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
+app.get("/index.html", (req, res) => res.sendFile(path.join(frontendPath, "index.html")));
+app.get("/driver.html", (req, res) => res.sendFile(path.join(frontendPath, "driver.html")));
 
-    if (!condition) {
-        return res.json({ hospitals: [] });
-    }
+const getKmDistance = (lat1, lon1, lat2, lon2) => {
+    const rLat1 = parseFloat(lat1) || 0;
+    const rLon1 = parseFloat(lon1) || 0;
+    const rLat2 = parseFloat(lat2) || 0;
+    const rLon2 = parseFloat(lon2) || 0;
+    if (rLat1 === 0 || rLon1 === 0 || rLat2 === 0 || rLon2 === 0) return 0;
 
-    // 🛡️ THE SHIELD: This line automatically deletes emojis from the frontend search
-    // So "❤️ Heart Attack" becomes just "Heart Attack" before it hits the DB!
-    const cleanCondition = condition.replace(/[^\w\s\/\-]/gi, '').trim();
-    
-    console.log(`🔎 Searching DB for: "${cleanCondition}"`);
+    const R = 6371; 
+    const dLat = (rLat2 - rLat1) * Math.PI / 180; 
+    const dLon = (rLon2 - rLon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rLat1 * Math.PI / 180) * Math.cos(rLat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
+};
 
-    let query = `
-        SELECT DISTINCT h.* FROM hospitals h 
-        JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
-        WHERE hd.department = ?
-    `;
-    
-    let queryParams = [cleanCondition];
+const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A";
 
-    if (ayushman_only === 'true') {
-        query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
-    }
+// Helper function to process and sort hospitals
+function processAndSort(rows, userLat, userLng) {
+    return rows.map(h => {
+        const distance = getKmDistance(userLat, userLng, h.latitude, h.longitude);
+        return { ...h, distance_km: distance.toFixed(2) };
+    }).sort((a, b) => a.distance_km - b.distance_km);
+}
 
-    db.query(query, queryParams, (err, rows) => {
-        if (err) {
-            console.error("❌ SQL Error:", err.message);
-            return res.status(500).json({ error: "Database Error" });
-        }
+// ==========================================
+// PATIENT ROUTES
+// ==========================================
 
-        if (!rows || rows.length === 0) {
-            return res.json({ hospitals: [] }); 
-        }
-
-        const sortedHospitals = rows.map(h => {
-            const distance = getKmDistance(lat, lng, h.latitude, h.longitude);
-            return { ...h, distance_km: distance.toFixed(2) };
-        }).sort((a, b) => a.distance_km - b.distance_km);
-
-        res.json({ hospitals: sortedHospitals });
-    });
-});
 app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
         if (err) return res.status(500).json({ error: "DB Error" });
@@ -61,45 +50,47 @@ app.post("/api/save-user", (req, res) => {
 });
 
 app.get("/api/hospitals", (req, res) => {
-    // Uses 'condition' to match what your frontend sends
     const { condition, ayushman_only, lat, lng } = req.query;
-    
-    console.log(`🔎 Searching for: ${condition} | Ayushman: ${ayushman_only}`);
+
+    // 🛡️ THE SAFETY NET: If anything fails, run this to guarantee hospitals show up
+    const sendFallbackHospitals = () => {
+        let fallbackSQL = "SELECT * FROM hospitals";
+        if (ayushman_only === 'true') {
+            fallbackSQL += " WHERE accepts_ayushman = 1 OR is_gov = 1";
+        }
+        db.query(fallbackSQL, (err, allHospitals) => {
+            if (err || !allHospitals) return res.json({ hospitals: [] });
+            res.json({ hospitals: processAndSort(allHospitals, lat, lng) });
+        });
+    };
 
     if (!condition) {
-        return res.json({ hospitals: [] });
+        return sendFallbackHospitals();
     }
 
-    // Uses DISTINCT to prevent MySQL Strict Mode crashes
+    // Strip emojis and use a flexible LIKE match
+    const cleanCondition = condition.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    
     let query = `
         SELECT DISTINCT h.* FROM hospitals h 
         JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
-        WHERE TRIM(hd.department) = TRIM(?)
+        WHERE hd.department LIKE ?
     `;
-    
-    let queryParams = [condition];
+    let queryParams = [`%${cleanCondition}%`];
 
     if (ayushman_only === 'true') {
         query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
     }
 
     db.query(query, queryParams, (err, rows) => {
-        if (err) {
-            console.error("❌ SQL Query Error:", err.message);
-            return res.status(500).json({ error: "Database Error", details: err.message });
+        // 🚨 IF ZERO RESULTS OR ERROR -> TRIGGER THE SAFETY NET
+        if (err || !rows || rows.length === 0) {
+            console.log("⚠️ Search missed. Triggering Safety Net to show hospitals.");
+            return sendFallbackHospitals();
         }
 
-        if (!rows || rows.length === 0) {
-            console.log("⚠️ No hospitals found in DB for:", condition);
-            return res.json({ hospitals: [] }); 
-        }
-
-        const sortedHospitals = rows.map(h => {
-            const distance = getKmDistance(lat, lng, h.latitude, h.longitude);
-            return { ...h, distance_km: distance.toFixed(2) };
-        }).sort((a, b) => a.distance_km - b.distance_km);
-
-        res.json({ hospitals: sortedHospitals });
+        // If exact matches found, send them
+        res.json({ hospitals: processAndSort(rows, lat, lng) });
     });
 });
 
@@ -209,7 +200,6 @@ app.get("/api/driver/active-mission", (req, res) => {
 app.get("/api/driver/radar", (req, res) => {
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booked_at DESC`, (err, results) => {
         if (err) {
-            console.error("Radar Error:", err.message);
             return res.status(500).json({ error: "Radar failed." });
         }
         if (!results) results = [];
@@ -254,10 +244,7 @@ app.post("/api/driver/complete", (req, res) => {
 
 app.get("/api/driver/history", (req, res) => {
     db.query(`SELECT b.*, u.name AS user_name, h.name AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.driver_id = ? AND b.status = 'COMPLETED' ORDER BY b.completed_at DESC LIMIT 10`, [req.query.driver_id], (err, results) => {
-        if (err) {
-            console.error("History Error:", err.message);
-            return res.json({ history: [] });
-        }
+        if (err) return res.json({ history: [] });
         if (!results) results = [];
 
         res.json({ history: results.map(h => {
