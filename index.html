@@ -15,7 +15,6 @@
     body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 40px; }
     .container { width: 100%; max-width: 600px; margin: auto; padding: 16px; }
     
-    /* Topbar */
     .topbar { position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); z-index: 10; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
     .brand { font-weight: 800; font-size: 1.2rem; color: var(--primary); }
     .call-btn { background: var(--primary); color: white; padding: 8px 16px; border-radius: 999px; text-decoration: none; font-weight: bold; font-size: 14px; }
@@ -23,7 +22,6 @@
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 16px; }
     p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
     
-    /* Native Page Header with Top Back Arrow */
     .page-header { display: flex; align-items: center; margin-bottom: 12px; }
     .page-header h1 { margin: 0; font-size: 20px; }
     .back-icon { background: none; border: none; font-size: 20px; margin-right: 12px; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; transition: background 0.2s; }
@@ -108,6 +106,7 @@
       <button class="list-item" onclick="selectEmergency('Pregnancy')">🤰 Pregnancy / Labor</button>
       <button class="list-item" style="grid-column: span 2;" onclick="selectEmergency('General Sickness')">🤒 General Sickness / High Fever</button>
     </div>
+    
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
   </div>
 
@@ -221,7 +220,6 @@
   };
   let pollInterval = null;
 
-  // FIX 2: Updated bestFor array so the Recommended badge works with the new search terms
   const ambulanceDatabase = [
     { type: "NORMAL", name: "🚑 Normal Ambulance", rate: 20, bestFor: ["General Sickness", "Fracture", "Bleeding"] },
     { type: "NURSE", name: "👩‍⚕️ Ambulance with Nurse", rate: 25, bestFor: ["Pregnancy", "Burns"] },
@@ -288,7 +286,6 @@
     const list = document.getElementById('hospitalList');
     list.innerHTML = "<p>Scanning nearby hospitals with the right departments...</p>";
     
-    // THE TOGGLE: This reads 'true' or 'false' correctly
     const isAyushman = document.getElementById('ayushmanToggle').checked;
     const url = `${BASE_URL}/api/hospitals?lat=${state.userLat}&lng=${state.userLng}&ayushman_only=${isAyushman}&condition=${encodeURIComponent(state.emergency)}`;
     
@@ -303,7 +300,8 @@
 
       list.innerHTML = "";
       data.hospitals.slice(0, 10).forEach(h => {
-        const badge = (h.is_gov || h.accepts_ayushman) ? "<span class='badge green'>✅ PM-JAY Free</span>" : "";
+        // Bulletproof check to see if it's a PM-JAY hospital
+        const badge = (h.is_gov == 1 || h.accepts_ayushman == 1) ? "<span class='badge green'>✅ PM-JAY Free</span>" : "";
         const safeName = h.name.replace(/'/g, "\\'");
         
         list.innerHTML += `
