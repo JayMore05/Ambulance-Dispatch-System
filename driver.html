@@ -361,6 +361,16 @@
   }
 
   async function fetchRadar() {
+    // Inside fetchRadar function
+if(data.bookings && data.bookings.length > 0) {
+    if (data.bookings.length > lastEmergencyCount) {
+        let beep = document.getElementById('alertBeep');
+        beep.muted = false; // Ensure it's not muted
+        beep.play().catch(e => console.log("Click the screen once to enable sound"));
+    }
+    lastEmergencyCount = data.bookings.length;
+    // ... rest of code
+}
     if(!driver.isOnline || driver.activeBookingId) return;
     try {
       const res = await fetch(`${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}`);
