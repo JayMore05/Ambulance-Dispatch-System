@@ -237,5 +237,12 @@ app.get("/api/driver/history", (req, res) => {
         })});
     });
 });
+app.post("/api/bookings/cancel", (req, res) => {
+    const { booking_id } = req.body;
+    db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [booking_id], (err) => {
+        if (err) return res.status(500).json({ success: false });
+        res.json({ success: true });
+    });
+});
 
 app.listen(4000, () => console.log(`🚀 Final Production Server live on Port 4000`));
