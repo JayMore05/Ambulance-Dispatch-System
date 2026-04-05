@@ -332,7 +332,28 @@
       goStep(6); 
   }
 
-  function closeReceipt() { driver.activeBookingId = null; totalDrivenKm = 0; baseDistance = 0; navTab(2, document.querySelectorAll('.nav-item')[0]); }
+  function closeReceipt() { 
+      // 1. Reset mission data
+      driver.activeBookingId = null; 
+      totalDrivenKm = 0; 
+      baseDistance = 0; 
+      
+      // 2. Force UI back to Step 2 (Radar)
+      goStep(2);
+      
+      // 3. Force the pulse animation to turn back on
+      document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
+      document.querySelector('.pulse').style.display = "flex"; 
+      
+      // 4. Restart the 5-second scanning loop
+      fetchRadar(); 
+      if(radarInterval) clearInterval(radarInterval);
+      radarInterval = setInterval(fetchRadar, 5000);
+      
+      // 5. Highlight the Radar tab at the bottom
+      document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.nav-item')[0].classList.add('active');
+  }
 
   async function loadHistory() {
     const list = document.getElementById('historyList'); list.innerHTML = "Loading history...";
