@@ -208,19 +208,35 @@
 
 <audio id="alertBeep" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
 
+// --- KEEP ALL YOUR CSS AND HTML TAGS EXACTLY THE SAME ---
+// --- ONLY REPLACE THE SCRIPT SECTION AT THE BOTTOM WITH THIS ---
+
 <script>
-  const BASE_URL = window.location.origin
-  let driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true };
+  const BASE_URL = window.location.origin;
+  // Load driver from local storage so they stay logged in on refresh
+  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true };
   let radarInterval = null;
   let isRegisterMode = false;
   let lastEmergencyCount = 0;
   let pendingAcceptData = null; 
 
   window.onload = () => {
+    if (driver.id) {
+        // Resume session if driver exists
+        document.getElementById('navToggle').style.display = 'flex';
+        document.getElementById('bottomNav').style.display = 'flex';
+        checkActiveMission();
+    }
+    
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => { driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; },
-        err => { console.log("Using default location"); }
+      navigator.geolocation.watchPosition(
+        pos => { 
+            driver.lat = pos.coords.latitude; 
+            driver.lng = pos.coords.longitude; 
+            console.log("GPS Updated:", driver.lat, driver.lng);
+        },
+        err => { console.log("Location access denied."); },
+        { enableHighAccuracy: true }
       );
     }
   };
@@ -234,12 +250,13 @@
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
     goStep(stepNum);
+    if(stepNum === 2) fetchRadar();
     if(stepNum === 4) loadHistory();
     if(stepNum === 5) { 
-      document.getElementById('editName').value=driver.name; 
-      document.getElementById('editPhone').value=driver.phone; 
-      document.getElementById('editVehicle').value=driver.vehicle_num; 
-      document.getElementById('editType').value = driver.type || 'NORMAL'; 
+      document.getElementById('editName').value = driver.name || ''; 
+      document.getElementById('editPhone').value = driver.phone || ''; 
+      document.getElementById('editVehicle').value = driver.vehicle_num || ''; 
+      document.getElementById('editType').value = driver.type || 'ALS'; 
     }
   }
 
@@ -254,7 +271,11 @@
     const phone = document.getElementById('authPhone').value;
     if (!phone) return alert("Enter phone number.");
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone, isRegister: isRegisterMode }) });
+      const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ phone, isRegister: isRegisterMode }) 
+      });
       const data = await res.json();
       if (res.ok) {
         document.getElementById('loginForm').classList.add('hidden');
@@ -262,11 +283,6 @@
         document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`;
       } else { alert("❌ " + data.error); }
     } catch(err) { alert("Server error."); }
-  }
-
-  function cancelLogin() {
-    document.getElementById('otpForm').classList.add('hidden');
-    document.getElementById('loginForm').classList.remove('hidden');
   }
 
   async function verifyOTP() {
@@ -277,10 +293,15 @@
     const type = document.getElementById('regType').value;
 
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone, otp, isRegister: isRegisterMode, name, vehicle_num, ambulance_type: type }) });
+      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ phone, otp, isRegister: isRegisterMode, name, vehicle_num, ambulance_type: type }) 
+      });
       const data = await res.json();
       if (data.driver_id) {
         driver = { ...driver, id: data.driver_id, type: data.ambulance_type, name: data.name, phone: data.phone, vehicle_num: data.ambulance_number, isOnline: true };
+        localStorage.setItem('driver_session', JSON.stringify(driver)); // Save Session
         document.getElementById('navToggle').style.display = 'flex';
         document.getElementById('bottomNav').style.display = 'flex';
         checkActiveMission();
@@ -294,23 +315,34 @@
     document.getElementById('toggleText').style.color = driver.isOnline ? "var(--success)" : "var(--muted)";
     
     if(driver.isOnline) {
-      document.getElementById('radarTitle').innerText = "Scanning 8km Radius...";
+      document.getElementById('radarTitle').innerText = "Scanning 15km Radius...";
       document.querySelector('.pulse').style.display = "flex";
-      fetchRadar(); radarInterval = setInterval(fetchRadar, 3000);
+      fetchRadar(); 
+      radarInterval = setInterval(fetchRadar, 5000);
     } else {
       document.getElementById('radarTitle').innerText = "You are Offline";
       document.querySelector('.pulse').style.display = "none";
       document.getElementById('emergencyList').innerHTML = "";
       clearInterval(radarInterval);
     }
-    fetch(`${BASE_URL}/api/driver/toggle-status`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ driver_id: driver.id, status: driver.isOnline?'ONLINE':'OFFLINE' }) });
+    fetch(`${BASE_URL}/api/driver/toggle-status`, { 
+        method:"POST", 
+        headers:{"Content-Type":"application/json"}, 
+        body: JSON.stringify({ driver_id: driver.id, status: driver.isOnline?'ONLINE':'OFFLINE' }) 
+    });
   }
 
   async function checkActiveMission() {
     const res = await fetch(`${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}`);
     const data = await res.json();
-    if(data.hasMission) setupActiveMissionUI(data.mission);
-    else { goStep(2); fetchRadar(); radarInterval = setInterval(fetchRadar, 3000); }
+    if(data.hasMission) {
+        clearInterval(radarInterval);
+        setupActiveMissionUI(data.mission);
+    } else { 
+        goStep(2); 
+        fetchRadar(); 
+        if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
+    }
   }
 
   function setupActiveMissionUI(m) {
@@ -320,6 +352,7 @@
     document.getElementById('missionHospital').innerText = m.hospital_name;
     document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
     
+    // Fixed Google Maps URL syntax
     const patientMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${m.user_latitude},${m.user_longitude}`;
     document.getElementById('navToPatient').href = patientMapUrl;
 
@@ -327,17 +360,24 @@
     const hospitalMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${hospDest}`;
     document.getElementById('navToHospital').href = hospitalMapUrl;
 
-    document.getElementById('phase1Box').classList.remove('hidden');
-    document.getElementById('phase2Box').classList.add('hidden');
+    // Check if driver was already in Phase 2
+    if(m.status === 'IN_TRANSIT') {
+        document.getElementById('phase1Box').classList.add('hidden');
+        document.getElementById('phase2Box').classList.remove('hidden');
+    } else {
+        document.getElementById('phase1Box').classList.remove('hidden');
+        document.getElementById('phase2Box').classList.add('hidden');
+    }
     goStep(3);
   }
 
   async function fetchRadar() {
-    if(!driver.isOnline) return;
+    if(!driver.isOnline || driver.activeBookingId) return;
     try {
       const res = await fetch(`${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}`);
       const data = await res.json();
-      const list = document.getElementById('emergencyList'); list.innerHTML = "";
+      const list = document.getElementById('emergencyList'); 
+      list.innerHTML = "";
       
       if(data.bookings && data.bookings.length > 0) {
         if (data.bookings.length > lastEmergencyCount) document.getElementById('alertBeep').play();
@@ -348,18 +388,25 @@
           const safeHosp = b.hospital_name.replace(/'/g, "\\'");
           const safeCond = b.emergency_category.replace(/'/g, "\\'");
 
-          const btnHtml = `<button class="btn primary" style="margin-top:12px;" onclick="promptModal(${b.booking_id}, '${safeName}', '${b.user_phone}', '${safeCond}', '${safeHosp}', ${b.user_latitude}, ${b.user_longitude}, ${b.hosp_lat || null}, ${b.hosp_lng || null})">ACCEPT EMERGENCY</button>`;
-          
-          list.innerHTML += `<div class="request-card">
+          list.innerHTML += `<div class="request-card ${b.priorityStar ? 'priority' : ''}">
             ${b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : ''}
-            <div class="req-header"><div class="req-title">${b.emergency_category}</div><div style="text-align: right;"><div style="font-size: 11px; color: var(--muted);">⏰ ${b.formatted_time}</div><div class="req-dist">📍 ~${b.real_eta} mins</div></div></div>
+            <div class="req-header">
+                <div class="req-title">${b.emergency_category}</div>
+                <div style="text-align: right;">
+                    <div style="font-size: 11px; color: var(--muted);">⏰ ${b.formatted_time}</div>
+                    <div class="req-dist">📍 ~${b.real_eta} mins</div>
+                </div>
+            </div>
             <div class="req-detail"><strong>Patient:</strong> ${b.user_name}</div>
             <div class="req-detail"><strong>Dropoff:</strong> ${b.hospital_name}</div>
-            ${btnHtml}
+            <button class="btn primary" style="margin-top:12px;" onclick="promptModal(${b.booking_id}, '${safeName}', '${b.user_phone}', '${safeCond}', '${safeHosp}', ${b.user_latitude}, ${b.user_longitude}, ${b.hosp_lat || 0}, ${b.hosp_lng || 0})">ACCEPT EMERGENCY</button>
           </div>`;
         });
-      } else { lastEmergencyCount = 0; }
-    } catch(err) {}
+      } else { 
+          list.innerHTML = `<p style="text-align:center; color:var(--muted); margin-top:20px;">No emergencies in range.</p>`;
+          lastEmergencyCount = 0; 
+      }
+    } catch(err) { console.error("Radar Error:", err); }
   }
 
   function promptModal(id, name, phone, cond, hosp, uLat, uLng, hLat, hLng) {
@@ -379,49 +426,63 @@
     if(!pendingAcceptData) return;
     document.getElementById('dispatchModal').classList.add('hidden');
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/accept`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) });
+      const res = await fetch(`${BASE_URL}/api/driver/accept`, { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
+      });
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok) {
         clearInterval(radarInterval);
         setupActiveMissionUI(pendingAcceptData);
-      } else { alert("❌ " + (data.error || "Could not accept booking.")); fetchRadar(); }
+      } else { alert("❌ " + (data.error || "Someone else accepted this.")); fetchRadar(); }
     } catch(err) { alert("Connection Error."); }
   }
 
   async function switchToPhase2() {
     try {
-      await fetch(`${BASE_URL}/api/driver/pickup`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId }) });
-      document.getElementById('phase1Box').classList.add('hidden');
-      document.getElementById('phase2Box').classList.remove('hidden');
+      const res = await fetch(`${BASE_URL}/api/driver/pickup`, { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ booking_id: driver.activeBookingId }) 
+      });
+      if(res.ok) {
+        document.getElementById('phase1Box').classList.add('hidden');
+        document.getElementById('phase2Box').classList.remove('hidden');
+      }
     } catch(err) { alert("Network Error"); }
   }
 
   async function completeTrip() {
     try {
-      await fetch(`${BASE_URL}/api/driver/complete`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId }) });
-      
-      document.getElementById('successModal').classList.remove('hidden');
-      driver.activeBookingId = null;
-      navTab(2, document.querySelectorAll('.nav-item')[0]); 
-      fetchRadar(); radarInterval = setInterval(fetchRadar, 3000);
-    } catch(err) {}
+      const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ booking_id: driver.activeBookingId }) 
+      });
+      if(res.ok) {
+          document.getElementById('successModal').classList.remove('hidden');
+          driver.activeBookingId = null;
+      }
+    } catch(err) { alert("Failed to complete trip."); }
   }
 
   function closeSuccessModal() {
     document.getElementById('successModal').classList.add('hidden');
+    navTab(2, document.querySelectorAll('.nav-item')[0]); 
+    fetchRadar(); 
+    if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000);
   }
 
   async function loadHistory() {
-    const list = document.getElementById('historyList'); list.innerHTML = "Loading...";
+    const list = document.getElementById('historyList'); 
+    list.innerHTML = "Loading history...";
     const res = await fetch(`${BASE_URL}/api/driver/history?driver_id=${driver.id}`);
     const data = await res.json();
-    if(data.history.length === 0) return list.innerHTML = "<p>No completed missions.</p>";
+    if(!data.history || data.history.length === 0) return list.innerHTML = "<p>No completed missions.</p>";
     list.innerHTML = "";
     
     data.history.forEach(h => { 
-      const pName = h.user_name || "Unknown Patient";
-      const cost = h.total_cost > 0 ? h.total_cost : 0;
-
       list.innerHTML += `
         <div class="request-card" style="cursor:pointer;" onclick="document.getElementById('hist-${h.booking_id}').classList.toggle('hidden')">
           <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -432,29 +493,45 @@
           <div class="req-detail">Dropoff: ${h.hospital_name}</div>
           
           <div id="hist-${h.booking_id}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
-             <div class="req-detail"><strong>Patient:</strong> ${pName}</div>
+             <div class="req-detail"><strong>Patient:</strong> ${h.user_name}</div>
              <div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${h.time_booked}</div>
              <div class="req-detail"><strong>📍 Picked Up:</strong> ${h.time_picked}</div>
              <div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.time_dropped}</div>
-             <div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${cost}</div>
+             <div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.total_cost}</div>
           </div>
         </div>`; 
     });
   }
 
   async function saveProfile() {
-    const p = { driver_id: driver.id, name: document.getElementById('editName').value, phone: document.getElementById('editPhone').value, ambulance_number: document.getElementById('editVehicle').value, ambulance_type: document.getElementById('editType').value };
-    const res = await fetch(`${BASE_URL}/api/driver/update-profile`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(p) });
-    if(res.ok) { driver = {...driver, name: p.name, phone: p.phone, vehicle_num: p.ambulance_number, type: p.ambulance_type}; alert("Saved!"); }
+    const p = { 
+        driver_id: driver.id, 
+        name: document.getElementById('editName').value, 
+        phone: document.getElementById('editPhone').value, 
+        ambulance_number: document.getElementById('editVehicle').value, 
+        ambulance_type: document.getElementById('editType').value 
+    };
+    const res = await fetch(`${BASE_URL}/api/driver/update-profile`, { 
+        method: "POST", 
+        headers: {"Content-Type":"application/json"}, 
+        body: JSON.stringify(p) 
+    });
+    if(res.ok) { 
+        driver = {...driver, name: p.name, phone: p.phone, vehicle_num: p.ambulance_number, type: p.ambulance_type}; 
+        localStorage.setItem('driver_session', JSON.stringify(driver));
+        alert("Profile Updated Successfully!"); 
+    }
   }
 
   function logout() {
-    if(!confirm("Are you sure?")) return;
+    if(!confirm("Are you sure? All session data will be cleared.")) return;
     clearInterval(radarInterval);
+    localStorage.removeItem('driver_session');
     driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false };
     document.getElementById('navToggle').style.display = 'none';
     document.getElementById('bottomNav').style.display = 'none';
-    cancelLogin(); goStep(1);
+    cancelLogin(); 
+    goStep(1);
   }
 </script>
 </body>
