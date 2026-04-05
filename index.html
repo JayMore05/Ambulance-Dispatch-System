@@ -8,7 +8,6 @@
     :root {
       --bg: #f4f6f8; --card: #ffffff; --border: #e0e0e0;
       --primary: #e53935; --success: #2e7d32; --text: #1a1a1a;
-      
       --muted: #666; --highlight: #fff3f3;
     }
     
@@ -26,14 +25,11 @@
     .page-header { display: flex; align-items: center; margin-bottom: 12px; }
     .page-header h1 { margin: 0; font-size: 20px; }
     .back-icon { background: none; border: none; font-size: 20px; margin-right: 12px; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; transition: background 0.2s; }
-    .back-icon:active { background: #f0f0f0; }
     
     label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
     input { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--border); font-size: 16px; outline: none; }
-    input:focus { border-color: var(--primary); }
     
     .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.1s; display: block; text-align: center; }
-    .btn:active { transform: scale(0.98); }
     .btn.primary { background: var(--primary); color: #fff; }
     .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
     
@@ -92,8 +88,6 @@
       <button class="back-icon" onclick="goBack()">⬅️</button>
       <h1>What is the Emergency?</h1>
     </div>
-    <p>Select the condition so we can alert the right specialists.</p>
-    
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
       <button class="list-item" onclick="selectEmergency('Heart Attack')">❤️ Heart Attack</button>
       <button class="list-item" onclick="selectEmergency('Road Accident')">🚗 Road Accident</button>
@@ -105,9 +99,8 @@
       <button class="list-item" onclick="selectEmergency('Poison')">🐍 Poison / Snake</button>
       <button class="list-item" onclick="selectEmergency('Burns')">🔥 Severe Burns</button>
       <button class="list-item" onclick="selectEmergency('Pregnancy')">🤰 Pregnancy / Labor</button>
-      <button class="list-item" style="grid-column: span 2;" onclick="selectEmergency('General Sickness')">🤒 General Sickness / High Fever</button>
+      <button class="list-item" style="grid-column: span 2;" onclick="selectEmergency('General Sickness')">🤒 General Sickness</button>
     </div>
-    
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
   </div>
 
@@ -116,18 +109,16 @@
       <button class="back-icon" onclick="goBack()">⬅️</button>
       <h1>Choose Destination</h1>
     </div>
-    
     <div class="toggle-box">
-      <div class="text">✅ Show Free / Ayushman Hospitals Only</div>
+      <div class="text">✅ Show Ayushman (PM-JAY) Only</div>
       <label class="switch">
         <input type="checkbox" id="ayushmanToggle" onchange="fetchHospitals()">
         <span class="slider"></span>
       </label>
     </div>
     <div id="hospitalList">
-      <p>Loading nearby hospitals matching your condition...</p>
+      <p>Scanning nearby specialists...</p>
     </div>
-    
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
   </div>
 
@@ -136,22 +127,19 @@
       <button class="back-icon" onclick="goBack()">⬅️</button>
       <h1>Select Ambulance</h1>
     </div>
-    <p>We highlighted the best options for your specific emergency.</p>
-    
     <button class="list-item" style="border: 2px solid #f57c00;" onclick="selectAmbulance('ANY', 20)">
-      <div class="title">⚡ Any Available (Fastest Response) <span class="badge fast">Recommended</span></div>
-      <div class="meta">Broadcasts to all nearby drivers. Rate depends on who accepts (₹20-₹40/km).</div>
+      <div class="title">⚡ Any Available (Fastest) <span class="badge fast">Recommended</span></div>
+      <div class="meta">Broadcasts to all nearby drivers. ₹20-₹40/km.</div>
     </button>
     <div id="ambulanceOptions"></div>
-    
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
   </div>
 
   <div id="step5" class="card hidden">
     <div class="radar-box">
       <div class="pulse"></div>
-      <h1>Broadcasting to Ambulances...</h1>
-      <p style="margin-top:10px;">Searching 8km radius for the fastest driver. Please wait.</p>
+      <h1>Broadcasting...</h1>
+      <p>Searching 15km for the fastest driver. Please wait.</p>
     </div>
     <button class="btn ghost" style="color:var(--primary); border-color:var(--primary); margin-top:20px;" onclick="triggerCancelModal()">❌ Cancel Request</button>
   </div>
@@ -168,34 +156,19 @@
     </div>
     <div style="display:flex; gap:10px; margin-top:20px;">
       <a href="tel:112" class="btn primary" style="text-decoration:none; background:#2e7d32;">📞 Call Driver</a>
-      <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="triggerCancelModal()">❌ Cancel</button>
+      <button class="btn ghost" onclick="triggerCancelModal()">❌ Cancel</button>
     </div>
   </div>
 
-</div>
-
-<div id="cancelModal" class="modal-overlay hidden">
-  <div class="modal">
-    <h2 style="margin-top:0;">Are you sure?</h2>
-    <p>This will stop the ambulance search and cancel your emergency request.</p>
-    <div style="display:flex; gap:10px; margin-top:20px;">
-      <button class="btn ghost" onclick="closeCancelModal()">No, Keep it</button>
-      <button class="btn primary" onclick="confirmCancel()">Yes, Cancel</button>
-    </div>
-  </div>
-</div>
-
-<div id="step7" class="card hidden">
+  <div id="step7" class="card hidden">
     <div style="text-align:center; padding: 20px 0;">
       <h1 style="color: var(--success); font-size: 28px; margin:0;">✅ Trip Completed</h1>
       <p style="margin-top:5px; font-weight:bold;">Thank you for using FastRescue.</p>
     </div>
-    
     <div class="list-item" style="cursor:default;">
       <div class="meta">Dropoff Hospital</div>
       <div class="title" id="receiptHospital">--</div>
     </div>
-    
     <div style="background: var(--highlight); padding: 16px; border-radius: 12px; border: 1px solid var(--border); margin-top: 10px;">
       <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
         <span class="meta">Distance Travelled:</span>
@@ -206,193 +179,135 @@
         <strong style="font-size: 22px; color: var(--primary);" id="receiptCost">₹--</strong>
       </div>
     </div>
-    <p style="font-size: 12px; color: var(--muted); text-align:center; margin-top:10px;">*Cost calculated as rounded up distance × ambulance rate.</p>
-    
     <button class="btn ghost" style="margin-top:20px;" onclick="window.location.reload()">Return Home</button>
   </div>
 
-<script>
-  const BASE_URL = window.location.origin
-  let currentStep = 1;
+</div>
 
-  let state = {
-    userLat: null, userLng: null, userId: null, emergency: null, hospitalId: null, 
-    hospitalName: null, ambulanceType: null, distance: 0, rate: 0, bookingId: null
-  };
+<div id="cancelModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2 style="margin-top:0;">Are you sure?</h2>
+    <p>This will stop the ambulance search and cancel your request.</p>
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button class="btn ghost" onclick="closeCancelModal()">No, Keep it</button>
+      <button class="btn primary" onclick="confirmCancel()">Yes, Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE_URL = window.location.origin;
+  let currentStep = 1;
+  let state = { userLat: 19.0760, userLng: 72.8777, userId: null, emergency: null, hospitalId: null, hospitalName: null, ambulanceType: null, distance: 0, rate: 0, bookingId: null };
   let pollInterval = null;
 
   const ambulanceDatabase = [
-    { type: "NORMAL", name: "🚑 Normal Ambulance", rate: 20, bestFor: ["General Sickness", "Fracture", "Bleeding"] },
-    { type: "NURSE", name: "👩‍⚕️ Ambulance with Nurse", rate: 25, bestFor: ["Pregnancy", "Burns"] },
+    { type: "NORMAL", name: "🚑 Normal Ambulance", rate: 20, bestFor: ["General Sickness", "Bleeding"] },
+    { type: "NURSE", name: "👩‍⚕️ Nurse On-Board", rate: 25, bestFor: ["Pregnancy", "Burns"] },
     { type: "ECG", name: "❤️ ECG Ambulance", rate: 30, bestFor: ["Heart Attack"] },
-    { type: "VENTILATOR", name: "🫁 Ventilator Ambulance", rate: 35, bestFor: ["Breathing", "Unconscious", "Poison"] },
-    { type: "ALS", name: "🚨 Advanced Life Support (ALS)", rate: 40, bestFor: ["Heart Attack", "Road Accident", "Stroke"] }
+    { type: "VENTILATOR", name: "🫁 Ventilator Support", rate: 35, bestFor: ["Breathing", "Unconscious"] },
+    { type: "ALS", name: "🚨 ALS Support", rate: 40, bestFor: ["Heart Attack", "Road Accident", "Stroke"] }
   ];
 
- window.onload = () => {
-    const statusEl = document.getElementById('locStatus');
-    
-    statusEl.innerText = "📍 Requesting GPS Access...";
-    statusEl.style.color = "#f57c00";
-
+  window.onload = () => {
     if (navigator.geolocation) {
-        const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                state.userLat = pos.coords.latitude; 
-                state.userLng = pos.coords.longitude;
-                statusEl.innerText = "✅ GPS Location Locked";
-                statusEl.style.color = "var(--success)";
-            },
-            (err) => {
-                console.warn(`ERROR(${err.code}): ${err.message}`);
-                statusEl.innerText = "⚠️ GPS Denied. Using Mumbai Default.";
-                statusEl.style.color = "#e53935";
-                state.userLat = 19.0760; 
-                state.userLng = 72.8777; 
-            }, 
-            geoOptions
-        );
-    } else {
-        statusEl.innerText = "❌ Browser does not support GPS.";
+      navigator.geolocation.getCurrentPosition(pos => {
+        state.userLat = pos.coords.latitude;
+        state.userLng = pos.coords.longitude;
+        document.getElementById('locStatus').innerText = "✅ GPS Location Locked";
+        document.getElementById('locStatus').style.color = "var(--success)";
+      });
     }
-};
-
-  function goStep(n) {
-    currentStep = n;
-    for(let i=1; i<=7; i++) {
-      let el = document.getElementById('step' + i);
-      if(el) el.classList.add('hidden');
-    }
-    document.getElementById('step' + n).classList.remove('hidden');
-  }
-
-  function goBack() {
-    if(currentStep === 2) goStep(1);
-    else if(currentStep === 3) goStep(2);
-    else if(currentStep === 4) goStep(3);
-  }
+  };
 
   async function saveUser() {
     const name = document.getElementById('userName').value;
     const phone = document.getElementById('userPhone').value;
-    if(!name || !phone) return alert("Please enter both your Name and Phone Number.");
-
-    try {
-      const res = await fetch(BASE_URL + "/api/save-user", {
-        method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ name, phone, latitude: state.userLat, longitude: state.userLng })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) { state.userId = data.user_id; goStep(2); } 
-      else { alert("Database Error: " + (data.error || "Could not save user.")); }
-    } catch(err) { alert("🚨 SERVER ERROR: Make sure 'node server.js' is running."); }
+    if(!name || !phone) return alert("Enter details");
+    const res = await fetch(`${BASE_URL}/api/save-user`, {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ name, phone, latitude: state.userLat, longitude: state.userLng })
+    });
+    const data = await res.json();
+    state.userId = data.user_id;
+    goStep(2);
   }
 
-  function selectEmergency(type) {
-    state.emergency = type;
-    goStep(3);
-    fetchHospitals();
-  }
+  function selectEmergency(type) { state.emergency = type; goStep(3); fetchHospitals(); }
 
   async function fetchHospitals() {
-    const list = document.getElementById('hospitalList');
-    list.innerHTML = "<p>Scanning nearby hospitals with the right departments...</p>";
-    
     const isAyushman = document.getElementById('ayushmanToggle').checked;
-    const url = `${BASE_URL}/api/hospitals?lat=${state.userLat}&lng=${state.userLng}&ayushman_only=${isAyushman}&condition=${encodeURIComponent(state.emergency)}`;
-    
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      
-      if(!data.hospitals || data.hospitals.length === 0) {
-        list.innerHTML = "<p style='color:red; font-weight:bold;'>No matching hospitals found for this emergency.</p>";
-        return;
-      }
-
-      list.innerHTML = "";
-      data.hospitals.slice(0, 10).forEach(h => {
-        const badge = (h.is_gov == 1 || h.accepts_ayushman == 1) ? "<span class='badge green'>✅ PM-JAY Free</span>" : "";
-        const safeName = h.name.replace(/'/g, "\\'");
-        
-        list.innerHTML += `
-          <button class="list-item" onclick="selectHospital(${h.hospital_id}, '${safeName}', ${h.distance_km})">
-            <div class="title">${h.name} ${badge}</div>
-            <div class="meta">${h.distance_km} km away • ${h.address || "Maharashtra"}</div>
-          </button>
-        `;
-      });
-    } catch(e) { list.innerHTML = "<p style='color:red;'>🚨 ERROR: Backend disconnected.</p>"; }
+    const res = await fetch(`${BASE_URL}/api/hospitals?lat=${state.userLat}&lng=${state.userLng}&ayushman_only=${isAyushman}&condition=${encodeURIComponent(state.emergency)}`);
+    const data = await res.json();
+    const list = document.getElementById('hospitalList');
+    list.innerHTML = data.hospitals.map(h => `
+      <button class="list-item" onclick="selectHospital(${h.hospital_id}, '${h.name.replace(/'/g, "\\'")}', ${h.distance_km})">
+        <div class="title">${h.name} ${(h.is_gov || h.accepts_ayushman) ? '<span class="badge green">✅ PM-JAY</span>' : ''}</div>
+        <div class="meta">${h.distance_km} km away</div>
+      </button>
+    `).join('');
   }
 
   function selectHospital(id, name, dist) {
     state.hospitalId = id; state.hospitalName = name; state.distance = dist;
-    const ambContainer = document.getElementById('ambulanceOptions');
-    ambContainer.innerHTML = ""; 
-    
-    ambulanceDatabase.forEach(amb => {
-      let isRecommended = amb.bestFor.includes(state.emergency);
-      let badge = isRecommended ? `<span class="badge green">⭐ Recommended</span>` : "";
-      let borderStyle = isRecommended ? `border-left: 4px solid var(--success);` : ``;
-
-      ambContainer.innerHTML += `
-        <button class="list-item" style="${borderStyle}" onclick="selectAmbulance('${amb.type}', ${amb.rate})">
-          <div class="title">${amb.name} ${badge}</div>
-          <div class="meta">₹${amb.rate}/km</div>
-        </button>
-      `;
-    });
+    const container = document.getElementById('ambulanceOptions');
+    container.innerHTML = ambulanceDatabase.map(amb => `
+      <button class="list-item" onclick="selectAmbulance('${amb.type}', ${amb.rate})">
+        <div class="title">${amb.name} ${amb.bestFor.includes(state.emergency) ? '⭐' : ''}</div>
+        <div class="meta">₹${amb.rate}/km</div>
+      </button>
+    `).join('');
     goStep(4);
   }
 
   async function selectAmbulance(type, rate) {
-    state.ambulanceType = type; state.rate = rate; goStep(5); 
-    try {
-      const res = await fetch(BASE_URL + "/api/bookings", {
-        method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          user_id: state.userId, hospital_id: state.hospitalId, emergency_type: state.emergency, 
-          ambulance_type: state.ambulanceType, user_lat: state.userLat, user_lng: state.userLng,
-          distance_km: state.distance, rate_per_km: state.rate
-        })
-      });
-      const data = await res.json();
-      if(data.error) { alert("Database Error: " + data.error); goStep(4); return; }
-      state.bookingId = data.booking_id;
-      pollInterval = setInterval(checkStatus, 3000);
-    } catch(err) { alert("Network Failed. Is your 'node server.js' running?"); goStep(4); }
+    state.ambulanceType = type; state.rate = rate; goStep(5);
+    const res = await fetch(`${BASE_URL}/api/bookings`, {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        user_id: state.userId, hospital_id: state.hospitalId, emergency_type: state.emergency,
+        ambulance_type: type, user_lat: state.userLat, user_lng: state.userLng,
+        distance_km: state.distance, rate_per_km: rate
+      })
+    });
+    const data = await res.json();
+    state.bookingId = data.booking_id;
+    pollInterval = setInterval(checkStatus, 3000);
   }
 
   async function checkStatus() {
-    try {
-      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`);
-      const data = await res.json();
-      
-      // 1. Completion Check
-      if (data.status === 'COMPLETED') {
-        clearInterval(pollInterval);
-        goStep(7); 
-        document.getElementById('receiptHospital').innerText = data.hospital;
-        document.getElementById('receiptDist').innerText = data.distance + " km";
-        document.getElementById('receiptCost').innerText = "₹" + data.final_cost;
-        return;
-      }
-      
-      // 2. Assignment Check (This moves it off the Pulse Screen)
-      if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
-        if(currentStep !== 6) goStep(6);
-        document.getElementById('trackHospital').innerText = state.hospitalName;
-        document.getElementById('etaDist').innerText = data.distance;
-        document.getElementById('etaTime').innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : data.eta + " mins";
-      }
-    } catch(err) { console.error("Poll Error:", err); }
+    if (!state.bookingId) return;
+    const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`);
+    const data = await res.json();
+
+    if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
+      if (currentStep !== 6) goStep(6);
+      document.getElementById('trackHospital').innerText = state.hospitalName;
+      document.getElementById('etaDist').innerText = data.distance;
+      document.getElementById('etaTime').innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : data.eta + " mins";
+    }
+
+    if (data.status === 'COMPLETED') {
+      clearInterval(pollInterval);
+      goStep(7);
+      document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName;
+      document.getElementById('receiptDist').innerText = data.distance + " km";
+      document.getElementById('receiptCost').innerText = "₹" + data.final_cost;
+    }
   }
-  
+
+  function goStep(n) {
+    currentStep = n;
+    [1,2,3,4,5,6,7].forEach(i => {
+      let el = document.getElementById('step' + i);
+      if(el) el.classList.toggle('hidden', i !== n);
+    });
+  }
+
+  function goBack() { goStep(currentStep - 1); }
   function triggerCancelModal() { document.getElementById('cancelModal').classList.remove('hidden'); }
   function closeCancelModal() { document.getElementById('cancelModal').classList.add('hidden'); }
-  function confirmCancel() { alert("Cancelled."); window.location.reload(); }
-  
+  function confirmCancel() { window.location.reload(); }
 </script>
 </body>
 </html>
