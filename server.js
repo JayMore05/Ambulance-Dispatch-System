@@ -56,40 +56,21 @@ const formatTime = (dateString) => {
 // 🏥 PATIENT SIDE APIS
 // ---------------------------------------------------------
 
-app.get("/api/hospitals", (req, res) => {
-    const { condition, ayushman_only, lat, lng } = req.query;
-    const cleanCondition = condition ? condition.replace(/[^\x00-\x7F]/g, "").trim() : "";
+app.post("/api/bookings", (req, res) => {
+    const { user_id, hospital_id, custom_destination, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
     
-    let query = `
-        SELECT DISTINCT h.* FROM hospitals h 
-        INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
-        WHERE hd.department = ?
-    `;
-    let queryParams = [cleanCondition];
-
-    if (ayushman_only === 'true') {
-        query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
-    }
-
-    db.query(query, queryParams, (err, rows) => {
-        if (err) return res.status(500).json({ error: "Database error" });
-
-        if (rows.length === 0) {
-            const fallbackSQL = `
-                SELECT h.* FROM hospitals h 
-                INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
-                WHERE hd.department = 'General Sickness'
-                ${ayushman_only === 'true' ? ' AND (h.accepts_ayushman = 1 OR h.is_gov = 1)' : ''}
-            `;
-            db.query(fallbackSQL, (err2, fallbackRows) => {
-                res.json({ hospitals: processAndSort(fallbackRows || [], lat, lng) });
-            });
-            return;
+    db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+    [user_id, hospital_id || null, custom_destination || null, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km], (err, result) => {
+        
+        // 🔴 CHANGED THIS LINE TO SHOW THE EXACT ERROR 🔴
+        if (err) {
+            console.error("SQL Error during booking:", err.message);
+            return res.status(500).json({ error: err.message });
         }
-        res.json({ hospitals: processAndSort(rows, lat, lng) });
+        
+        res.json({ booking_id: result.insertId });
     });
 });
-
 app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", 
     [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
