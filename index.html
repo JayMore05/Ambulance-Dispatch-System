@@ -228,23 +228,47 @@
     { type: "ALS", name: "🚨 Advanced Life Support (ALS)", rate: 40, bestFor: ["Heart Attack", "Road Accident", "Stroke"] }
   ];
 
-  window.onload = () => {
-    state.userLat = 19.0760; state.userLng = 72.8777;
-    document.getElementById('locStatus').innerText = "⚠️ Desktop Mode: Using Mumbai Default GPS";
-    document.getElementById('locStatus').style.color = "#f57c00";
+ window.onload = () => {
+    const statusEl = document.getElementById('locStatus');
+    
+    // 1. Initial State
+    statusEl.innerText = "📍 Requesting GPS Access...";
+    statusEl.style.color = "#f57c00";
 
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          state.userLat = pos.coords.latitude; state.userLng = pos.coords.longitude;
-          document.getElementById('locStatus').innerText = "✅ Real GPS Location Locked";
-          document.getElementById('locStatus').style.color = "var(--success)";
-        },
-        err => { console.log("Real GPS blocked."); }
-      );
-    }
-  };
+        // 2. Options for high accuracy (essential for mobile testing)
+        const geoOptions = {
+            enableHighAccuracy: true, 
+            timeout: 10000, 
+            maximumAge: 0
+        };
 
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                // 3. Success: Overwrite defaults with real phone data
+                state.userLat = pos.coords.latitude; 
+                state.userLng = pos.coords.longitude;
+                
+                statusEl.innerText = "✅ GPS Location Locked";
+                statusEl.style.color = "var(--success)";
+                console.log(`Location Fetched: ${state.userLat}, ${state.userLng}`);
+            },
+            (err) => {
+                // 4. Failure: If user denies or GPS is off
+                console.warn(`ERROR(${err.code}): ${err.message}`);
+                statusEl.innerText = "⚠️ GPS Denied. Using Mumbai Default.";
+                statusEl.style.color = "#e53935";
+                
+                // Fallback to Mumbai if real GPS is unavailable
+                state.userLat = 19.0760; 
+                state.userLng = 72.8777; 
+            }, 
+            geoOptions
+        );
+    } else {
+        statusEl.innerText = "❌ Browser does not support GPS.";
+    }
+};
   function goStep(n) {
     currentStep = n;
     for(let i=1; i<=7; i++) {
