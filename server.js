@@ -115,27 +115,43 @@ app.post("/api/bookings/cancel", (req, res) => {
 });
 
 app.get("/api/user/eta", (req, res) => {
-    db.query(`SELECT b.*, h.name AS hospital_name, dl.latitude AS dLat, dl.longitude AS dLng 
-              FROM bookings b 
-              LEFT JOIN driver_locations dl ON b.driver_id = dl.driver_id 
-              JOIN hospitals h ON b.hospital_id = h.hospital_id 
-              WHERE b.booking_id = ?`, [req.query.booking_id], (err, rows) => {
-        
-        if (err || !rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
+    // FIXED: Removed the 'driver_locations' table join that was causing the SQL crash
+    const query = `
+        SELECT b.*, h.name AS hospital_name 
+        FROM bookings b 
+        JOIN hospitals h ON b.hospital_id = h.hospital_id 
+        WHERE b.booking_id = ?
+    `;
+
+    db.query(query, [req.query.booking_id], (err, rows) => {
+        if (err) {
+            console.error("ETA Query Error:", err); // This will show you errors in the terminal now
+            return res.json({ status: 'SEARCHING' });
+        }
+        if (!rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
         
         const b = rows[0];
         const distKm = parseFloat(b.hospital_distance_km) || 0;
         const totalCost = Math.ceil(distKm) * (parseFloat(b.price_per_km) || 0);
 
+        // If the driver finished the trip, send the receipt data
         if(b.status === 'COMPLETED') {
-            return res.json({ status: 'COMPLETED', final_cost: totalCost, distance: distKm.toFixed(2), hospital: b.hospital_name });
+            return res.json({ 
+                status: 'COMPLETED', 
+                final_cost: totalCost, 
+                distance: distKm.toFixed(2), 
+                hospital: b.hospital_name 
+            });
         }
 
-        const dist = (b.dLat && b.dLng) ? getKmDistance(b.dLat, b.dLng, b.user_latitude, b.user_longitude) : 0;
-        res.json({ status: b.status, distance: dist.toFixed(2), eta: dist > 0 ? Math.max(1, Math.round((dist / 40) * 60)) : "Calculating..." });
+        // Send the current status (ASSIGNED, IN_TRANSIT, etc.) so the frontend can change screens
+        res.json({ 
+            status: b.status, 
+            distance: distKm.toFixed(2), 
+            eta: distKm > 0 ? Math.max(1, Math.round((distKm / 40) * 60)) : "Calculating..." 
+        });
     });
 });
-
 // ---------------------------------------------------------
 // 🚑 DRIVER SIDE APIS
 // ---------------------------------------------------------
