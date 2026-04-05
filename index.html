@@ -277,37 +277,64 @@
 
   async function checkStatus() {
     if (!state.bookingId) return;
-    const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`);
-    const data = await res.json();
 
-    if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
-      if (currentStep !== 6) goStep(6);
-      document.getElementById('trackHospital').innerText = state.hospitalName;
-      document.getElementById('etaDist').innerText = data.distance;
-      document.getElementById('etaTime').innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : data.eta + " mins";
-    }
+    try {
+      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`);
+      const data = await res.json();
+      
+      console.log("Database Sync -> Status:", data.status);
 
-    if (data.status === 'COMPLETED') {
-      clearInterval(pollInterval);
-      goStep(7);
-      document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName;
-      document.getElementById('receiptDist').innerText = data.distance + " km";
-      document.getElementById('receiptCost').innerText = "₹" + data.final_cost;
+      // 1. Handle Driver Accepted or Started Driving
+      if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
+        if (currentStep !== 6) {
+           console.log("Transitioning to Tracking Screen (Step 6)");
+           goStep(6);
+        }
+        
+        // Update UI Elements safely
+        const hospEl = document.getElementById('trackHospital');
+        const distEl = document.getElementById('etaDist');
+        const timeEl = document.getElementById('etaTime');
+
+        if(hospEl) hospEl.innerText = state.hospitalName || "Hospital";
+        if(distEl) distEl.innerText = data.distance + " km";
+        if(timeEl) timeEl.innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : data.eta + " mins";
+      }
+
+      // 2. Handle Trip Completed
+      if (data.status === 'COMPLETED') {
+        console.log("Transitioning to Receipt (Step 7)");
+        clearInterval(pollInterval);
+        goStep(7);
+        
+        document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName;
+        document.getElementById('receiptDist').innerText = data.distance + " km";
+        document.getElementById('receiptCost').innerText = "₹" + data.final_cost;
+      }
+    } catch(err) {
+      console.error("Polling Error:", err);
     }
   }
 
   function goStep(n) {
+    console.log("Moving to Step:", n);
     currentStep = n;
-    [1,2,3,4,5,6,7].forEach(i => {
+    
+    // We use a broader loop to ensure all 7 steps are handled
+    for (let i = 1; i <= 7; i++) {
       let el = document.getElementById('step' + i);
-      if(el) el.classList.toggle('hidden', i !== n);
-    });
+      if (el) {
+        if (i === n) {
+          el.classList.remove('hidden'); // Show current
+        } else {
+          el.classList.add('hidden'); // Hide others
+        }
+      }
+    }
+    
+    // Auto-scroll to top so the user sees the new step
+    window.scrollTo(0, 0);
   }
-
-  function goBack() { goStep(currentStep - 1); }
-  function triggerCancelModal() { document.getElementById('cancelModal').classList.remove('hidden'); }
-  function closeCancelModal() { document.getElementById('cancelModal').classList.add('hidden'); }
-  function confirmCancel() { window.location.reload(); }
 </script>
 </body>
 </html>
