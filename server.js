@@ -106,15 +106,29 @@ app.get("/api/user/eta", (req, res) => {
               LEFT JOIN driver_locations dl ON b.driver_id = dl.driver_id 
               JOIN hospitals h ON b.hospital_id = h.hospital_id 
               WHERE b.booking_id = ?`, [req.query.booking_id], (err, rows) => {
+        
         if (err || !rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
+        
         const b = rows[0];
         const distKm = parseFloat(b.hospital_distance_km) || 0;
         const totalCost = Math.ceil(distKm) * (parseFloat(b.price_per_km) || 0);
 
-        if(b.status === 'COMPLETED') return res.json({ status: 'COMPLETED', final_cost: totalCost, distance: distKm.toFixed(2), hospital: b.hospital_name });
+        // This block sends the data the receipt screen needs
+        if(b.status === 'COMPLETED') {
+            return res.json({ 
+                status: 'COMPLETED', 
+                final_cost: totalCost, 
+                distance: distKm.toFixed(2), 
+                hospital: b.hospital_name 
+            });
+        }
 
         const dist = (b.dLat && b.dLng) ? getKmDistance(b.dLat, b.dLng, b.user_latitude, b.user_longitude) : 0;
-        res.json({ status: b.status, distance: dist.toFixed(2), eta: dist > 0 ? Math.max(1, Math.round((dist / 40) * 60)) : "Calculating..." });
+        res.json({ 
+            status: b.status, 
+            distance: dist.toFixed(2), 
+            eta: dist > 0 ? Math.max(1, Math.round((dist / 40) * 60)) : "Calculating..." 
+        });
     });
 });
 
