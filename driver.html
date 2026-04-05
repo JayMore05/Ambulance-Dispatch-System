@@ -219,7 +219,8 @@
 <audio id="alertBeep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
 
 <script>
-  const BASE_URL = window.location.origin;
+  // Change this line in BOTH html files:
+const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
   let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true, rate: 40 };
   let radarInterval = null;
   let isRegisterMode = false;
