@@ -96,17 +96,17 @@
     <p>Select the condition so we can alert the right specialists.</p>
     
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-      <button class="list-item" onclick="selectEmergency('Heart Attack & Cardiology')">❤️ Heart Attack</button>
-      <button class="list-item" onclick="selectEmergency('Road ACcident / Trauma')">🚗 Road Accident</button>
-      <button class="list-item" onclick="selectEmergency('Stroke / Neurology')">🧠 Stroke / Neuro</button>
-      <button class="list-item" onclick="selectEmergency('Critical Emergency')">🫁 Breathing Issue</button>
-      <button class="list-item" onclick="selectEmergency('Critical Emergency')">😵 Unconscious</button>
-      <button class="list-item" onclick="selectEmergency('Road ACcident / Trauma')">🦴 Severe Fracture</button>
-      <button class="list-item" onclick="selectEmergency('Critical Emergency')">🩸 Heavy Bleeding</button>
-      <button class="list-item" onclick="selectEmergency('POISON')">🐍 Poison / Snake</button>
-      <button class="list-item" onclick="selectEmergency('General Emergency')">🔥 Severe Burns</button>
-      <button class="list-item" onclick="selectEmergency('General Emergency')">🤰 Pregnancy / Labor</button>
-      <button class="list-item" style="grid-column: span 2;" onclick="selectEmergency('General Emergency')">🤒 General Sickness / High Fever</button>
+      <button class="list-item" onclick="selectEmergency('Heart Attack')">❤️ Heart Attack</button>
+      <button class="list-item" onclick="selectEmergency('Road Accident')">🚗 Road Accident</button>
+      <button class="list-item" onclick="selectEmergency('Stroke')">🧠 Stroke / Neuro</button>
+      <button class="list-item" onclick="selectEmergency('Breathing')">🫁 Breathing Issue</button>
+      <button class="list-item" onclick="selectEmergency('Unconscious')">😵 Unconscious</button>
+      <button class="list-item" onclick="selectEmergency('Fracture')">🦴 Severe Fracture</button>
+      <button class="list-item" onclick="selectEmergency('Bleeding')">🩸 Heavy Bleeding</button>
+      <button class="list-item" onclick="selectEmergency('Poison')">🐍 Poison / Snake</button>
+      <button class="list-item" onclick="selectEmergency('Burns')">🔥 Severe Burns</button>
+      <button class="list-item" onclick="selectEmergency('Pregnancy')">🤰 Pregnancy / Labor</button>
+      <button class="list-item" style="grid-column: span 2;" onclick="selectEmergency('General Sickness')">🤒 General Sickness / High Fever</button>
     </div>
     
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
@@ -185,6 +185,7 @@
     </div>
   </div>
 </div>
+
 <div id="step7" class="card hidden">
     <div style="text-align:center; padding: 20px 0;">
       <h1 style="color: var(--success); font-size: 28px; margin:0;">✅ Trip Completed</h1>
@@ -221,12 +222,13 @@
   };
   let pollInterval = null;
 
+  // FIX 2: Updated bestFor array so the Recommended badge works with the new search terms
   const ambulanceDatabase = [
-    { type: "NORMAL", name: "🚑 Normal Ambulance", rate: 20, bestFor: ["General Emergency"] },
-    { type: "NURSE", name: "👩‍⚕️ Ambulance with Nurse", rate: 25, bestFor: ["General Emergency", "Pregnancy"] },
-    { type: "ECG", name: "❤️ ECG Ambulance", rate: 30, bestFor: ["Heart Attack & Cardiology"] },
-    { type: "VENTILATOR", name: "🫁 Ventilator Ambulance", rate: 35, bestFor: ["Critical Emergency", "POISON"] },
-    { type: "ALS", name: "🚨 Advanced Life Support (ALS)", rate: 40, bestFor: ["Heart Attack & Cardiology", "Road ACcident / Trauma", "Stroke / Neurology"] }
+    { type: "NORMAL", name: "🚑 Normal Ambulance", rate: 20, bestFor: ["General Sickness", "Fracture", "Bleeding"] },
+    { type: "NURSE", name: "👩‍⚕️ Ambulance with Nurse", rate: 25, bestFor: ["Pregnancy", "Burns"] },
+    { type: "ECG", name: "❤️ ECG Ambulance", rate: 30, bestFor: ["Heart Attack"] },
+    { type: "VENTILATOR", name: "🫁 Ventilator Ambulance", rate: 35, bestFor: ["Breathing", "Unconscious", "Poison"] },
+    { type: "ALS", name: "🚨 Advanced Life Support (ALS)", rate: 40, bestFor: ["Heart Attack", "Road Accident", "Stroke"] }
   ];
 
   window.onload = () => {
@@ -248,14 +250,13 @@
 
   function goStep(n) {
     currentStep = n;
-    for(let i=1; i<=6; i++) {
+    for(let i=1; i<=7; i++) {
       let el = document.getElementById('step' + i);
       if(el) el.classList.add('hidden');
     }
     document.getElementById('step' + n).classList.remove('hidden');
   }
 
-  // Unified Go Back Function (works for both Top and Bottom buttons)
   function goBack() {
     if(currentStep === 2) goStep(1);
     else if(currentStep === 3) goStep(2);
@@ -288,6 +289,7 @@
     const list = document.getElementById('hospitalList');
     list.innerHTML = "<p>Scanning nearby hospitals with the right departments...</p>";
     
+    // THE TOGGLE: This reads 'true' or 'false' correctly
     const isAyushman = document.getElementById('ayushmanToggle').checked;
     const url = `${BASE_URL}/api/hospitals?lat=${state.userLat}&lng=${state.userLng}&ayushman_only=${isAyushman}&condition=${encodeURIComponent(state.emergency)}`;
     
@@ -355,7 +357,8 @@
       } catch(parseError) { alert("Server Crashed! Error details: " + text.substring(0, 150)); goStep(4); }
     } catch(err) { alert("Network Failed. Is your 'node server.js' running?"); goStep(4); }
   }
-async function checkStatus() {
+
+  async function checkStatus() {
     try {
       const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`);
       const data = await res.json();
@@ -377,6 +380,7 @@ async function checkStatus() {
       }
     } catch(err) {}
   }
+  
   function triggerCancelModal() { document.getElementById('cancelModal').classList.remove('hidden'); }
   function closeCancelModal() { document.getElementById('cancelModal').classList.add('hidden'); }
   function confirmCancel() { alert("Cancelled."); window.location.reload(); }
