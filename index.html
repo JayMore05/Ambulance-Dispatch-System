@@ -28,7 +28,7 @@
     .back-icon:active { background: #f0f0f0; }
     
     label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
-    input { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--border); font-size: 16px; outline: none; }
+    input { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--border); font-size: 16px; outline: none; margin-bottom: 10px; }
     input:focus { border-color: var(--primary); }
     
     .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.1s; display: block; text-align: center; }
@@ -117,16 +117,21 @@
       <h1>Choose Destination</h1>
     </div>
     
+    <input type="text" id="hospSearch" onkeyup="searchList()" placeholder="🔍 Search hospital name...">
+    
     <div class="toggle-box">
-      <div class="text">✅ Show Free / Ayushman Hospitals Only</div>
+      <div class="text">✅ Show Free / Ayushman Only</div>
       <label class="switch">
         <input type="checkbox" id="ayushmanToggle" onchange="fetchHospitals()">
         <span class="slider"></span>
       </label>
     </div>
+    
     <div id="hospitalList">
       <p>Loading nearby hospitals matching your condition...</p>
     </div>
+    
+    <button class="btn ghost" style="border-color:var(--primary); color:var(--primary); margin-top:10px;" onclick="customHospital()">➕ Not Listed? Enter Custom</button>
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
   </div>
 
@@ -165,8 +170,8 @@
       <div class="title" id="trackHospital">Loading...</div>
     </div>
     <div style="display:flex; gap:10px; margin-top:20px;">
-      <a href="tel:112" class="btn primary" style="text-decoration:none; background:#2e7d32;">📞 Call Driver</a>
-      <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="triggerCancelModal()">❌ Cancel</button>
+      <a href="tel:112" class="btn primary" style="text-decoration:none; background:#2e7d32; width:50%;">📞 Call Driver</a>
+      <button class="btn ghost" style="width:50%;" onclick="changeDestination()">🔄 Change Dest.</button>
     </div>
   </div>
 
@@ -183,7 +188,7 @@
     
     <div style="background: var(--highlight); padding: 16px; border-radius: 12px; border: 1px solid var(--border); margin-top: 10px;">
       <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-        <span class="meta">Distance Travelled:</span>
+        <span class="meta">Actual Distance Driven:</span>
         <strong id="receiptDist">-- km</strong>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed var(--border); padding-top: 12px;">
@@ -191,7 +196,7 @@
         <strong style="font-size: 22px; color: var(--primary);" id="receiptCost">₹--</strong>
       </div>
     </div>
-    <p style="font-size: 12px; color: var(--muted); text-align:center; margin-top:10px;">*Cost calculated as rounded up distance × ambulance rate.</p>
+    <p style="font-size: 12px; color: var(--muted); text-align:center; margin-top:10px;">*Cost calculated dynamically based on actual route taken by driver.</p>
     
     <button class="btn ghost" style="margin-top:20px;" onclick="window.location.reload()">Return Home</button>
   </div>
@@ -215,7 +220,7 @@
 
   let state = {
     userLat: null, userLng: null, userId: null, emergency: null, hospitalId: null, 
-    hospitalName: null, ambulanceType: null, distance: 0, rate: 0, bookingId: null
+    hospitalName: null, customName: null, ambulanceType: null, distance: 0, rate: 0, bookingId: null
   };
   let pollInterval = null;
 
@@ -305,17 +310,17 @@
       const data = await res.json();
       
       if(!data.hospitals || data.hospitals.length === 0) {
-        list.innerHTML = "<p style='color:red; font-weight:bold;'>No matching hospitals found for this emergency.</p>";
+        list.innerHTML = "<p style='color:red; font-weight:bold;'>No matching hospitals found. Try Custom Search.</p>";
         return;
       }
 
       list.innerHTML = "";
-      data.hospitals.slice(0, 10).forEach(h => {
-        const badge = (h.is_gov == 1 || h.accepts_ayushman == 1) ? "<span class='badge green'>✅ PM-JAY Free</span>" : "";
+      data.hospitals.slice(0, 15).forEach(h => {
+        const badge = (h.is_gov == 1 || h.accepts_ayushman == 1) ? "<span class='badge green'>✅ PM-JAY</span>" : "";
         const safeName = h.name.replace(/'/g, "\\'");
         
         list.innerHTML += `
-          <button class="list-item" onclick="selectHospital(${h.hospital_id}, '${safeName}', ${h.distance_km})">
+          <button class="list-item hosp-btn" onclick="selectHospital(${h.hospital_id}, '${safeName}', ${h.distance_km})">
             <div class="title">${h.name} ${badge}</div>
             <div class="meta">${h.distance_km} km away • ${h.address || "Maharashtra"}</div>
           </button>
@@ -324,8 +329,39 @@
     } catch(e) { list.innerHTML = "<p style='color:red;'>🚨 ERROR: Backend disconnected.</p>"; }
   }
 
+  // 🔍 NEW: Search Bar Filter
+  function searchList() {
+    const term = document.getElementById('hospSearch').value.toLowerCase();
+    document.querySelectorAll('.hosp-btn').forEach(btn => {
+        btn.style.display = btn.innerText.toLowerCase().includes(term) ? "block" : "none";
+    });
+  }
+
+  // ➕ NEW: Custom Hospital Alert
+  function customHospital() {
+      const name = prompt("Enter the Name & City of the Hospital/Clinic:");
+      if(name) {
+          state.hospitalId = null;
+          state.customName = name;
+          state.hospitalName = name;
+          state.distance = 5; // Default estimate
+          
+          const ambContainer = document.getElementById('ambulanceOptions');
+          ambContainer.innerHTML = ""; 
+          ambulanceDatabase.forEach(amb => {
+            ambContainer.innerHTML += `
+              <button class="list-item" onclick="selectAmbulance('${amb.type}', ${amb.rate})">
+                <div class="title">${amb.name}</div>
+                <div class="meta">₹${amb.rate}/km</div>
+              </button>
+            `;
+          });
+          goStep(4);
+      }
+  }
+
   function selectHospital(id, name, dist) {
-    state.hospitalId = id; state.hospitalName = name; state.distance = dist;
+    state.hospitalId = id; state.hospitalName = name; state.customName = null; state.distance = dist;
     const ambContainer = document.getElementById('ambulanceOptions');
     ambContainer.innerHTML = ""; 
     
@@ -352,7 +388,7 @@
       const res = await fetch(BASE_URL + "/api/bookings", {
         method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
-          user_id: state.userId, hospital_id: state.hospitalId, emergency_type: state.emergency, 
+          user_id: state.userId, hospital_id: state.hospitalId, custom_destination: state.customName, emergency_type: state.emergency, 
           ambulance_type: state.ambulanceType, user_lat: state.userLat, user_lng: state.userLng,
           distance_km: state.distance, rate_per_km: state.rate
         })
@@ -380,7 +416,7 @@
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
         if(currentStep !== 6) goStep(6);
         
-        document.getElementById('trackHospital').innerText = state.hospitalName || "Hospital";
+        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName;
         document.getElementById('etaDist').innerText = data.distance;
         document.getElementById('etaTime').innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : data.eta + " mins";
       }
@@ -396,11 +432,22 @@
       }
     } catch(err) { console.log("Poll Sync Delay"); }
   }
+
+  // 🔄 NEW: Change Destination Mid Trip
+  async function changeDestination() {
+      const newDest = prompt("Enter the new Hospital Name:");
+      if(newDest && state.bookingId) {
+          await fetch(`${BASE_URL}/api/bookings/update-destination`, { 
+              method: "POST", headers: {"Content-Type":"application/json"}, 
+              body: JSON.stringify({ booking_id: state.bookingId, new_destination: newDest }) 
+          });
+          alert("Destination Updated! Driver has been notified.");
+      }
+  }
   
   function triggerCancelModal() { document.getElementById('cancelModal').classList.remove('hidden'); }
   function closeCancelModal() { document.getElementById('cancelModal').classList.add('hidden'); }
   
-  // ❌ CANCEL FUNCTION (Clears from Driver Radar)
   async function confirmCancel() {
       if (state.bookingId) {
           try {
