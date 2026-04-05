@@ -40,11 +40,19 @@ function processAndSort(rows, userLat, userLng) {
 
 // Fixed Time Formatting for IST
 const formatTime = (dateString) => {
-    if (!dateString) return "N/A";
+    if (!dateString) return "Just Now";
+    
+    // Create date object from DB timestamp
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    
+    // Force conversion to Indian Standard Time (IST)
+    return date.toLocaleTimeString('en-IN', { 
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: true 
+    });
 };
-
 // ---------------------------------------------------------
 // 🏥 PATIENT SIDE APIS
 // ---------------------------------------------------------
