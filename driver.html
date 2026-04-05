@@ -141,14 +141,32 @@
     <div id="phase1Box">
       <p style="color:var(--warning); font-weight:bold; text-align:center;">Phase 1: Drive to Patient</p>
       <a id="navToPatient" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🗺️ Navigate to Patient (GPS)</a>
-      <button class="btn info" onclick="switchToPhase2()">📍 Patient Picked Up</button>
+      <button class="btn info" onclick="pickup()">📍 Patient Picked Up</button>
     </div>
 
     <div id="phase2Box" class="hidden">
+      <div style="background:#333; padding:15px; border-radius:8px; text-align:center; margin-bottom:15px;">
+        <p style="margin:0; font-size:12px; color:var(--muted)">LIVE ODOMETER (Actual Distance)</p>
+        <h2 style="margin:5px 0 0 0; color:var(--success);"><span id="liveOdo">0.00</span> km</h2>
+      </div>
       <p style="color:var(--success); font-weight:bold; text-align:center;">Phase 2: Drive to Hospital</p>
       <a id="navToHospital" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🏥 Navigate to Hospital</a>
-      <button class="btn success" onclick="completeTrip()">✅ Dropoff & Complete Trip</button>
+      <button class="btn ghost" style="margin-bottom:10px;" onclick="changeDestination()">🔄 Change Destination</button>
+      <button class="btn success" onclick="completeTrip()">✅ Arrived at Dropoff</button>
     </div>
+  </div>
+  
+  <div id="step6" class="card hidden" style="text-align:center;">
+    <h1 style="color:var(--success)">Trip Finished</h1>
+    <p>Please collect payment from patient.</p>
+    <div style="background:#2c2c2c; padding:20px; border-radius:12px; margin:20px 0;">
+      <p style="color:var(--muted); margin:0;">Actual Distance Driven</p>
+      <h2><span id="receiptDist"></span> km</h2>
+      <hr style="border-color:#444;">
+      <p style="color:var(--muted); margin:0; margin-top:10px;">Amount to Collect</p>
+      <h1 style="color:var(--success); font-size:40px; margin:5px 0;">₹<span id="receiptCost"></span></h1>
+    </div>
+    <button class="btn primary" onclick="closeReceipt()">Finish & Return to Radar</button>
   </div>
 
   <div id="step4" class="card hidden">
@@ -198,24 +216,30 @@
   </div>
 </div>
 
-<div id="successModal" class="modal-overlay hidden">
-  <div class="modal" style="border-color: var(--success); box-shadow: 0 10px 30px rgba(76, 175, 80, 0.3);">
-    <div style="font-size: 50px; margin-bottom: 10px;">✅</div>
-    <h2 style="color:var(--success); margin:0 0 10px;">Mission Accomplished!</h2>
-    <p>Patient dropped off successfully. The receipt has been sent.</p>
-    <button class="btn success" style="margin-top:20px;" onclick="closeSuccessModal()">Return to Radar</button>
-  </div>
-</div>
-
 <audio id="alertBeep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
 
 <script>
   const BASE_URL = window.location.origin;
-  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true };
+  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true, rate: 40 };
   let radarInterval = null;
   let isRegisterMode = false;
   let lastEmergencyCount = 0;
   let pendingAcceptData = null; 
+  
+  // Odometer Variables
+  let missionInterval = null;
+  let odometerInterval = null;
+  let totalDrivenKm = 0;
+  let lastLat = null; 
+  let lastLng = null;
+
+  // 📏 Haversine (Needed for Live Odometer)
+  const getKmDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371; 
+      const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
+  };
 
   window.onload = () => {
     if (driver.id) {
@@ -237,15 +261,17 @@
   };
 
   function goStep(n) {
-    [1,2,3,4,5].forEach(i => document.getElementById('step'+i).classList.add('hidden'));
+    [1,'1-otp',2,3,4,5,6].forEach(i => {
+        let el = document.getElementById('step'+i);
+        if(el) el.classList.add('hidden');
+    });
     document.getElementById('step' + n).classList.remove('hidden');
     window.scrollTo(0,0);
   }
 
-  // RESTORED NAVIGATION LOGIC
   function navTab(stepNum, btnElement) {
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
-    btnElement.classList.add('active');
+    if(btnElement) btnElement.classList.add('active');
     goStep(stepNum);
     if(stepNum === 2) fetchRadar();
     if(stepNum === 4) loadHistory();
@@ -303,6 +329,8 @@
       const data = await res.json();
       if (data.driver_id) {
         driver = { ...driver, id: data.driver_id, type: data.ambulance_type, name: data.name, phone: data.phone, vehicle_num: data.ambulance_number, isOnline: true };
+        // Set rate dynamically based on type
+        driver.rate = (data.ambulance_type === 'NORMAL') ? 20 : (data.ambulance_type === 'NURSE') ? 25 : (data.ambulance_type === 'ECG') ? 30 : (data.ambulance_type === 'VENTILATOR') ? 35 : 40;
         localStorage.setItem('driver_session', JSON.stringify(driver));
         document.getElementById('navToggle').style.display = 'flex';
         document.getElementById('bottomNav').style.display = 'flex';
@@ -371,6 +399,18 @@
         document.getElementById('phase2Box').classList.add('hidden');
     }
     goStep(3);
+    
+    // Poll to keep destination text updated if patient changes it
+    if(!missionInterval) missionInterval = setInterval(checkActiveMission, 5000);
+  }
+
+  // 🔄 NEW: Change Destination Button
+  async function changeDestination() {
+      const newDest = prompt("Enter new Hospital Name:");
+      if(newDest && driver.activeBookingId) {
+          await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest }) });
+          checkActiveMission(); // Refresh UI instantly
+      }
   }
 
   async function fetchRadar() {
@@ -439,52 +479,47 @@
       const data = await res.json();
       if (res.ok) {
         clearInterval(radarInterval);
-        
-        // Sync before jump
-        const mRes = await fetch(`${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}`);
-        const mData = await mRes.json();
-        if(mData.hasMission) setupActiveMissionUI(mData.mission);
-        
+        checkActiveMission();
       } else { alert("❌ Taken by another driver."); fetchRadar(); }
     } catch(err) { alert("Connection Error."); }
   }
 
-  async function switchToPhase2() {
-    try {
-      const res = await fetch(`${BASE_URL}/api/driver/pickup`, { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ booking_id: driver.activeBookingId }) 
-      });
-      if(res.ok) {
-        document.getElementById('phase1Box').classList.add('hidden');
-        document.getElementById('phase2Box').classList.remove('hidden');
-      }
-    } catch(err) { alert("Network Error"); }
+  // 🚗 NEW: Start Live Odometer when Pickup is clicked
+  async function pickup() { 
+      await fetch(`${BASE_URL}/api/driver/pickup`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId }) }); 
+      checkActiveMission();
+      
+      // Start recording distance
+      lastLat = driver.lat; lastLng = driver.lng; totalDrivenKm = 0;
+      odometerInterval = setInterval(() => {
+          const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng);
+          if (d > 0.01) { // Only count movements larger than 10 meters to ignore GPS jitter
+              totalDrivenKm += d;
+              lastLat = driver.lat; lastLng = driver.lng;
+              document.getElementById('liveOdo').innerText = totalDrivenKm.toFixed(2);
+          }
+      }, 3000);
   }
 
-  async function completeTrip() {
-    try {
-      const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ booking_id: driver.activeBookingId }) 
-      });
-      if(res.ok) {
-          document.getElementById('successModal').classList.remove('hidden');
-          driver.activeBookingId = null;
-      }
-    } catch(err) { alert("Failed to complete trip."); }
+  // 💰 NEW: Complete Trip & Show Receipt
+  async function completeTrip() { 
+      clearInterval(odometerInterval);
+      clearInterval(missionInterval);
+      
+      // Send actual driven distance to server
+      await fetch(`${BASE_URL}/api/driver/complete`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) }); 
+      
+      // Calculate Cost Locally for Receipt (Round up distance * Driver's rate)
+      const finalCost = Math.ceil(totalDrivenKm) * (driver.rate || 40);
+      
+      document.getElementById('receiptDist').innerText = totalDrivenKm.toFixed(2);
+      document.getElementById('receiptCost').innerText = finalCost;
+      
+      goStep(6); // Show Payment Collection Screen
   }
 
-  function closeSuccessModal() {
-    document.getElementById('successModal').classList.add('hidden');
-    navTab(2, document.querySelectorAll('.nav-item')[0]); 
-    fetchRadar(); 
-    if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000);
-  }
+  function closeReceipt() { driver.activeBookingId = null; totalDrivenKm = 0; startRadar(); }
 
-  // RESTORED HISTORY LOGIC
   async function loadHistory() {
     const list = document.getElementById('historyList'); 
     list.innerHTML = "Loading history...";
@@ -514,7 +549,6 @@
     });
   }
 
-  // RESTORED PROFILE LOGIC
   async function saveProfile() {
     const p = { 
         driver_id: driver.id, 
@@ -539,7 +573,7 @@
     if(!confirm("Are you sure? All session data will be cleared.")) return;
     clearInterval(radarInterval);
     localStorage.removeItem('driver_session');
-    driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false };
+    driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, rate: 40 };
     document.getElementById('navToggle').style.display = 'none';
     document.getElementById('bottomNav').style.display = 'none';
     cancelLogin(); 
