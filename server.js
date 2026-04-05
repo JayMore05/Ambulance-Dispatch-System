@@ -38,21 +38,18 @@ function processAndSort(rows, userLat, userLng) {
     .sort((a, b) => a.distance_km - b.distance_km);
 }
 
-// Fixed Time Formatting for IST
+// 🕒 Fixed Time Formatting for Indian Standard Time (IST)
 const formatTime = (dateString) => {
-    if (!dateString) return "Just Now";
-    
-    // Create date object from DB timestamp
+    if (!dateString) return "N/A";
     const date = new Date(dateString);
-    
-    // Force conversion to Indian Standard Time (IST)
     return date.toLocaleTimeString('en-IN', { 
-        timeZone: 'Asia/Kolkata',
+        timeZone: 'Asia/Kolkata', 
         hour: '2-digit', 
         minute: '2-digit', 
         hour12: true 
     });
 };
+
 // ---------------------------------------------------------
 // 🏥 PATIENT SIDE APIS
 // ---------------------------------------------------------
@@ -108,6 +105,15 @@ app.post("/api/bookings", (req, res) => {
     });
 });
 
+// ❌ NEW ROUTE: Cancel Booking
+app.post("/api/bookings/cancel", (req, res) => {
+    const { booking_id } = req.body;
+    db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [booking_id], (err) => {
+        if (err) return res.status(500).json({ error: "Cancel failed" });
+        res.json({ success: true });
+    });
+});
+
 app.get("/api/user/eta", (req, res) => {
     db.query(`SELECT b.*, h.name AS hospital_name, dl.latitude AS dLat, dl.longitude AS dLng 
               FROM bookings b 
@@ -121,22 +127,12 @@ app.get("/api/user/eta", (req, res) => {
         const distKm = parseFloat(b.hospital_distance_km) || 0;
         const totalCost = Math.ceil(distKm) * (parseFloat(b.price_per_km) || 0);
 
-        // This block sends the data the receipt screen needs
         if(b.status === 'COMPLETED') {
-            return res.json({ 
-                status: 'COMPLETED', 
-                final_cost: totalCost, 
-                distance: distKm.toFixed(2), 
-                hospital: b.hospital_name 
-            });
+            return res.json({ status: 'COMPLETED', final_cost: totalCost, distance: distKm.toFixed(2), hospital: b.hospital_name });
         }
 
         const dist = (b.dLat && b.dLng) ? getKmDistance(b.dLat, b.dLng, b.user_latitude, b.user_longitude) : 0;
-        res.json({ 
-            status: b.status, 
-            distance: dist.toFixed(2), 
-            eta: dist > 0 ? Math.max(1, Math.round((dist / 40) * 60)) : "Calculating..." 
-        });
+        res.json({ status: b.status, distance: dist.toFixed(2), eta: dist > 0 ? Math.max(1, Math.round((dist / 40) * 60)) : "Calculating..." });
     });
 });
 
@@ -174,6 +170,15 @@ app.post("/api/driver/verify-otp", (req, res) => {
                 res.json({ driver_id: drivers[0].driver_id, ...drivers[0] });
             });
         }
+    });
+});
+
+app.post("/api/driver/update-profile", (req, res) => {
+    const { driver_id, name, phone, ambulance_number, ambulance_type } = req.body;
+    db.query("UPDATE drivers SET name=?, phone=?, ambulance_number=?, ambulance_type=? WHERE driver_id=?", 
+    [name, phone, ambulance_number, ambulance_type, driver_id], (err) => {
+        if (err) return res.status(500).json({ error: "Update failed" });
+        res.json({ success: true });
     });
 });
 
@@ -237,12 +242,10 @@ app.get("/api/driver/history", (req, res) => {
         })});
     });
 });
-app.post("/api/bookings/cancel", (req, res) => {
-    const { booking_id } = req.body;
-    db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [booking_id], (err) => {
-        if (err) return res.status(500).json({ success: false });
-        res.json({ success: true });
-    });
+
+app.post("/api/driver/toggle-status", (req, res) => {
+    // Keep alive endpoint for driver status
+    res.json({ success: true });
 });
 
 app.listen(4000, () => console.log(`🚀 Final Production Server live on Port 4000`));
