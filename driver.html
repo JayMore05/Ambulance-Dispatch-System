@@ -53,6 +53,7 @@
     .pulse::after { content: ""; position: absolute; width: 100%; height: 100%; border: 2px solid var(--success); border-radius: 50%; z-index: 1; animation: pulse-anim 2s infinite; }
     @keyframes pulse-anim { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
     
+    /* THE RESTORED BOTTOM NAVIGATION */
     .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 10px; display: none; z-index: 10;}
     .nav-item { color: var(--muted); background: none; border: none; font-size: 14px; cursor: pointer; padding: 8px 16px; border-radius: 8px; }
     .nav-item.active { background: rgba(229, 57, 53, 0.1); color: var(--primary); font-weight: bold; }
@@ -206,7 +207,7 @@
   </div>
 </div>
 
-<audio id="alertBeep" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+<audio id="alertBeep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
 
 <script>
   const BASE_URL = window.location.origin;
@@ -238,8 +239,10 @@
   function goStep(n) {
     [1,2,3,4,5].forEach(i => document.getElementById('step'+i).classList.add('hidden'));
     document.getElementById('step' + n).classList.remove('hidden');
+    window.scrollTo(0,0);
   }
 
+  // RESTORED NAVIGATION LOGIC
   function navTab(stepNum, btnElement) {
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
@@ -259,6 +262,11 @@
     document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode);
     document.getElementById('tabRegister').classList.toggle('active', isRegisterMode);
     document.getElementById('registerFields').classList.toggle('hidden', !isRegisterMode);
+  }
+
+  function cancelLogin() {
+    document.getElementById('otpForm').classList.add('hidden');
+    document.getElementById('loginForm').classList.remove('hidden');
   }
 
   async function requestOTP() {
@@ -308,6 +316,11 @@
     document.getElementById('toggleText').innerText = driver.isOnline ? "ONLINE" : "OFFLINE";
     document.getElementById('toggleText').style.color = driver.isOnline ? "var(--success)" : "var(--muted)";
     
+    // 📢 AUDIO UNLOCK HACK: Clicking the toggle unlocks the browser audio restrictions
+    const audio = document.getElementById('alertBeep');
+    audio.muted = false;
+    audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => console.log("Audio ready."));
+
     if(driver.isOnline) {
       document.getElementById('radarTitle').innerText = "Scanning 15km Radius...";
       document.querySelector('.pulse').style.display = "flex";
@@ -361,16 +374,6 @@
   }
 
   async function fetchRadar() {
-    // Inside fetchRadar function
-if(data.bookings && data.bookings.length > 0) {
-    if (data.bookings.length > lastEmergencyCount) {
-        let beep = document.getElementById('alertBeep');
-        beep.muted = false; // Ensure it's not muted
-        beep.play().catch(e => console.log("Click the screen once to enable sound"));
-    }
-    lastEmergencyCount = data.bookings.length;
-    // ... rest of code
-}
     if(!driver.isOnline || driver.activeBookingId) return;
     try {
       const res = await fetch(`${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}`);
@@ -379,7 +382,10 @@ if(data.bookings && data.bookings.length > 0) {
       list.innerHTML = "";
       
       if(data.bookings && data.bookings.length > 0) {
-        if (data.bookings.length > lastEmergencyCount) document.getElementById('alertBeep').play();
+        // 📢 TRIGGER SOUND
+        if (data.bookings.length > lastEmergencyCount) {
+            document.getElementById('alertBeep').play().catch(e => console.log("Sound blocked by browser"));
+        }
         lastEmergencyCount = data.bookings.length;
 
         data.bookings.forEach(b => {
@@ -430,10 +436,11 @@ if(data.bookings && data.bookings.length > 0) {
           headers: {"Content-Type":"application/json"}, 
           body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
       });
+      const data = await res.json();
       if (res.ok) {
         clearInterval(radarInterval);
         
-        // Force sync with server before jumping step
+        // Sync before jump
         const mRes = await fetch(`${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}`);
         const mData = await mRes.json();
         if(mData.hasMission) setupActiveMissionUI(mData.mission);
@@ -477,6 +484,7 @@ if(data.bookings && data.bookings.length > 0) {
     if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000);
   }
 
+  // RESTORED HISTORY LOGIC
   async function loadHistory() {
     const list = document.getElementById('historyList'); 
     list.innerHTML = "Loading history...";
@@ -506,6 +514,7 @@ if(data.bookings && data.bookings.length > 0) {
     });
   }
 
+  // RESTORED PROFILE LOGIC
   async function saveProfile() {
     const p = { 
         driver_id: driver.id, 
