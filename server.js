@@ -14,7 +14,6 @@ app.use(express.static(frontendPath));
 // 🛠️ UTILITY FUNCTIONS
 // ---------------------------------------------------------
 
-// 📏 Haversine Formula for Real-World GPS Distance
 const getKmDistance = (lat1, lon1, lat2, lon2) => {
     const rLat1 = parseFloat(lat1) || 0;
     const rLon1 = parseFloat(lon1) || 0;
@@ -30,17 +29,21 @@ const getKmDistance = (lat1, lon1, lat2, lon2) => {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
 };
 
-// 🎯 The Processor: Strictly sorts by distance and filters nearby hospitals
 function processAndSort(rows, userLat, userLng) {
     return rows.map(h => {
         const distance = getKmDistance(userLat, userLng, h.latitude, h.longitude);
         return { ...h, distance_km: parseFloat(distance.toFixed(2)) };
     })
-    .filter(h => h.distance_km < 500) // Keep it within Maharashtra/Neighboring regions
+    .filter(h => h.distance_km < 500) 
     .sort((a, b) => a.distance_km - b.distance_km);
 }
 
-const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A";
+// Fixed Time Formatting for IST
+const formatTime = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
 
 // ---------------------------------------------------------
 // 🏥 PATIENT SIDE APIS
@@ -48,11 +51,8 @@ const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTim
 
 app.get("/api/hospitals", (req, res) => {
     const { condition, ayushman_only, lat, lng } = req.query;
-
-    // 1. Clean condition: Remove Emojis (e.g. "❤️ Heart Attack" -> "Heart Attack")
     const cleanCondition = condition ? condition.replace(/[^\x00-\x7F]/g, "").trim() : "";
     
-    // 2. The Core Query: INNER JOIN ensures only hospitals with that department show up
     let query = `
         SELECT DISTINCT h.* FROM hospitals h 
         INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
@@ -60,7 +60,6 @@ app.get("/api/hospitals", (req, res) => {
     `;
     let queryParams = [cleanCondition];
 
-    // 3. PM-JAY Filter (If toggled ON)
     if (ayushman_only === 'true') {
         query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
     }
@@ -68,7 +67,6 @@ app.get("/api/hospitals", (req, res) => {
     db.query(query, queryParams, (err, rows) => {
         if (err) return res.status(500).json({ error: "Database error" });
 
-        // 4. Fallback: If no specialists found for that condition, show General hospitals
         if (rows.length === 0) {
             const fallbackSQL = `
                 SELECT h.* FROM hospitals h 
@@ -81,7 +79,6 @@ app.get("/api/hospitals", (req, res) => {
             });
             return;
         }
-
         res.json({ hospitals: processAndSort(rows, lat, lng) });
     });
 });
