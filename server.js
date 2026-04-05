@@ -128,13 +128,17 @@ app.post("/api/bookings/update-destination", (req, res) => {
 });
 
 app.get("/api/user/eta", (req, res) => {
-    db.query(`SELECT b.*, COALESCE(b.custom_destination, h.name) AS hospital_name, dl.latitude AS dLat, dl.longitude AS dLng 
+    // FIXED: Completely removed the driver_locations join!
+    db.query(`SELECT b.*, COALESCE(b.custom_destination, h.name) AS hospital_name 
               FROM bookings b 
-              LEFT JOIN driver_locations dl ON b.driver_id = dl.driver_id 
               LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id 
               WHERE b.booking_id = ?`, [req.query.booking_id], (err, rows) => {
         
-        if (err || !rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
+        if (err) {
+            console.error("ETA Polling Error:", err);
+            return res.json({ status: 'SEARCHING' });
+        }
+        if (!rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
         
         const b = rows[0];
         const distKm = parseFloat(b.hospital_distance_km) || 0;
@@ -144,16 +148,14 @@ app.get("/api/user/eta", (req, res) => {
             return res.json({ status: 'COMPLETED', final_cost: totalCost, distance: distKm.toFixed(2), hospital: b.hospital_name });
         }
 
-        const dist = (b.dLat && b.dLng) ? getKmDistance(b.dLat, b.dLng, b.user_latitude, b.user_longitude) : 0;
         res.json({ 
             status: b.status, 
-            distance: dist.toFixed(2), 
-            eta: dist > 0 ? Math.max(1, Math.round((dist / 40) * 60)) : "Calculating...", 
+            distance: distKm.toFixed(2), 
+            eta: distKm > 0 ? Math.max(1, Math.round((distKm / 40) * 60)) : "Calculating...", 
             hospital_name: b.hospital_name 
         });
     });
 });
-
 // ---------------------------------------------------------
 // 🚑 DRIVER SIDE APIS
 // ---------------------------------------------------------
@@ -211,11 +213,20 @@ app.get("/api/driver/active-mission", (req, res) => {
 app.get("/api/driver/radar", (req, res) => {
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booked_at DESC`, (err, results) => {
         if (err) return res.status(500).json({ error: "Radar failed." });
-        const nearby = (results || []).filter(b => getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude) <= 15).map(b => {
+        
+        const driverType = req.query.driverType; // E.g., 'ALS', 'ECG', 'NORMAL'
+        
+        const nearby = (results || []).filter(b => {
+            const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
+            // 1. Must be within 15km
+            // 2. Ambulance type must match EXACTLY, or patient chose 'ANY'
+            const typeMatches = (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
+            return dist <= 15 && typeMatches;
+        }).map(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
             return { 
                 ...b, 
-                priorityStar: (b.emergency_category.includes('Heart') && (req.query.driverType === 'ALS' || req.query.driverType === 'ECG')), 
+                priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), 
                 real_eta: Math.max(1, Math.round((dist / 40) * 60)), 
                 formatted_time: formatTime(b.booked_at) 
             };
@@ -223,7 +234,6 @@ app.get("/api/driver/radar", (req, res) => {
         res.json({ bookings: nearby });
     });
 });
-
 app.post("/api/driver/accept", (req, res) => {
     db.query("UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'", 
     [req.body.driver_id, req.body.booking_id], (err, result) => {
