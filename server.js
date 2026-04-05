@@ -14,6 +14,7 @@ app.use(express.static(frontendPath));
 // 🛠️ UTILITY FUNCTIONS
 // ---------------------------------------------------------
 
+// 📏 Haversine Formula for Real-World GPS Distance
 const getKmDistance = (lat1, lon1, lat2, lon2) => {
     const rLat1 = parseFloat(lat1) || 0;
     const rLon1 = parseFloat(lon1) || 0;
@@ -29,6 +30,7 @@ const getKmDistance = (lat1, lon1, lat2, lon2) => {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
 };
 
+// 🎯 Strictly sorts by distance and filters nearby hospitals
 function processAndSort(rows, userLat, userLng) {
     return rows.map(h => {
         const distance = getKmDistance(userLat, userLng, h.latitude, h.longitude);
@@ -38,7 +40,7 @@ function processAndSort(rows, userLat, userLng) {
     .sort((a, b) => a.distance_km - b.distance_km);
 }
 
-// 🕒 Fixed Time Formatting for Indian Standard Time (IST)
+// 🕒 Indian Standard Time (IST) Formatter
 const formatTime = (dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
@@ -97,61 +99,55 @@ app.post("/api/save-user", (req, res) => {
 });
 
 app.post("/api/bookings", (req, res) => {
-    const { user_id, hospital_id, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
-    db.query(`INSERT INTO bookings (user_id, hospital_id, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
-    [user_id, hospital_id, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km], (err, result) => {
+    const { user_id, hospital_id, custom_destination, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
+    db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+    [user_id, hospital_id || null, custom_destination || null, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km], (err, result) => {
         if (err) return res.status(500).json({ error: "Booking failed" });
         res.json({ booking_id: result.insertId });
     });
 });
 
-// ❌ NEW ROUTE: Cancel Booking
 app.post("/api/bookings/cancel", (req, res) => {
     const { booking_id } = req.body;
     db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [booking_id], (err) => {
-        if (err) return res.status(500).json({ error: "Cancel failed" });
-        res.json({ success: true });
+        res.json({ success: !err });
+    });
+});
+
+app.post("/api/bookings/update-destination", (req, res) => {
+    const { booking_id, new_destination } = req.body;
+    db.query("UPDATE bookings SET hospital_id = NULL, custom_destination = ? WHERE booking_id = ?", [new_destination, booking_id], (err) => {
+        res.json({ success: !err });
     });
 });
 
 app.get("/api/user/eta", (req, res) => {
-    // FIXED: Removed the 'driver_locations' table join that was causing the SQL crash
-    const query = `
-        SELECT b.*, h.name AS hospital_name 
-        FROM bookings b 
-        JOIN hospitals h ON b.hospital_id = h.hospital_id 
-        WHERE b.booking_id = ?
-    `;
-
-    db.query(query, [req.query.booking_id], (err, rows) => {
-        if (err) {
-            console.error("ETA Query Error:", err); // This will show you errors in the terminal now
-            return res.json({ status: 'SEARCHING' });
-        }
-        if (!rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
+    db.query(`SELECT b.*, COALESCE(b.custom_destination, h.name) AS hospital_name, dl.latitude AS dLat, dl.longitude AS dLng 
+              FROM bookings b 
+              LEFT JOIN driver_locations dl ON b.driver_id = dl.driver_id 
+              LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id 
+              WHERE b.booking_id = ?`, [req.query.booking_id], (err, rows) => {
+        
+        if (err || !rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
         
         const b = rows[0];
         const distKm = parseFloat(b.hospital_distance_km) || 0;
         const totalCost = Math.ceil(distKm) * (parseFloat(b.price_per_km) || 0);
 
-        // If the driver finished the trip, send the receipt data
         if(b.status === 'COMPLETED') {
-            return res.json({ 
-                status: 'COMPLETED', 
-                final_cost: totalCost, 
-                distance: distKm.toFixed(2), 
-                hospital: b.hospital_name 
-            });
+            return res.json({ status: 'COMPLETED', final_cost: totalCost, distance: distKm.toFixed(2), hospital: b.hospital_name });
         }
 
-        // Send the current status (ASSIGNED, IN_TRANSIT, etc.) so the frontend can change screens
+        const dist = (b.dLat && b.dLng) ? getKmDistance(b.dLat, b.dLng, b.user_latitude, b.user_longitude) : 0;
         res.json({ 
             status: b.status, 
-            distance: distKm.toFixed(2), 
-            eta: distKm > 0 ? Math.max(1, Math.round((distKm / 40) * 60)) : "Calculating..." 
+            distance: dist.toFixed(2), 
+            eta: dist > 0 ? Math.max(1, Math.round((dist / 40) * 60)) : "Calculating...", 
+            hospital_name: b.hospital_name 
         });
     });
 });
+
 // ---------------------------------------------------------
 // 🚑 DRIVER SIDE APIS
 // ---------------------------------------------------------
@@ -159,7 +155,6 @@ app.get("/api/user/eta", (req, res) => {
 app.post("/api/driver/request-otp", (req, res) => {
     const { phone, isRegister } = req.body;
     db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
-        if (err) return res.status(500).json({ error: "DB Error" });
         if (isRegister && drivers.length > 0) return res.status(400).json({ error: "Phone already registered." });
         if (!isRegister && drivers.length === 0) return res.status(400).json({ error: "Driver not found." });
         
@@ -198,7 +193,7 @@ app.post("/api/driver/update-profile", (req, res) => {
     });
 });
 
-const activeQuery = `SELECT b.*, u.name AS user_name, u.phone AS user_phone, h.name AS hospital_name, h.latitude AS hosp_lat, h.longitude AS hosp_lng FROM bookings b JOIN users u ON b.user_id = u.user_id JOIN hospitals h ON b.hospital_id = h.hospital_id`;
+const activeQuery = `SELECT b.*, u.name AS user_name, u.phone AS user_phone, COALESCE(b.custom_destination, h.name) AS hospital_name, h.latitude AS hosp_lat, h.longitude AS hosp_lng FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id`;
 
 app.get("/api/driver/active-mission", (req, res) => {
     db.query(`${activeQuery} WHERE b.driver_id = ? AND b.status IN ('ASSIGNED', 'IN_TRANSIT')`, [req.query.driver_id], (err, results) => {
@@ -238,13 +233,15 @@ app.post("/api/driver/pickup", (req, res) => {
 });
 
 app.post("/api/driver/complete", (req, res) => {
-    db.query("UPDATE bookings SET status='COMPLETED', completed_at=CURRENT_TIMESTAMP WHERE booking_id=?", [req.body.booking_id], (err) => {
+    const { booking_id, actual_distance } = req.body;
+    db.query("UPDATE bookings SET status='COMPLETED', completed_at=CURRENT_TIMESTAMP, hospital_distance_km=? WHERE booking_id=?", 
+    [actual_distance, booking_id], (err) => {
         res.json({ success: !err });
     });
 });
 
 app.get("/api/driver/history", (req, res) => {
-    db.query(`SELECT b.*, u.name AS user_name, h.name AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.driver_id = ? AND b.status = 'COMPLETED' ORDER BY b.completed_at DESC LIMIT 10`, [req.query.driver_id], (err, results) => {
+    db.query(`SELECT b.*, u.name AS user_name, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.driver_id = ? AND b.status = 'COMPLETED' ORDER BY b.completed_at DESC LIMIT 10`, [req.query.driver_id], (err, results) => {
         if (err) return res.json({ history: [] });
         res.json({ history: (results || []).map(h => {
             const distKm = parseFloat(h.hospital_distance_km) || 0;
@@ -259,9 +256,6 @@ app.get("/api/driver/history", (req, res) => {
     });
 });
 
-app.post("/api/driver/toggle-status", (req, res) => {
-    // Keep alive endpoint for driver status
-    res.json({ success: true });
-});
+app.post("/api/driver/toggle-status", (req, res) => res.json({ success: true }));
 
-app.listen(4000, () => console.log(`🚀 Final Production Server live on Port 4000`));
+app.listen(4000, () => console.log(`🚀 Production Server live on Port 4000`));
