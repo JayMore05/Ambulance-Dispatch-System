@@ -352,7 +352,7 @@
     document.getElementById('missionHospital').innerText = m.hospital_name;
     document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
     
-    // Fixed Google Maps URL syntax
+    // CORRECTED GOOGLE MAPS URLS
     const patientMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${m.user_latitude},${m.user_longitude}`;
     document.getElementById('navToPatient').href = patientMapUrl;
 
@@ -360,7 +360,6 @@
     const hospitalMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${hospDest}`;
     document.getElementById('navToHospital').href = hospitalMapUrl;
 
-    // Check if driver was already in Phase 2
     if(m.status === 'IN_TRANSIT') {
         document.getElementById('phase1Box').classList.add('hidden');
         document.getElementById('phase2Box').classList.remove('hidden');
@@ -370,7 +369,6 @@
     }
     goStep(3);
   }
-
   async function fetchRadar() {
     if(!driver.isOnline || driver.activeBookingId) return;
     try {
