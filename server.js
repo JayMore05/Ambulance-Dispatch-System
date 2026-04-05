@@ -214,13 +214,14 @@ app.get("/api/driver/radar", (req, res) => {
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booked_at DESC`, (err, results) => {
         if (err) return res.status(500).json({ error: "Radar failed." });
         
-        const driverType = req.query.driverType; // E.g., 'ALS', 'ECG', 'NORMAL'
+        const driverType = req.query.driverType; 
         
         const nearby = (results || []).filter(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            // 1. Must be within 15km
-            // 2. Ambulance type must match EXACTLY, or patient chose 'ANY'
+            
+            // 🔥 STRICT FILTER: Must be within 15km AND (Patient chose 'ANY' OR exact type matches)
             const typeMatches = (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
+            
             return dist <= 15 && typeMatches;
         }).map(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
@@ -231,10 +232,10 @@ app.get("/api/driver/radar", (req, res) => {
                 formatted_time: formatTime(b.booked_at) 
             };
         });
+        
         res.json({ bookings: nearby });
     });
-});
-app.post("/api/driver/accept", (req, res) => {
+});app.post("/api/driver/accept", (req, res) => {
     db.query("UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'", 
     [req.body.driver_id, req.body.booking_id], (err, result) => {
         if (err || result.affectedRows === 0) return res.status(400).json({ error: "Emergency already taken." });
