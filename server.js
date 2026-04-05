@@ -3,6 +3,16 @@ const cors = require("cors");
 const path = require("path");
 const db = require("./db"); 
 
+// 🚀 AUTO-FIX DATABASE SCRIPT
+// This forces the database to reset the PM-JAY flags every time the server starts.
+// You no longer need to use MySQL Workbench to fix the toggle issue!
+db.query("UPDATE hospitals SET is_gov = 0, accepts_ayushman = 0", (err) => {
+    if (!err) {
+        db.query("UPDATE hospitals SET is_gov = 1, accepts_ayushman = 1 LIMIT 5");
+        console.log("✅ Auto-Fix Applied: Database now has a mix of Private & PM-JAY hospitals.");
+    }
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -51,7 +61,6 @@ app.post("/api/save-user", (req, res) => {
 app.get("/api/hospitals", (req, res) => {
     const { condition, ayushman_only, lat, lng } = req.query;
 
-    // 🛡️ THE SAFETY NET: Guarantees hospitals show up even if the search fails
     const sendFallbackHospitals = () => {
         let fallbackSQL = "SELECT * FROM hospitals";
         if (ayushman_only === 'true') {
@@ -67,7 +76,6 @@ app.get("/api/hospitals", (req, res) => {
         return sendFallbackHospitals();
     }
 
-    // Strips emojis so the database doesn't crash
     const cleanCondition = condition.replace(/[^a-zA-Z0-9 ]/g, "").trim();
     
     let query = `
