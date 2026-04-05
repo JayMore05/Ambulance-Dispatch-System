@@ -30,7 +30,6 @@ const getKmDistance = (lat1, lon1, lat2, lon2) => {
 
 const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A";
 
-// Helper function to process and sort hospitals
 function processAndSort(rows, userLat, userLng) {
     return rows.map(h => {
         const distance = getKmDistance(userLat, userLng, h.latitude, h.longitude);
@@ -52,7 +51,7 @@ app.post("/api/save-user", (req, res) => {
 app.get("/api/hospitals", (req, res) => {
     const { condition, ayushman_only, lat, lng } = req.query;
 
-    // 🛡️ THE SAFETY NET: If anything fails, run this to guarantee hospitals show up
+    // 🛡️ THE SAFETY NET: Guarantees hospitals show up even if the search fails
     const sendFallbackHospitals = () => {
         let fallbackSQL = "SELECT * FROM hospitals";
         if (ayushman_only === 'true') {
@@ -68,7 +67,7 @@ app.get("/api/hospitals", (req, res) => {
         return sendFallbackHospitals();
     }
 
-    // Strip emojis and use a flexible LIKE match
+    // Strips emojis so the database doesn't crash
     const cleanCondition = condition.replace(/[^a-zA-Z0-9 ]/g, "").trim();
     
     let query = `
@@ -83,13 +82,9 @@ app.get("/api/hospitals", (req, res) => {
     }
 
     db.query(query, queryParams, (err, rows) => {
-        // 🚨 IF ZERO RESULTS OR ERROR -> TRIGGER THE SAFETY NET
         if (err || !rows || rows.length === 0) {
-            console.log("⚠️ Search missed. Triggering Safety Net to show hospitals.");
             return sendFallbackHospitals();
         }
-
-        // If exact matches found, send them
         res.json({ hospitals: processAndSort(rows, lat, lng) });
     });
 });
@@ -199,9 +194,7 @@ app.get("/api/driver/active-mission", (req, res) => {
 
 app.get("/api/driver/radar", (req, res) => {
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booked_at DESC`, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: "Radar failed." });
-        }
+        if (err) return res.status(500).json({ error: "Radar failed." });
         if (!results) results = [];
 
         const nearby = results.filter(b => getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude) <= 8).map(b => {
