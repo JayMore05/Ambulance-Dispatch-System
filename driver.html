@@ -117,7 +117,7 @@
   <div id="step2" class="card hidden">
     <div class="radar-box">
       <div class="pulse"></div>
-      <h1 style="color: var(--success);" id="radarTitle">Scanning 8km Radius...</h1>
+      <h1 style="color: var(--success);" id="radarTitle">Scanning 15km Radius...</h1>
       <p id="radarSub">Waiting for emergency dispatches.</p>
     </div>
     <div id="emergencyList"></div>
@@ -208,12 +208,8 @@
 
 <audio id="alertBeep" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
 
-// --- KEEP ALL YOUR CSS AND HTML TAGS EXACTLY THE SAME ---
-// --- ONLY REPLACE THE SCRIPT SECTION AT THE BOTTOM WITH THIS ---
-
 <script>
   const BASE_URL = window.location.origin;
-  // Load driver from local storage so they stay logged in on refresh
   let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true };
   let radarInterval = null;
   let isRegisterMode = false;
@@ -222,7 +218,6 @@
 
   window.onload = () => {
     if (driver.id) {
-        // Resume session if driver exists
         document.getElementById('navToggle').style.display = 'flex';
         document.getElementById('bottomNav').style.display = 'flex';
         checkActiveMission();
@@ -233,7 +228,6 @@
         pos => { 
             driver.lat = pos.coords.latitude; 
             driver.lng = pos.coords.longitude; 
-            console.log("GPS Updated:", driver.lat, driver.lng);
         },
         err => { console.log("Location access denied."); },
         { enableHighAccuracy: true }
@@ -301,7 +295,7 @@
       const data = await res.json();
       if (data.driver_id) {
         driver = { ...driver, id: data.driver_id, type: data.ambulance_type, name: data.name, phone: data.phone, vehicle_num: data.ambulance_number, isOnline: true };
-        localStorage.setItem('driver_session', JSON.stringify(driver)); // Save Session
+        localStorage.setItem('driver_session', JSON.stringify(driver));
         document.getElementById('navToggle').style.display = 'flex';
         document.getElementById('bottomNav').style.display = 'flex';
         checkActiveMission();
@@ -352,13 +346,9 @@
     document.getElementById('missionHospital').innerText = m.hospital_name;
     document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
     
-    // CORRECTED GOOGLE MAPS URLS
-    const patientMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${m.user_latitude},${m.user_longitude}`;
-    document.getElementById('navToPatient').href = patientMapUrl;
-
+    document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=$${m.user_latitude},${m.user_longitude}`;
     let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name);
-    const hospitalMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${hospDest}`;
-    document.getElementById('navToHospital').href = hospitalMapUrl;
+    document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
 
     if(m.status === 'IN_TRANSIT') {
         document.getElementById('phase1Box').classList.add('hidden');
@@ -369,6 +359,7 @@
     }
     goStep(3);
   }
+
   async function fetchRadar() {
     if(!driver.isOnline || driver.activeBookingId) return;
     try {
@@ -429,11 +420,15 @@
           headers: {"Content-Type":"application/json"}, 
           body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
       });
-      const data = await res.json();
       if (res.ok) {
         clearInterval(radarInterval);
-        setupActiveMissionUI(pendingAcceptData);
-      } else { alert("❌ " + (data.error || "Someone else accepted this.")); fetchRadar(); }
+        
+        // Force sync with server before jumping step
+        const mRes = await fetch(`${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}`);
+        const mData = await mRes.json();
+        if(mData.hasMission) setupActiveMissionUI(mData.mission);
+        
+      } else { alert("❌ Taken by another driver."); fetchRadar(); }
     } catch(err) { alert("Connection Error."); }
   }
 
