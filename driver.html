@@ -1,18 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DriverOps Pro</title>
   <style>
     :root { --bg: #121212; --card: #1e1e1e; --border: #333; --primary: #e53935; --success: #4caf50; --text: #ffffff; --muted: #aaaaaa; --highlight: #2c2c2c; --warning: #ffb300; --info: #2196F3; }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 70px; }
     .container { width: 100%; max-width: 600px; margin: auto; padding: 16px; }
-    
     .topbar { position: sticky; top: 0; background: rgba(30,30,30,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); z-index: 10; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
     .brand { font-weight: 800; font-size: 1.2rem; color: var(--primary); }
-    
     .status-toggle { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 12px; display: none; }
     .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
     .switch input { opacity: 0; width: 0; height: 0; }
@@ -20,25 +17,21 @@
     .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; border-radius: 50%; transition: .4s; }
     input:checked + .slider { background-color: var(--success); }
     input:checked + .slider:before { transform: translateX(20px); }
-
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-bottom: 16px; }
     h1 { font-size: 20px; margin: 0 0 8px; }
     p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
     label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
     input, select { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; outline: none; transition: 0.2s; }
     input:focus, select:focus { border-color: var(--primary); }
-    
     .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.1s; text-align: center; display:flex; align-items:center; justify-content:center; gap:8px;}
     .btn:active { transform: scale(0.98); }
     .btn.primary { background: var(--primary); color: #fff; }
     .btn.success { background: var(--success); color: #fff; }
     .btn.info { background: var(--info); color: #fff; }
     .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
-    
     .auth-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
     .auth-tab { flex: 1; padding: 12px; text-align: center; background: var(--highlight); border-radius: 10px; cursor: pointer; font-weight: bold; color: var(--muted); border: 2px solid transparent; }
     .auth-tab.active { background: rgba(229, 57, 53, 0.1); color: var(--primary); border-color: var(--primary); }
-
     .request-card { background: var(--highlight); border: 2px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
     .request-card.priority { border-color: var(--warning); background: rgba(255, 179, 0, 0.05); }
     .req-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
@@ -46,24 +39,18 @@
     .req-dist { font-size: 14px; font-weight: bold; color: var(--muted); }
     .req-detail { font-size: 14px; margin-bottom: 4px; color: #ddd; }
     .star-badge { background: rgba(255, 179, 0, 0.2); color: var(--warning); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; display: inline-block; margin-bottom: 10px; }
-    
     .radar-box { text-align: center; padding: 30px 0; }
     .pulse { width: 80px; height: 80px; background: rgba(76, 175, 80, 0.2); border-radius: 50%; margin: 0 auto 20px; position: relative; display: flex; justify-content: center; align-items: center; }
     .pulse::before { content: "📡"; font-size: 30px; z-index: 2; }
     .pulse::after { content: ""; position: absolute; width: 100%; height: 100%; border: 2px solid var(--success); border-radius: 50%; z-index: 1; animation: pulse-anim 2s infinite; }
     @keyframes pulse-anim { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
-    
-    /* THE RESTORED BOTTOM NAVIGATION */
     .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 10px; display: none; z-index: 10;}
     .nav-item { color: var(--muted); background: none; border: none; font-size: 14px; cursor: pointer; padding: 8px 16px; border-radius: 8px; }
     .nav-item.active { background: rgba(229, 57, 53, 0.1); color: var(--primary); font-weight: bold; }
-    
-    /* CUSTOM CONFIRMATION MODALS */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
     .modal { background: var(--card); border: 1px solid var(--primary); padding: 24px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(229, 57, 53, 0.3); }
     .modal-warning { font-size: 40px; margin-bottom: 10px; animation: flash 1s infinite; }
     @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
     .hidden { display: none !important; }
   </style>
 </head>
@@ -73,15 +60,11 @@
   <div class="brand">🚑 DriverOps Pro</div>
   <div class="status-toggle" id="navToggle">
     <span id="toggleText" style="color:var(--success);">ONLINE</span>
-    <label class="switch">
-      <input type="checkbox" id="statusCheckbox" checked onchange="toggleStatus()">
-      <span class="slider"></span>
-    </label>
+    <label class="switch"><input type="checkbox" id="statusCheckbox" checked onchange="toggleStatus()"><span class="slider"></span></label>
   </div>
 </div>
 
 <div class="container">
-
   <div id="step1" class="card">
     <div class="auth-tabs">
       <div class="auth-tab active" id="tabLogin" onclick="switchAuthMode('login')">Login</div>
@@ -89,38 +72,28 @@
     </div>
     <div id="loginForm">
       <div id="registerFields" class="hidden">
-        <label>Full Name</label>
-        <input id="regName" placeholder="e.g. Rahul Kumar">
-        <label>Vehicle Number</label>
-        <input id="regVehicle" placeholder="MH-02-AB-1234" style="text-transform: uppercase;">
+        <label>Full Name</label><input id="regName" placeholder="e.g. Rahul Kumar">
+        <label>Vehicle Number</label><input id="regVehicle" placeholder="MH-02-AB-1234" style="text-transform: uppercase;">
         <label>Ambulance Type</label>
         <select id="regType">
-          <option value="NORMAL">🚑 Normal</option>
-          <option value="NURSE">👩‍⚕️ Nurse</option>
-          <option value="ECG">❤️ ECG</option>
-          <option value="VENTILATOR">🫁 Ventilator</option>
+          <option value="NORMAL">🚑 Normal</option><option value="NURSE">👩‍⚕️ Nurse</option>
+          <option value="ECG">❤️ ECG</option><option value="VENTILATOR">🫁 Ventilator</option>
           <option value="ALS" selected>🚨 ALS</option>
         </select>
       </div>
-      <label>Phone Number</label>
-      <input id="authPhone" type="tel" placeholder="10-digit number">
+      <label>Phone Number</label><input id="authPhone" type="tel" placeholder="10-digit number">
       <button class="btn primary" style="margin-top:16px;" onclick="requestOTP()">Send Secure OTP</button>
     </div>
     <div id="otpForm" class="hidden">
       <div id="demoOtpBox" style="background: rgba(255, 179, 0, 0.2); border: 1px dashed var(--warning); color: var(--warning); padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 16px; font-weight: bold;">Loading...</div>
-      <label>Enter 4-Digit OTP</label>
-      <input id="driverOtp" type="number" placeholder="XXXX" style="letter-spacing: 4px; font-weight:bold; text-align:center;">
+      <label>Enter 4-Digit OTP</label><input id="driverOtp" type="number" placeholder="XXXX" style="letter-spacing: 4px; font-weight:bold; text-align:center;">
       <button class="btn success" style="margin-top:16px;" onclick="verifyOTP()">Verify & Go Online</button>
       <button class="btn ghost" style="margin-top:10px;" onclick="cancelLogin()">← Back</button>
     </div>
   </div>
 
   <div id="step2" class="card hidden">
-    <div class="radar-box">
-      <div class="pulse"></div>
-      <h1 style="color: var(--success);" id="radarTitle">Scanning 15km Radius...</h1>
-      <p id="radarSub">Waiting for emergency dispatches.</p>
-    </div>
+    <div class="radar-box"><div class="pulse"></div><h1 style="color: var(--success);" id="radarTitle">Scanning 15km Radius...</h1><p id="radarSub">Waiting for emergency dispatches.</p></div>
     <div id="emergencyList"></div>
   </div>
 
@@ -129,7 +102,6 @@
       <h1 style="color: var(--primary); margin:0;">🚨 ONGOING MISSION</h1>
       <a id="btnCallPatient" href="#" class="btn info" style="width:auto; padding:8px 16px; font-size:14px; text-decoration:none;">📞 Call Patient</a>
     </div>
-    
     <div class="request-card">
       <div class="req-detail"><strong>Patient:</strong> <span id="missionPatient"></span></div>
       <div class="req-detail"><strong>Condition:</strong> <span id="missionCondition"></span></div>
@@ -140,7 +112,7 @@
     
     <div id="phase1Box">
       <p style="color:var(--warning); font-weight:bold; text-align:center;">Phase 1: Drive to Patient</p>
-      <a id="navToPatient" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🗺️ Navigate to Patient (GPS)</a>
+      <a id="navToPatient" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🗺️ Navigate to Patient</a>
       <button class="btn info" onclick="pickup()">📍 Patient Picked Up</button>
     </div>
 
@@ -169,10 +141,7 @@
     <button class="btn primary" onclick="closeReceipt()">Finish & Return to Radar</button>
   </div>
 
-  <div id="step4" class="card hidden">
-    <h1>Mission History</h1>
-    <div id="historyList">Loading history...</div>
-  </div>
+  <div id="step4" class="card hidden"><h1>Mission History</h1><div id="historyList">Loading history...</div></div>
 
   <div id="step5" class="card hidden">
     <h1>Driver Profile</h1>
@@ -180,17 +149,10 @@
     <label>Phone Number</label><input id="editPhone">
     <label>Vehicle Number</label><input id="editVehicle" style="text-transform: uppercase;">
     <label>Ambulance Type</label>
-    <select id="editType">
-      <option value="NORMAL">🚑 Normal</option>
-      <option value="NURSE">👩‍⚕️ Nurse</option>
-      <option value="ECG">❤️ ECG</option>
-      <option value="VENTILATOR">🫁 Ventilator</option>
-      <option value="ALS">🚨 ALS</option>
-    </select>
+    <select id="editType"><option value="NORMAL">🚑 Normal</option><option value="NURSE">👩‍⚕️ Nurse</option><option value="ECG">❤️ ECG</option><option value="VENTILATOR">🫁 Ventilator</option><option value="ALS">🚨 ALS</option></select>
     <button class="btn success" style="margin-top:20px;" onclick="saveProfile()">💾 Save Changes</button>
     <button class="btn ghost" style="margin-top:10px; color:var(--primary); border-color:var(--primary);" onclick="logout()">🚪 Logout Completely</button>
   </div>
-
 </div>
 
 <div id="bottomNav" class="bottom-nav">
@@ -201,74 +163,40 @@
 
 <div id="dispatchModal" class="modal-overlay hidden">
   <div class="modal">
-    <div class="modal-warning">⚠️</div>
-    <h2 style="color:var(--primary); margin:0 0 10px;">URGENT DISPATCH</h2>
+    <div class="modal-warning">⚠️</div><h2 style="color:var(--primary); margin:0 0 10px;">URGENT DISPATCH</h2>
     <div style="text-align:left; background:var(--bg); padding:16px; border-radius:12px; margin-bottom:20px;">
       <div class="req-detail"><strong>Patient:</strong> <span id="modalPatient"></span></div>
       <div class="req-detail"><strong>Emergency:</strong> <span id="modalCondition" style="color:var(--warning);"></span></div>
       <div class="req-detail"><strong>Dropoff:</strong> <span id="modalHospital"></span></div>
     </div>
     <p style="color:var(--text); font-weight:bold;">Are you sure you can respond immediately?</p>
-    <div style="display:flex; gap:10px; margin-top:20px;">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" onclick="confirmAccept()">YES, RESPOND NOW</button>
-    </div>
+    <div style="display:flex; gap:10px; margin-top:20px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="confirmAccept()">YES, RESPOND NOW</button></div>
   </div>
 </div>
 
 <audio id="alertBeep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
 
 <script>
-  // Change this line in BOTH html files:
-const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
+  const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
   let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true, rate: 40 };
-  let radarInterval = null;
-  let isRegisterMode = false;
-  let lastEmergencyCount = 0;
-  let pendingAcceptData = null; 
+  let radarInterval = null, isRegisterMode = false, lastEmergencyCount = 0, pendingAcceptData = null; 
   
-  // Odometer Variables
-  let missionInterval = null;
-  let odometerInterval = null;
-  let totalDrivenKm = 0;
-  let lastLat = null; 
-  let lastLng = null;
+  // Odometer Logic Variables
+  let missionInterval = null, odometerInterval = null;
+  let totalDrivenKm = 0, lastLat = null, lastLng = null, baseDistance = 0;
 
-  // 📏 Haversine (Needed for Live Odometer)
   const getKmDistance = (lat1, lon1, lat2, lon2) => {
-      const R = 6371; 
-      const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
+      const R = 6371; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
   };
 
   window.onload = () => {
-    if (driver.id) {
-        document.getElementById('navToggle').style.display = 'flex';
-        document.getElementById('bottomNav').style.display = 'flex';
-        checkActiveMission();
-    }
-    
-    if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(
-        pos => { 
-            driver.lat = pos.coords.latitude; 
-            driver.lng = pos.coords.longitude; 
-        },
-        err => { console.log("Location access denied."); },
-        { enableHighAccuracy: true }
-      );
-    }
+    if (driver.id) { document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; checkActiveMission(); }
+    if (navigator.geolocation) navigator.geolocation.watchPosition(pos => { driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; }, err => console.log("GPS denied"), { enableHighAccuracy: true });
   };
 
-  function goStep(n) {
-    [1,'1-otp',2,3,4,5,6].forEach(i => {
-        let el = document.getElementById('step'+i);
-        if(el) el.classList.add('hidden');
-    });
-    document.getElementById('step' + n).classList.remove('hidden');
-    window.scrollTo(0,0);
-  }
+  function goStep(n) { [1,'1-otp',2,3,4,5,6].forEach(i => { let el = document.getElementById('step'+i); if(el) el.classList.add('hidden'); }); document.getElementById('step' + n).classList.remove('hidden'); window.scrollTo(0,0); }
 
   function navTab(stepNum, btnElement) {
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
@@ -276,67 +204,32 @@ const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
     goStep(stepNum);
     if(stepNum === 2) fetchRadar();
     if(stepNum === 4) loadHistory();
-    if(stepNum === 5) { 
-      document.getElementById('editName').value = driver.name || ''; 
-      document.getElementById('editPhone').value = driver.phone || ''; 
-      document.getElementById('editVehicle').value = driver.vehicle_num || ''; 
-      document.getElementById('editType').value = driver.type || 'ALS'; 
-    }
+    if(stepNum === 5) { document.getElementById('editName').value = driver.name || ''; document.getElementById('editPhone').value = driver.phone || ''; document.getElementById('editVehicle').value = driver.vehicle_num || ''; document.getElementById('editType').value = driver.type || 'ALS'; }
   }
 
-  function switchAuthMode(mode) {
-    isRegisterMode = (mode === 'register');
-    document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode);
-    document.getElementById('tabRegister').classList.toggle('active', isRegisterMode);
-    document.getElementById('registerFields').classList.toggle('hidden', !isRegisterMode);
-  }
-
-  function cancelLogin() {
-    document.getElementById('otpForm').classList.add('hidden');
-    document.getElementById('loginForm').classList.remove('hidden');
-  }
+  function switchAuthMode(mode) { isRegisterMode = (mode === 'register'); document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode); document.getElementById('tabRegister').classList.toggle('active', isRegisterMode); document.getElementById('registerFields').classList.toggle('hidden', !isRegisterMode); }
+  function cancelLogin() { document.getElementById('otpForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); }
 
   async function requestOTP() {
-    const phone = document.getElementById('authPhone').value;
-    if (!phone) return alert("Enter phone number.");
+    const phone = document.getElementById('authPhone').value; if (!phone) return alert("Enter phone number.");
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ phone, isRegister: isRegisterMode }) 
-      });
+      const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone, isRegister: isRegisterMode }) });
       const data = await res.json();
-      if (res.ok) {
-        document.getElementById('loginForm').classList.add('hidden');
-        document.getElementById('otpForm').classList.remove('hidden');
-        document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`;
-      } else { alert("❌ " + data.error); }
+      if (res.ok) { document.getElementById('loginForm').classList.add('hidden'); document.getElementById('otpForm').classList.remove('hidden'); document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`; } else alert("❌ " + data.error);
     } catch(err) { alert("Server error."); }
   }
 
   async function verifyOTP() {
-    const phone = document.getElementById('authPhone').value;
-    const otp = document.getElementById('driverOtp').value;
-    const name = document.getElementById('regName').value;
-    const vehicle_num = document.getElementById('regVehicle').value;
-    const type = document.getElementById('regType').value;
-
+    const phone = document.getElementById('authPhone').value, otp = document.getElementById('driverOtp').value, name = document.getElementById('regName').value, vehicle_num = document.getElementById('regVehicle').value, type = document.getElementById('regType').value;
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ phone, otp, isRegister: isRegisterMode, name, vehicle_num, ambulance_type: type }) 
-      });
+      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone, otp, isRegister: isRegisterMode, name, vehicle_num, ambulance_type: type }) });
       const data = await res.json();
       if (data.driver_id) {
         driver = { ...driver, id: data.driver_id, type: data.ambulance_type, name: data.name, phone: data.phone, vehicle_num: data.ambulance_number, isOnline: true };
-        // Set rate dynamically based on type
         driver.rate = (data.ambulance_type === 'NORMAL') ? 20 : (data.ambulance_type === 'NURSE') ? 25 : (data.ambulance_type === 'ECG') ? 30 : (data.ambulance_type === 'VENTILATOR') ? 35 : 40;
         localStorage.setItem('driver_session', JSON.stringify(driver));
-        document.getElementById('navToggle').style.display = 'flex';
-        document.getElementById('bottomNav').style.display = 'flex';
-        checkActiveMission();
-      } else { alert("❌ " + data.error); }
+        document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; checkActiveMission();
+      } else alert("❌ " + data.error);
     } catch(err) { alert("Failed to verify."); }
   }
 
@@ -344,74 +237,38 @@ const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
     driver.isOnline = document.getElementById('statusCheckbox').checked;
     document.getElementById('toggleText').innerText = driver.isOnline ? "ONLINE" : "OFFLINE";
     document.getElementById('toggleText').style.color = driver.isOnline ? "var(--success)" : "var(--muted)";
-    
-    // 📢 AUDIO UNLOCK HACK: Clicking the toggle unlocks the browser audio restrictions
-    const audio = document.getElementById('alertBeep');
-    audio.muted = false;
-    audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => console.log("Audio ready."));
+    const audio = document.getElementById('alertBeep'); audio.muted = false; audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => console.log("Audio ready."));
 
-    if(driver.isOnline) {
-      document.getElementById('radarTitle').innerText = "Scanning 15km Radius...";
-      document.querySelector('.pulse').style.display = "flex";
-      fetchRadar(); 
-      radarInterval = setInterval(fetchRadar, 5000);
-    } else {
-      document.getElementById('radarTitle').innerText = "You are Offline";
-      document.querySelector('.pulse').style.display = "none";
-      document.getElementById('emergencyList').innerHTML = "";
-      clearInterval(radarInterval);
-    }
-    fetch(`${BASE_URL}/api/driver/toggle-status`, { 
-        method:"POST", 
-        headers:{"Content-Type":"application/json"}, 
-        body: JSON.stringify({ driver_id: driver.id, status: driver.isOnline?'ONLINE':'OFFLINE' }) 
-    });
+    if(driver.isOnline) { document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; document.querySelector('.pulse').style.display = "flex"; fetchRadar(); radarInterval = setInterval(fetchRadar, 5000); } 
+    else { document.getElementById('radarTitle').innerText = "You are Offline"; document.querySelector('.pulse').style.display = "none"; document.getElementById('emergencyList').innerHTML = ""; clearInterval(radarInterval); }
+    fetch(`${BASE_URL}/api/driver/toggle-status`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ driver_id: driver.id, status: driver.isOnline?'ONLINE':'OFFLINE' }) });
   }
 
   async function checkActiveMission() {
     const res = await fetch(`${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}`);
     const data = await res.json();
-    if(data.hasMission) {
-        clearInterval(radarInterval);
-        setupActiveMissionUI(data.mission);
-    } else { 
-        goStep(2); 
-        fetchRadar(); 
-        if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
-    }
+    if(data.hasMission) { clearInterval(radarInterval); setupActiveMissionUI(data.mission); } 
+    else { goStep(2); fetchRadar(); if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); }
   }
 
   function setupActiveMissionUI(m) {
     driver.activeBookingId = m.booking_id;
-    document.getElementById('missionPatient').innerText = m.user_name;
-    document.getElementById('missionCondition').innerText = m.emergency_category;
-    document.getElementById('missionHospital').innerText = m.hospital_name;
-    document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
+    baseDistance = parseFloat(m.hospital_distance_km) || 0; // Fix: Save original distance to prevent 0 cost error
+    document.getElementById('missionPatient').innerText = m.user_name; document.getElementById('missionCondition').innerText = m.emergency_category; document.getElementById('missionHospital').innerText = m.hospital_name; document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
     
     document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=$${m.user_latitude},${m.user_longitude}`;
     let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name);
     document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
 
-    if(m.status === 'IN_TRANSIT') {
-        document.getElementById('phase1Box').classList.add('hidden');
-        document.getElementById('phase2Box').classList.remove('hidden');
-    } else {
-        document.getElementById('phase1Box').classList.remove('hidden');
-        document.getElementById('phase2Box').classList.add('hidden');
-    }
+    if(m.status === 'IN_TRANSIT') { document.getElementById('phase1Box').classList.add('hidden'); document.getElementById('phase2Box').classList.remove('hidden'); } 
+    else { document.getElementById('phase1Box').classList.remove('hidden'); document.getElementById('phase2Box').classList.add('hidden'); }
     goStep(3);
-    
-    // Poll to keep destination text updated if patient changes it
     if(!missionInterval) missionInterval = setInterval(checkActiveMission, 5000);
   }
 
-  // 🔄 NEW: Change Destination Button
   async function changeDestination() {
       const newDest = prompt("Enter new Hospital Name:");
-      if(newDest && driver.activeBookingId) {
-          await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest }) });
-          checkActiveMission(); // Refresh UI instantly
-      }
+      if(newDest && driver.activeBookingId) { await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest }) }); checkActiveMission(); }
   }
 
   async function fetchRadar() {
@@ -419,166 +276,86 @@ const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
     try {
       const res = await fetch(`${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}`);
       const data = await res.json();
-      const list = document.getElementById('emergencyList'); 
-      list.innerHTML = "";
-      
+      const list = document.getElementById('emergencyList'); list.innerHTML = "";
       if(data.bookings && data.bookings.length > 0) {
-        // 📢 TRIGGER SOUND
-        if (data.bookings.length > lastEmergencyCount) {
-            document.getElementById('alertBeep').play().catch(e => console.log("Sound blocked by browser"));
-        }
+        if (data.bookings.length > lastEmergencyCount) document.getElementById('alertBeep').play().catch(e => console.log("Sound blocked"));
         lastEmergencyCount = data.bookings.length;
 
         data.bookings.forEach(b => {
-          const safeName = b.user_name.replace(/'/g, "\\'");
-          const safeHosp = b.hospital_name.replace(/'/g, "\\'");
-          const safeCond = b.emergency_category.replace(/'/g, "\\'");
-
+          const safeName = b.user_name.replace(/'/g, "\\'"); const safeHosp = b.hospital_name.replace(/'/g, "\\'"); const safeCond = b.emergency_category.replace(/'/g, "\\'");
           list.innerHTML += `<div class="request-card ${b.priorityStar ? 'priority' : ''}">
             ${b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : ''}
-            <div class="req-header">
-                <div class="req-title">${b.emergency_category}</div>
-                <div style="text-align: right;">
-                    <div style="font-size: 11px; color: var(--muted);">⏰ ${b.formatted_time}</div>
-                    <div class="req-dist">📍 ~${b.real_eta} mins</div>
-                </div>
-            </div>
-            <div class="req-detail"><strong>Patient:</strong> ${b.user_name}</div>
-            <div class="req-detail"><strong>Dropoff:</strong> ${b.hospital_name}</div>
+            <div class="req-header"><div class="req-title">${b.emergency_category}</div><div style="text-align: right;"><div style="font-size: 11px; color: var(--muted);">⏰ ${b.formatted_time}</div><div class="req-dist">📍 ~${b.real_eta} mins</div></div></div>
+            <div class="req-detail"><strong>Patient:</strong> ${b.user_name}</div><div class="req-detail"><strong>Dropoff:</strong> ${b.hospital_name}</div>
             <button class="btn primary" style="margin-top:12px;" onclick="promptModal(${b.booking_id}, '${safeName}', '${b.user_phone}', '${safeCond}', '${safeHosp}', ${b.user_latitude}, ${b.user_longitude}, ${b.hosp_lat || 0}, ${b.hosp_lng || 0})">ACCEPT EMERGENCY</button>
           </div>`;
         });
-      } else { 
-          list.innerHTML = `<p style="text-align:center; color:var(--muted); margin-top:20px;">No emergencies in range.</p>`;
-          lastEmergencyCount = 0; 
-      }
+      } else { list.innerHTML = `<p style="text-align:center; color:var(--muted); margin-top:20px;">No emergencies in range.</p>`; lastEmergencyCount = 0; }
     } catch(err) { console.error("Radar Error:", err); }
   }
 
-  function promptModal(id, name, phone, cond, hosp, uLat, uLng, hLat, hLng) {
-    pendingAcceptData = { booking_id: id, user_name: name, user_phone: phone, emergency_category: cond, hospital_name: hosp, user_latitude: uLat, user_longitude: uLng, hosp_lat: hLat, hosp_lng: hLng };
-    document.getElementById('modalPatient').innerText = name;
-    document.getElementById('modalCondition').innerText = cond;
-    document.getElementById('modalHospital').innerText = hosp;
-    document.getElementById('dispatchModal').classList.remove('hidden');
-  }
-
-  function closeModal() {
-    document.getElementById('dispatchModal').classList.add('hidden');
-    pendingAcceptData = null;
-  }
+  function promptModal(id, name, phone, cond, hosp, uLat, uLng, hLat, hLng) { pendingAcceptData = { booking_id: id, user_name: name, user_phone: phone, emergency_category: cond, hospital_name: hosp, user_latitude: uLat, user_longitude: uLng, hosp_lat: hLat, hosp_lng: hLng }; document.getElementById('modalPatient').innerText = name; document.getElementById('modalCondition').innerText = cond; document.getElementById('modalHospital').innerText = hosp; document.getElementById('dispatchModal').classList.remove('hidden'); }
+  function closeModal() { document.getElementById('dispatchModal').classList.add('hidden'); pendingAcceptData = null; }
 
   async function confirmAccept() {
     if(!pendingAcceptData) return;
     document.getElementById('dispatchModal').classList.add('hidden');
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/accept`, { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
-      });
+      const res = await fetch(`${BASE_URL}/api/driver/accept`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) });
       const data = await res.json();
-      if (res.ok) {
-        clearInterval(radarInterval);
-        checkActiveMission();
-      } else { alert("❌ Taken by another driver."); fetchRadar(); }
+      if (res.ok) { clearInterval(radarInterval); checkActiveMission(); } else { alert("❌ Taken by another driver."); fetchRadar(); }
     } catch(err) { alert("Connection Error."); }
   }
 
-  // 🚗 NEW: Start Live Odometer when Pickup is clicked
   async function pickup() { 
       await fetch(`${BASE_URL}/api/driver/pickup`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId }) }); 
       checkActiveMission();
       
-      // Start recording distance
       lastLat = driver.lat; lastLng = driver.lng; totalDrivenKm = 0;
       odometerInterval = setInterval(() => {
           const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng);
-          if (d > 0.01) { // Only count movements larger than 10 meters to ignore GPS jitter
-              totalDrivenKm += d;
-              lastLat = driver.lat; lastLng = driver.lng;
-              document.getElementById('liveOdo').innerText = totalDrivenKm.toFixed(2);
-          }
+          if (d > 0.01) { totalDrivenKm += d; lastLat = driver.lat; lastLng = driver.lng; document.getElementById('liveOdo').innerText = totalDrivenKm.toFixed(2); }
       }, 3000);
   }
 
-  // 💰 NEW: Complete Trip & Show Receipt
   async function completeTrip() { 
-      clearInterval(odometerInterval);
-      clearInterval(missionInterval);
+      clearInterval(odometerInterval); clearInterval(missionInterval);
       
-      // Send actual driven distance to server
-      await fetch(`${BASE_URL}/api/driver/complete`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) }); 
+      // Calculate final distance ensuring it never charges 0
+      let finalDistance = Math.max(baseDistance, totalDrivenKm);
+      const finalCost = Math.ceil(finalDistance) * (driver.rate || 40);
       
-      // Calculate Cost Locally for Receipt (Round up distance * Driver's rate)
-      const finalCost = Math.ceil(totalDrivenKm) * (driver.rate || 40);
+      await fetch(`${BASE_URL}/api/driver/complete`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: finalDistance }) }); 
       
-      document.getElementById('receiptDist').innerText = totalDrivenKm.toFixed(2);
+      document.getElementById('receiptDist').innerText = finalDistance.toFixed(2);
       document.getElementById('receiptCost').innerText = finalCost;
-      
-      goStep(6); // Show Payment Collection Screen
+      goStep(6); 
   }
 
-  function closeReceipt() { driver.activeBookingId = null; totalDrivenKm = 0; startRadar(); }
+  function closeReceipt() { driver.activeBookingId = null; totalDrivenKm = 0; baseDistance = 0; navTab(2, document.querySelectorAll('.nav-item')[0]); }
 
   async function loadHistory() {
-    const list = document.getElementById('historyList'); 
-    list.innerHTML = "Loading history...";
+    const list = document.getElementById('historyList'); list.innerHTML = "Loading history...";
     const res = await fetch(`${BASE_URL}/api/driver/history?driver_id=${driver.id}`);
     const data = await res.json();
     if(!data.history || data.history.length === 0) return list.innerHTML = "<p>No completed missions.</p>";
     list.innerHTML = "";
-    
     data.history.forEach(h => { 
-      list.innerHTML += `
-        <div class="request-card" style="cursor:pointer;" onclick="document.getElementById('hist-${h.booking_id}').classList.toggle('hidden')">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="color:var(--success); font-weight:bold;">✅ COMPLETED</div>
-            <div style="font-size:12px; color:var(--muted);">▼ Details</div>
-          </div>
-          <div class="req-title" style="margin:5px 0;">${h.emergency_category}</div>
-          <div class="req-detail">Dropoff: ${h.hospital_name}</div>
-          
-          <div id="hist-${h.booking_id}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
-             <div class="req-detail"><strong>Patient:</strong> ${h.user_name}</div>
-             <div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${h.time_booked}</div>
-             <div class="req-detail"><strong>📍 Picked Up:</strong> ${h.time_picked}</div>
-             <div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.time_dropped}</div>
-             <div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.total_cost}</div>
-          </div>
-        </div>`; 
+      list.innerHTML += `<div class="request-card" style="cursor:pointer;" onclick="document.getElementById('hist-${h.booking_id}').classList.toggle('hidden')"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="color:var(--success); font-weight:bold;">✅ COMPLETED</div><div style="font-size:12px; color:var(--muted);">▼ Details</div></div><div class="req-title" style="margin:5px 0;">${h.emergency_category}</div><div class="req-detail">Dropoff: ${h.hospital_name}</div><div id="hist-${h.booking_id}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);"><div class="req-detail"><strong>Patient:</strong> ${h.user_name}</div><div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${h.time_booked}</div><div class="req-detail"><strong>📍 Picked Up:</strong> ${h.time_picked}</div><div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.time_dropped}</div><div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.total_cost}</div></div></div>`; 
     });
   }
 
   async function saveProfile() {
-    const p = { 
-        driver_id: driver.id, 
-        name: document.getElementById('editName').value, 
-        phone: document.getElementById('editPhone').value, 
-        ambulance_number: document.getElementById('editVehicle').value, 
-        ambulance_type: document.getElementById('editType').value 
-    };
-    const res = await fetch(`${BASE_URL}/api/driver/update-profile`, { 
-        method: "POST", 
-        headers: {"Content-Type":"application/json"}, 
-        body: JSON.stringify(p) 
-    });
-    if(res.ok) { 
-        driver = {...driver, name: p.name, phone: p.phone, vehicle_num: p.ambulance_number, type: p.ambulance_type}; 
-        localStorage.setItem('driver_session', JSON.stringify(driver));
-        alert("Profile Updated Successfully!"); 
-    }
+    const p = { driver_id: driver.id, name: document.getElementById('editName').value, phone: document.getElementById('editPhone').value, ambulance_number: document.getElementById('editVehicle').value, ambulance_type: document.getElementById('editType').value };
+    const res = await fetch(`${BASE_URL}/api/driver/update-profile`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(p) });
+    if(res.ok) { driver = {...driver, name: p.name, phone: p.phone, vehicle_num: p.ambulance_number, type: p.ambulance_type}; localStorage.setItem('driver_session', JSON.stringify(driver)); alert("Profile Updated Successfully!"); }
   }
 
   function logout() {
     if(!confirm("Are you sure? All session data will be cleared.")) return;
-    clearInterval(radarInterval);
-    localStorage.removeItem('driver_session');
+    clearInterval(radarInterval); localStorage.removeItem('driver_session');
     driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, rate: 40 };
-    document.getElementById('navToggle').style.display = 'none';
-    document.getElementById('bottomNav').style.display = 'none';
-    cancelLogin(); 
-    goStep(1);
+    document.getElementById('navToggle').style.display = 'none'; document.getElementById('bottomNav').style.display = 'none'; cancelLogin(); goStep(1);
   }
 </script>
 </body>
