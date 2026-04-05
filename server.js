@@ -50,43 +50,39 @@ function processAndSort(rows, userLat, userLng) {
 app.get("/api/hospitals", (req, res) => {
     const { condition, ayushman_only, lat, lng } = req.query;
 
-    // 1. Clean the condition: Remove emojis and extra spaces
+    // 1. Clean the condition string (Removes Emojis from your buttons)
     const cleanCondition = condition ? condition.replace(/[^\x00-\x7F]/g, "").trim() : "";
-    console.log(`🔍 Searching for Condition: "${cleanCondition}" | Ayushman: ${ayushman_only}`);
+    console.log(`🔍 Filtering for: [${cleanCondition}] | PM-JAY: ${ayushman_only}`);
 
-    // 2. The SQL: We use an INNER JOIN to force the match
+    // 2. Strict SQL Join: Only returns hospitals that have this specific department
     let query = `
-        SELECT h.* FROM hospitals h 
+        SELECT DISTINCT h.* FROM hospitals h 
         INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id 
         WHERE hd.department = ?
     `;
     
     let queryParams = [cleanCondition];
 
-    // 3. Add PM-JAY Filter if toggled
     if (ayushman_only === 'true') {
         query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
     }
 
     db.query(query, queryParams, (err, rows) => {
-        if (err) {
-            console.error("❌ DB Error:", err);
-            return res.status(500).json({ error: "Database error" });
-        }
+        if (err) return res.status(500).json({ error: "Database error" });
 
-        // 4. If no specific specialists found, fall back to General
+        // 3. If no specific specialists are found, show General Sickness as a backup
         if (rows.length === 0) {
-            console.log("⚠️ No specific match found. Falling back to General Sickness.");
-            db.query("SELECT * FROM hospitals WHERE hospital_id IN (SELECT hospital_id FROM hospital_departments WHERE department = 'General Sickness')", (err2, fallbackRows) => {
-                res.json({ hospitals: processAndSort(fallbackRows || [], lat, lng) });
+            console.log("⚠️ No specific match. Falling back to General Sickness.");
+            db.query("SELECT h.* FROM hospitals h JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id WHERE hd.department = 'General Sickness'", (err2, fallback) => {
+                res.json({ hospitals: processAndSort(fallback || [], lat, lng) });
             });
             return;
         }
 
-        console.log(`✅ Found ${rows.length} matching hospitals.`);
         res.json({ hospitals: processAndSort(rows, lat, lng) });
     });
 });
+
 app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", 
     [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
