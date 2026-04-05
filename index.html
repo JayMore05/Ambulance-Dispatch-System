@@ -385,14 +385,14 @@
       const data = await res.json();
       
       if (data.status === 'COMPLETED') {
-        clearInterval(pollInterval);
-        goStep(7);
+        clearInterval(pollInterval); // Stop the loop
+        goStep(7); // Show the receipt screen
         document.getElementById('receiptHospital').innerText = data.hospital;
-        document.getElementById('receiptDist').innerText = data.distance;
+        document.getElementById('receiptDist').innerText = data.distance + " km";
         document.getElementById('receiptCost').innerText = "₹" + data.final_cost;
         return;
       }
-
+      // ... rest of your code
       if (data.eta) {
         if(currentStep !== 6) goStep(6);
         document.getElementById('trackHospital').innerText = state.hospitalName;
