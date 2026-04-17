@@ -91,7 +91,12 @@ app.get("/api/hospitals/search", (req, res) => {
 app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", 
     [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
-        if (err) return res.status(500).json({ error: "User save failed" });
+        if (err) {
+            // 🔥 This will print the EXACT error in your Render logs
+            console.error("❌ SQL ERROR in save-user:", err.message); 
+            // 🔥 This will pop up the EXACT error on your Patient App screen
+            return res.status(500).json({ error: "User save failed: " + err.message }); 
+        }
         res.json({ success: true, user_id: result.insertId });
     });
 });
