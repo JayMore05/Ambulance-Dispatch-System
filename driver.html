@@ -346,7 +346,7 @@
       formData.append("image", fileField.files[0]);
       
       try {
-          const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: formData });
+          const res = await fetch(`https://api.imgbb.com/1/upload?key=${ee53b2b3a5cea6bfd2bb4e601fd624f9}`, { method: 'POST', body: formData });
           const data = await res.json();
           if(data.success) return data.data.url;
           return null;
@@ -358,7 +358,7 @@
       const bar = document.getElementById('uploadBar');
       
       if (!document.getElementById('fileAadhar').files[0]) return alert("Aadhar Card is mandatory.");
-      if (IMGBB_API_KEY === "YOUR_IMGBB_API_KEY_HERE") return alert("Developer Error: Please add the ImgBB API Key in the code!");
+      if (IMGBB_API_KEY === "ee53b2b3a5cea6bfd2bb4e601fd624f9") return alert("Developer Error: Please add the ImgBB API Key in the code!");
 
       btn.disabled = true; btn.innerText = "Uploading Documents...";
       document.getElementById('uploadProgress').style.display = "block";
