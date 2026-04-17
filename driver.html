@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DriverOps Pro</title>
+  <title>DriverOps Pro - FastRescue</title>
   <style>
     :root { --bg: #121212; --card: #1e1e1e; --border: #333; --primary: #e53935; --success: #4caf50; --text: #ffffff; --muted: #aaaaaa; --highlight: #2c2c2c; --warning: #ffb300; --info: #2196F3; }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -17,21 +17,27 @@
     .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; border-radius: 50%; transition: .4s; }
     input:checked + .slider { background-color: var(--success); }
     input:checked + .slider:before { transform: translateX(20px); }
+    
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-bottom: 16px; }
     h1 { font-size: 20px; margin: 0 0 8px; }
     p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
-    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
+    
+    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; text-transform: uppercase; }
     input, select { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; outline: none; transition: 0.2s; }
     input:focus, select:focus { border-color: var(--primary); }
+    input[type="file"] { padding: 10px; background: var(--highlight); font-size: 14px; }
+    
     .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.1s; text-align: center; display:flex; align-items:center; justify-content:center; gap:8px;}
     .btn:active { transform: scale(0.98); }
     .btn.primary { background: var(--primary); color: #fff; }
     .btn.success { background: var(--success); color: #fff; }
     .btn.info { background: var(--info); color: #fff; }
     .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    
     .auth-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
     .auth-tab { flex: 1; padding: 12px; text-align: center; background: var(--highlight); border-radius: 10px; cursor: pointer; font-weight: bold; color: var(--muted); border: 2px solid transparent; }
     .auth-tab.active { background: rgba(229, 57, 53, 0.1); color: var(--primary); border-color: var(--primary); }
+    
     .request-card { background: var(--highlight); border: 2px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
     .request-card.priority { border-color: var(--warning); background: rgba(255, 179, 0, 0.05); }
     .req-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
@@ -39,19 +45,24 @@
     .req-dist { font-size: 14px; font-weight: bold; color: var(--muted); }
     .req-detail { font-size: 14px; margin-bottom: 4px; color: #ddd; }
     .star-badge { background: rgba(255, 179, 0, 0.2); color: var(--warning); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; display: inline-block; margin-bottom: 10px; }
+    
     .radar-box { text-align: center; padding: 30px 0; }
     .pulse { width: 80px; height: 80px; background: rgba(76, 175, 80, 0.2); border-radius: 50%; margin: 0 auto 20px; position: relative; display: flex; justify-content: center; align-items: center; }
     .pulse::before { content: "📡"; font-size: 30px; z-index: 2; }
     .pulse::after { content: ""; position: absolute; width: 100%; height: 100%; border: 2px solid var(--success); border-radius: 50%; z-index: 1; animation: pulse-anim 2s infinite; }
     @keyframes pulse-anim { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+    
     .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 10px; display: none; z-index: 10;}
     .nav-item { color: var(--muted); background: none; border: none; font-size: 14px; cursor: pointer; padding: 8px 16px; border-radius: 8px; }
     .nav-item.active { background: rgba(229, 57, 53, 0.1); color: var(--primary); font-weight: bold; }
+    
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
     .modal { background: var(--card); border: 1px solid var(--primary); padding: 24px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(229, 57, 53, 0.3); }
-    .modal-warning { font-size: 40px; margin-bottom: 10px; animation: flash 1s infinite; }
-    @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .hidden { display: none !important; }
+
+    /* File Upload Progress Bar */
+    #uploadProgress { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
+    #uploadBar { width: 0%; height: 100%; background: var(--info); transition: 0.3s; }
   </style>
 </head>
 <body>
@@ -65,31 +76,77 @@
 </div>
 
 <div class="container">
+  
   <div id="step1" class="card">
     <div class="auth-tabs">
       <div class="auth-tab active" id="tabLogin" onclick="switchAuthMode('login')">Login</div>
-      <div class="auth-tab" id="tabRegister" onclick="switchAuthMode('register')">Register</div>
+      <div class="auth-tab" id="tabRegister" onclick="switchAuthMode('register')">Register (KYC)</div>
     </div>
+    
     <div id="loginForm">
-      <div id="registerFields" class="hidden">
+      <div id="regPart1" class="hidden">
         <label>Full Name</label><input id="regName" placeholder="e.g. Rahul Kumar">
+        <label>Phone Number</label><input id="regPhone" type="tel" placeholder="10-digit number">
         <label>Vehicle Number</label><input id="regVehicle" placeholder="MH-02-AB-1234" style="text-transform: uppercase;">
         <label>Ambulance Type</label>
         <select id="regType">
-          <option value="NORMAL">🚑 Normal</option><option value="NURSE">👩‍⚕️ Nurse</option>
-          <option value="ECG">❤️ ECG</option><option value="VENTILATOR">🫁 Ventilator</option>
-          <option value="ALS" selected>🚨 ALS</option>
+          <option value="PTV">🚐 Patient Transport (PTV)</option>
+          <option value="BLS">🚑 Basic Life Support (BLS)</option>
+          <option value="ALS" selected>🚨 Advanced Life Support (ALS)</option>
+          <option value="NEO">👶 Neonatal / Incubator</option>
         </select>
+        <button class="btn info" style="margin-top:20px;" onclick="goToRegPart2()">Next: Upload Documents ➔</button>
       </div>
-      <label>Phone Number</label><input id="authPhone" type="tel" placeholder="10-digit number">
-      <button class="btn primary" style="margin-top:16px;" onclick="requestOTP()">Send Secure OTP</button>
+
+      <div id="regPart2" class="hidden">
+        <button class="btn ghost" style="margin-bottom:15px; padding:8px;" onclick="goToRegPart1()">⬅ Back</button>
+        <p style="color:var(--warning); font-size:13px; font-weight:bold;">Please upload clear images for verification.</p>
+        
+        <label>Aadhar Card / Gov ID</label>
+        <input type="file" id="fileAadhar" accept="image/*">
+        
+        <label>Vehicle RC Book</label>
+        <input type="file" id="fileRC" accept="image/*">
+        
+        <label>Active Insurance Policy</label>
+        <input type="file" id="fileInsurance" accept="image/*">
+        
+        <label>PUC Certificate</label>
+        <input type="file" id="filePUC" accept="image/*">
+        
+        <div style="margin: 20px 0; display:flex; align-items:center; gap:10px;">
+            <input type="checkbox" id="regPCC" style="width:20px; height:20px; margin:0;">
+            <label style="margin:0; text-transform:none;">I have a valid Police Clearance (PCC)</label>
+        </div>
+
+        <div id="uploadProgress"><div id="uploadBar"></div></div>
+        <p id="uploadText" style="text-align:center; font-size:12px; color:var(--info); display:none;">Uploading securely to cloud...</p>
+
+        <button id="btnSubmitKYC" class="btn primary" style="margin-top:16px;" onclick="submitKYC()">Upload & Get OTP</button>
+      </div>
+
+      <div id="loginOnlyFields">
+        <label>Registered Phone Number</label>
+        <input id="authPhone" type="tel" placeholder="10-digit number">
+        <button class="btn primary" style="margin-top:16px;" onclick="requestOTP()">Send Login OTP</button>
+      </div>
     </div>
+    
     <div id="otpForm" class="hidden">
       <div id="demoOtpBox" style="background: rgba(255, 179, 0, 0.2); border: 1px dashed var(--warning); color: var(--warning); padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 16px; font-weight: bold;">Loading...</div>
       <label>Enter 4-Digit OTP</label><input id="driverOtp" type="number" placeholder="XXXX" style="letter-spacing: 4px; font-weight:bold; text-align:center;">
-      <button class="btn success" style="margin-top:16px;" onclick="verifyOTP()">Verify & Go Online</button>
-      <button class="btn ghost" style="margin-top:10px;" onclick="cancelLogin()">← Back</button>
+      <button class="btn success" style="margin-top:16px;" onclick="verifyOTP()">Verify Account</button>
+      <button class="btn ghost" style="margin-top:10px;" onclick="cancelLogin()">← Cancel</button>
     </div>
+  </div>
+
+  <div id="stepPending" class="card hidden" style="text-align:center; padding: 40px 20px;">
+    <h1 style="font-size: 50px; margin: 0;">⏳</h1>
+    <h1 style="color: var(--warning);">Verification Pending</h1>
+    <p>Your KYC documents have been submitted securely and are currently under review by our Admin team.</p>
+    <p style="font-size: 12px; color: var(--muted);">You cannot go online until approved.</p>
+    <button class="btn info" style="margin-top:20px;" onclick="checkApprovalStatus()">Refresh Status</button>
+    <button class="btn ghost" style="margin-top:10px; color: var(--primary); border-color: var(--primary);" onclick="logout()">Logout</button>
   </div>
 
   <div id="step2" class="card hidden">
@@ -100,7 +157,7 @@
   <div id="step3" class="card hidden">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <h1 style="color: var(--primary); margin:0;">🚨 ONGOING MISSION</h1>
-      <a id="btnCallPatient" href="#" class="btn info" style="width:auto; padding:8px 16px; font-size:14px; text-decoration:none;">📞 Call Patient</a>
+      <a id="btnCallPatient" href="#" class="btn info" style="width:auto; padding:8px 16px; font-size:14px; text-decoration:none;">📞 Call</a>
     </div>
     <div class="request-card">
       <div class="req-detail"><strong>Patient:</strong> <span id="missionPatient"></span></div>
@@ -123,7 +180,7 @@
       </div>
       <p style="color:var(--success); font-weight:bold; text-align:center;">Phase 2: Drive to Hospital</p>
       <a id="navToHospital" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🏥 Navigate to Hospital</a>
-      <button class="btn ghost" style="margin-bottom:10px;" onclick="changeDestination()">🔄 Change Destination</button>
+      <button class="btn ghost" style="margin-bottom:10px;" onclick="document.getElementById('destModal').classList.remove('hidden')">🔄 Change Destination</button>
       <button class="btn success" onclick="completeTrip()">✅ Arrived at Dropoff</button>
     </div>
   </div>
@@ -145,11 +202,19 @@
 
   <div id="step5" class="card hidden">
     <h1>Driver Profile</h1>
+    <div style="background: rgba(76, 175, 80, 0.1); border: 1px solid var(--success); padding: 10px; border-radius: 8px; margin-bottom: 20px; text-align: center; color: var(--success); font-weight: bold;">
+        ✅ KYC Verified
+    </div>
     <label>Full Name</label><input id="editName">
-    <label>Phone Number</label><input id="editPhone">
+    <label>Phone Number</label><input id="editPhone" readonly style="opacity:0.6;">
     <label>Vehicle Number</label><input id="editVehicle" style="text-transform: uppercase;">
     <label>Ambulance Type</label>
-    <select id="editType"><option value="NORMAL">🚑 Normal</option><option value="NURSE">👩‍⚕️ Nurse</option><option value="ECG">❤️ ECG</option><option value="VENTILATOR">🫁 Ventilator</option><option value="ALS">🚨 ALS</option></select>
+    <select id="editType">
+        <option value="PTV">🚐 Patient Transport (PTV)</option>
+        <option value="BLS">🚑 Basic Life Support (BLS)</option>
+        <option value="ALS">🚨 Advanced Life Support (ALS)</option>
+        <option value="NEO">👶 Neonatal / Incubator</option>
+    </select>
     <button class="btn success" style="margin-top:20px;" onclick="saveProfile()">💾 Save Changes</button>
     <button class="btn ghost" style="margin-top:10px; color:var(--primary); border-color:var(--primary);" onclick="logout()">🚪 Logout Completely</button>
   </div>
@@ -159,6 +224,18 @@
   <button class="nav-item active" onclick="navTab(2, this)">📡 Radar</button>
   <button class="nav-item" onclick="navTab(4, this)">📜 History</button>
   <button class="nav-item" onclick="navTab(5, this)">👤 Profile</button>
+</div>
+
+<div id="destModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2 style="margin-top:0;">Change Destination</h2>
+    <p style="color:var(--muted); font-size:14px;">Enter the exact name of the new hospital. The patient will be notified automatically.</p>
+    <input id="driverNewDest" placeholder="e.g. City Care Hospital" style="text-align:center; margin-bottom:10px;">
+    <div style="display:flex; gap:10px; margin-top:10px;">
+      <button class="btn ghost" onclick="document.getElementById('destModal').classList.add('hidden')">Cancel</button>
+      <button class="btn primary" onclick="submitDriverDest()">Update Destination</button>
+    </div>
+  </div>
 </div>
 
 <div id="dispatchModal" class="modal-overlay hidden">
@@ -177,13 +254,21 @@
 <audio id="alertBeep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
 
 <script>
+  // ==========================================
+  // SETUP & IMGBB API KEY
+  // ==========================================
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
-  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: true, rate: 40 };
-  let radarInterval = null, isRegisterMode = false, lastEmergencyCount = 0, pendingAcceptData = null; 
   
+  // 🔴 PASTE YOUR IMGBB API KEY HERE 🔴
+  const IMGBB_API_KEY = "YOUR_IMGBB_API_KEY_HERE"; 
+  
+  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null };
+  let radarInterval = null, isRegisterMode = false, lastEmergencyCount = 0, pendingAcceptData = null; 
+  let uploadedURLs = {}; // Stores image URLs
+
   // Odometer Logic Variables
   let missionInterval = null, odometerInterval = null;
-  let totalDrivenKm = 0, lastLat = null, lastLng = null, baseDistance = 0;
+  let totalDrivenKm = 0, lastLat = null, lastLng = null;
 
   const getKmDistance = (lat1, lon1, lat2, lon2) => {
       const R = 6371; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -192,11 +277,27 @@
   };
 
   window.onload = () => {
-    if (driver.id) { document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; checkActiveMission(); }
+    // Check local storage for session
+    if (driver.id) { 
+        if (driver.status === 'PENDING') {
+            goStep('Pending'); // Show pending screen if locked
+        } else {
+            document.getElementById('navToggle').style.display = 'flex'; 
+            document.getElementById('bottomNav').style.display = 'flex'; 
+            driver.isOnline = true; // Auto online on refresh
+            checkActiveMission(); 
+        }
+    }
+    
+    // Get GPS
     if (navigator.geolocation) navigator.geolocation.watchPosition(pos => { driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; }, err => console.log("GPS denied"), { enableHighAccuracy: true });
   };
 
-  function goStep(n) { [1,'1-otp',2,3,4,5,6].forEach(i => { let el = document.getElementById('step'+i); if(el) el.classList.add('hidden'); }); document.getElementById('step' + n).classList.remove('hidden'); window.scrollTo(0,0); }
+  function goStep(n) { 
+      [1, 'Pending', 2, 3, 4, 5, 6].forEach(i => { let el = document.getElementById('step'+i); if(el) el.classList.add('hidden'); }); 
+      document.getElementById('step' + n).classList.remove('hidden'); 
+      window.scrollTo(0,0); 
+  }
 
   function navTab(stepNum, btnElement) {
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
@@ -204,35 +305,146 @@
     goStep(stepNum);
     if(stepNum === 2) fetchRadar();
     if(stepNum === 4) loadHistory();
-    if(stepNum === 5) { document.getElementById('editName').value = driver.name || ''; document.getElementById('editPhone').value = driver.phone || ''; document.getElementById('editVehicle').value = driver.vehicle_num || ''; document.getElementById('editType').value = driver.type || 'ALS'; }
+    if(stepNum === 5) { 
+        document.getElementById('editName').value = driver.name || ''; 
+        document.getElementById('editPhone').value = driver.phone || ''; 
+        document.getElementById('editVehicle').value = driver.vehicle_num || ''; 
+        document.getElementById('editType').value = driver.type || 'ALS'; 
+    }
   }
 
-  function switchAuthMode(mode) { isRegisterMode = (mode === 'register'); document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode); document.getElementById('tabRegister').classList.toggle('active', isRegisterMode); document.getElementById('registerFields').classList.toggle('hidden', !isRegisterMode); }
+  // ==========================================
+  // AUTHENTICATION & KYC REGISTRATION
+  // ==========================================
+  function switchAuthMode(mode) { 
+      isRegisterMode = (mode === 'register'); 
+      document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode); 
+      document.getElementById('tabRegister').classList.toggle('active', isRegisterMode); 
+      
+      document.getElementById('loginOnlyFields').classList.toggle('hidden', isRegisterMode);
+      document.getElementById('regPart1').classList.toggle('hidden', !isRegisterMode);
+      document.getElementById('regPart2').classList.add('hidden');
+  }
+
+  function goToRegPart2() {
+      const name = document.getElementById('regName').value;
+      const phone = document.getElementById('regPhone').value;
+      const veh = document.getElementById('regVehicle').value;
+      if(!name || !phone || !veh) return alert("Please fill all basic details first.");
+      document.getElementById('regPart1').classList.add('hidden');
+      document.getElementById('regPart2').classList.remove('hidden');
+  }
+  function goToRegPart1() { document.getElementById('regPart2').classList.add('hidden'); document.getElementById('regPart1').classList.remove('hidden'); }
   function cancelLogin() { document.getElementById('otpForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); }
 
-  async function requestOTP() {
-    const phone = document.getElementById('authPhone').value; if (!phone) return alert("Enter phone number.");
+  // ☁️ Uploads image to ImgBB and returns secure URL
+  async function uploadImageToImgBB(fileInputId) {
+      const fileField = document.getElementById(fileInputId);
+      if (!fileField.files || fileField.files.length === 0) return null;
+      
+      const formData = new FormData();
+      formData.append("image", fileField.files[0]);
+      
+      try {
+          const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: formData });
+          const data = await res.json();
+          if(data.success) return data.data.url;
+          return null;
+      } catch (err) { return null; }
+  }
+
+  async function submitKYC() {
+      const btn = document.getElementById('btnSubmitKYC');
+      const bar = document.getElementById('uploadBar');
+      
+      if (!document.getElementById('fileAadhar').files[0]) return alert("Aadhar Card is mandatory.");
+      if (IMGBB_API_KEY === "YOUR_IMGBB_API_KEY_HERE") return alert("Developer Error: Please add the ImgBB API Key in the code!");
+
+      btn.disabled = true; btn.innerText = "Uploading Documents...";
+      document.getElementById('uploadProgress').style.display = "block";
+      document.getElementById('uploadText').style.display = "block";
+      
+      // Upload files sequentially to manage memory
+      bar.style.width = "20%"; uploadedURLs.aadhar = await uploadImageToImgBB('fileAadhar');
+      bar.style.width = "50%"; uploadedURLs.rc = await uploadImageToImgBB('fileRC');
+      bar.style.width = "75%"; uploadedURLs.insurance = await uploadImageToImgBB('fileInsurance');
+      bar.style.width = "95%"; uploadedURLs.puc = await uploadImageToImgBB('filePUC');
+      bar.style.width = "100%";
+      
+      if(!uploadedURLs.aadhar) { btn.disabled=false; btn.innerText="Upload & Get OTP"; return alert("Failed to upload Aadhar. Check image size/network."); }
+      
+      // If uploads succeed, trigger standard OTP flow
+      await requestOTP(document.getElementById('regPhone').value);
+  }
+
+  async function requestOTP(phoneOverride) {
+    const phone = phoneOverride || document.getElementById('authPhone').value; 
+    if (!phone) return alert("Enter phone number.");
     try {
       const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone, isRegister: isRegisterMode }) });
       const data = await res.json();
-      if (res.ok) { document.getElementById('loginForm').classList.add('hidden'); document.getElementById('otpForm').classList.remove('hidden'); document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`; } else alert("❌ " + data.error);
+      if (res.ok) { 
+          document.getElementById('loginForm').classList.add('hidden'); 
+          document.getElementById('otpForm').classList.remove('hidden'); 
+          document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`; 
+      } else { alert("❌ " + data.error); document.getElementById('btnSubmitKYC').disabled = false; document.getElementById('btnSubmitKYC').innerText = "Upload & Get OTP"; }
     } catch(err) { alert("Server error."); }
   }
 
   async function verifyOTP() {
-    const phone = document.getElementById('authPhone').value, otp = document.getElementById('driverOtp').value, name = document.getElementById('regName').value, vehicle_num = document.getElementById('regVehicle').value, type = document.getElementById('regType').value;
+    const phone = isRegisterMode ? document.getElementById('regPhone').value : document.getElementById('authPhone').value;
+    const otp = document.getElementById('driverOtp').value;
+    
+    const payload = {
+        phone: phone, otp: otp, isRegister: isRegisterMode,
+        name: document.getElementById('regName').value,
+        vehicle_num: document.getElementById('regVehicle').value,
+        ambulance_type: document.getElementById('regType').value,
+        aadhar_url: uploadedURLs.aadhar || null,
+        rc_url: uploadedURLs.rc || null,
+        insurance_url: uploadedURLs.insurance || null,
+        puc_url: uploadedURLs.puc || null,
+        pcc_status: document.getElementById('regPCC').checked ? 'YES' : 'NO'
+    };
+
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone, otp, isRegister: isRegisterMode, name, vehicle_num, ambulance_type: type }) });
+      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
       const data = await res.json();
+      
       if (data.driver_id) {
-        driver = { ...driver, id: data.driver_id, type: data.ambulance_type, name: data.name, phone: data.phone, vehicle_num: data.ambulance_number, isOnline: true };
-        driver.rate = (data.ambulance_type === 'NORMAL') ? 20 : (data.ambulance_type === 'NURSE') ? 25 : (data.ambulance_type === 'ECG') ? 30 : (data.ambulance_type === 'VENTILATOR') ? 35 : 40;
+        // Save Session
+        driver = { id: data.driver_id, type: data.ambulance_type, name: data.name, phone: phone, vehicle_num: data.ambulance_number, status: data.verification_status, isOnline: false };
         localStorage.setItem('driver_session', JSON.stringify(driver));
-        document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; checkActiveMission();
+        
+        // Handle Routing based on Admin Approval Status
+        if (data.verification_status === 'PENDING') {
+            goStep('Pending');
+        } else {
+            driver.isOnline = true; // Auto online
+            document.getElementById('navToggle').style.display = 'flex'; 
+            document.getElementById('bottomNav').style.display = 'flex'; 
+            checkActiveMission();
+            toggleStatus(); // Ping server
+        }
       } else alert("❌ " + data.error);
     } catch(err) { alert("Failed to verify."); }
   }
 
+  // Allow driver to check if admin approved them yet
+  async function checkApprovalStatus() {
+      if(!driver.phone) return;
+      // Re-verify login silently to check status
+      const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone: driver.phone, isRegister: false }) });
+      if(res.ok) {
+          alert("We sent a quick background check. Please logout and login again to refresh your status.");
+      } else {
+          alert("Still pending. Check back later.");
+      }
+  }
+
+  // ==========================================
+  // RADAR & MISSIONS
+  // ==========================================
   async function toggleStatus() {
     driver.isOnline = document.getElementById('statusCheckbox').checked;
     document.getElementById('toggleText').innerText = driver.isOnline ? "ONLINE" : "OFFLINE";
@@ -253,7 +465,6 @@
 
   function setupActiveMissionUI(m) {
     driver.activeBookingId = m.booking_id;
-    baseDistance = parseFloat(m.hospital_distance_km) || 0; // Fix: Save original distance to prevent 0 cost error
     document.getElementById('missionPatient').innerText = m.user_name; document.getElementById('missionCondition').innerText = m.emergency_category; document.getElementById('missionHospital').innerText = m.hospital_name; document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
     
     document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=$${m.user_latitude},${m.user_longitude}`;
@@ -266,9 +477,13 @@
     if(!missionInterval) missionInterval = setInterval(checkActiveMission, 5000);
   }
 
-  async function changeDestination() {
-      const newDest = prompt("Enter new Hospital Name:");
-      if(newDest && driver.activeBookingId) { await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest }) }); checkActiveMission(); }
+  async function submitDriverDest() {
+      const newDest = document.getElementById('driverNewDest').value;
+      if(newDest && driver.activeBookingId) { 
+          await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest }) }); 
+          document.getElementById('destModal').classList.add('hidden');
+          checkActiveMission(); 
+      }
   }
 
   async function fetchRadar() {
@@ -310,7 +525,6 @@
   async function pickup() { 
       await fetch(`${BASE_URL}/api/driver/pickup`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId }) }); 
       checkActiveMission();
-      
       lastLat = driver.lat; lastLng = driver.lng; totalDrivenKm = 0;
       odometerInterval = setInterval(() => {
           const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng);
@@ -318,39 +532,25 @@
       }, 3000);
   }
 
+  // 🔥 SINGLE SOURCE OF TRUTH: Server does the math!
   async function completeTrip() { 
       clearInterval(odometerInterval); clearInterval(missionInterval);
       
-      // Calculate final distance ensuring it never charges 0
-      let finalDistance = Math.max(baseDistance, totalDrivenKm);
-      const finalCost = Math.ceil(finalDistance) * (driver.rate || 40);
+      const res = await fetch(`${BASE_URL}/api/driver/complete`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) }); 
+      const data = await res.json();
       
-      await fetch(`${BASE_URL}/api/driver/complete`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: finalDistance }) }); 
-      
-      document.getElementById('receiptDist').innerText = finalDistance.toFixed(2);
-      document.getElementById('receiptCost').innerText = finalCost;
+      // Driver reads the EXACT final cost calculated by the server database
+      document.getElementById('receiptDist').innerText = totalDrivenKm.toFixed(2);
+      document.getElementById('receiptCost').innerText = data.final_cost || 0;
       goStep(6); 
   }
 
   function closeReceipt() { 
-      // 1. Reset mission data
-      driver.activeBookingId = null; 
-      totalDrivenKm = 0; 
-      baseDistance = 0; 
-      
-      // 2. Force UI back to Step 2 (Radar)
+      driver.activeBookingId = null; totalDrivenKm = 0; 
       goStep(2);
-      
-      // 3. Force the pulse animation to turn back on
       document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
       document.querySelector('.pulse').style.display = "flex"; 
-      
-      // 4. Restart the 5-second scanning loop
-      fetchRadar(); 
-      if(radarInterval) clearInterval(radarInterval);
-      radarInterval = setInterval(fetchRadar, 5000);
-      
-      // 5. Highlight the Radar tab at the bottom
+      fetchRadar(); if(radarInterval) clearInterval(radarInterval); radarInterval = setInterval(fetchRadar, 5000);
       document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.nav-item')[0].classList.add('active');
   }
@@ -375,7 +575,7 @@
   function logout() {
     if(!confirm("Are you sure? All session data will be cleared.")) return;
     clearInterval(radarInterval); localStorage.removeItem('driver_session');
-    driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, rate: 40 };
+    driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null };
     document.getElementById('navToggle').style.display = 'none'; document.getElementById('bottomNav').style.display = 'none'; cancelLogin(); goStep(1);
   }
 </script>
