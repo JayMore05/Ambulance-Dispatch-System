@@ -21,5 +21,3 @@ A distributed full-stack application designed to coordinate life-saving medical 
 
 ---
 
-### 📸 System Screenshots
-*[Once you save this file, you can drag and drop your screenshots here to show the radar and driver dashboard!]*
