@@ -20,18 +20,46 @@
         --highlight: #fee2e2; 
     }
     
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 40px; }
-    .container { width: 100%; max-width: 600px; margin: auto; padding: 16px; }
+    * { 
+        box-sizing: border-box; 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; 
+    }
+    
+    body { 
+        margin: 0; 
+        background: var(--bg); 
+        color: var(--text); 
+        padding-bottom: 40px; 
+    }
+    
+    .container { 
+        width: 100%; 
+        max-width: 600px; 
+        margin: auto; 
+        padding: 16px; 
+    }
     
     .topbar { 
-        position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); 
-        border-bottom: 1px solid var(--border); z-index: 10; padding: 14px 16px; 
-        display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05); 
+        position: sticky; 
+        top: 0; 
+        background: rgba(255,255,255,0.95); 
+        backdrop-filter: blur(10px); 
+        border-bottom: 1px solid var(--border); 
+        z-index: 10; 
+        padding: 14px 16px; 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05); 
     }
-    .brand { font-weight: 800; font-size: 1.3rem; color: var(--primary); letter-spacing: -0.5px; }
     
-    /* 🌐 Language Selector */
+    .brand { 
+        font-weight: 800; 
+        font-size: 1.3rem; 
+        color: var(--primary); 
+        letter-spacing: -0.5px; 
+    }
+    
     .lang-selector {
         padding: 6px;
         border-radius: 8px;
@@ -41,51 +69,267 @@
         outline: none;
     }
 
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.03); margin-bottom: 16px; }
-    p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card { 
+        background: var(--card); 
+        border: 1px solid var(--border); 
+        border-radius: 20px; 
+        padding: 24px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.03); 
+        margin-bottom: 16px; 
+    }
     
-    .page-header { display: flex; align-items: center; margin-bottom: 16px; }
-    .page-header h1 { margin: 0; font-size: 22px; font-weight: 800; }
-    .back-icon { background: #f1f5f9; border: none; font-size: 18px; margin-right: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; transition: 0.2s; }
-    .back-icon:active { transform: scale(0.95); background: #e2e8f0; }
+    p { 
+        margin: 0 0 16px; 
+        color: var(--muted); 
+        font-size: 14px; 
+        line-height: 1.6; 
+    }
     
-    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 700; text-transform: uppercase; }
-    input { width: 100%; padding: 16px; border-radius: 12px; border: 2px solid var(--border); font-size: 16px; outline: none; transition: 0.2s; background: #f8fafc; }
-    input:focus { border-color: var(--primary); background: #fff; }
+    .page-header { 
+        display: flex; 
+        align-items: center; 
+        margin-bottom: 16px; 
+    }
     
-    .btn { width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; text-align: center; margin-bottom: 10px; }
-    .btn:active { transform: scale(0.97); }
-    .btn.primary { background: var(--primary); color: #fff; }
-    .btn.ghost { background: transparent; border: 2px solid var(--border); color: var(--text); }
-    .btn.sos { background: #25D366; color: #fff; }
+    .page-header h1 { 
+        margin: 0; 
+        font-size: 22px; 
+        font-weight: 800; 
+    }
     
-    .list-item { text-align: left; width: 100%; background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; gap: 6px; }
-    .list-item:active { transform: scale(0.98); border-color: var(--primary); background: var(--highlight); }
-    .title { font-weight: 800; font-size: 16px; color: var(--text); }
-    .meta { font-size: 13px; color: var(--muted); font-weight: 500; }
+    .back-icon { 
+        background: #f1f5f9; 
+        border: none; 
+        font-size: 18px; 
+        margin-right: 12px; 
+        cursor: pointer; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        width: 36px; 
+        height: 36px; 
+        border-radius: 10px; 
+        transition: 0.2s; 
+    }
     
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; margin-left: 8px; text-transform: uppercase; }
-    .badge.green { background: #dcfce7; color: #166534; }
-    .badge.fast { background: #fef3c7; color: #b45309; }
+    .back-icon:active { 
+        transform: scale(0.95); 
+        background: #e2e8f0; 
+    }
     
-    .toggle-box { display: flex; align-items: center; justify-content: space-between; background: #f0fdf4; padding: 16px; border-radius: 14px; border: 1px solid #bbf7d0; margin-bottom: 20px; }
-    .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; border-radius: 34px; transition: .4s; }
-    .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; border-radius: 50%; transition: .4s; }
-    input:checked + .slider { background-color: var(--success); }
-    input:checked + .slider:before { transform: translateX(22px); }
+    label { 
+        display: block; 
+        font-size: 13px; 
+        color: var(--muted); 
+        margin: 12px 0 6px; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+    }
     
-    /* Radar & Timer */
-    .radar-box { text-align: center; padding: 40px 0; }
-    .pulse { width: 100px; height: 100px; background: rgba(229, 57, 53, 0.15); border-radius: 50%; margin: 0 auto 20px; position: relative; display: flex; justify-content: center; align-items: center; font-size: 40px; }
-    .pulse::after { content: ""; position: absolute; width: 100%; height: 100%; background: rgba(229, 57, 53, 0.4); border-radius: 50%; z-index: 1; animation: pulse-anim 1.5s infinite; }
-    @keyframes pulse-anim { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
+    input { 
+        width: 100%; 
+        padding: 16px; 
+        border-radius: 12px; 
+        border: 2px solid var(--border); 
+        font-size: 16px; 
+        outline: none; 
+        transition: 0.2s; 
+        background: #f8fafc; 
+    }
+    
+    input:focus { 
+        border-color: var(--primary); 
+        background: #fff; 
+    }
+    
+    .btn { 
+        width: 100%; 
+        padding: 16px; 
+        border: none; 
+        border-radius: 14px; 
+        font-size: 16px; 
+        font-weight: 700; 
+        cursor: pointer; 
+        transition: 0.2s; 
+        text-align: center; 
+        margin-bottom: 10px; 
+    }
+    
+    .btn:active { 
+        transform: scale(0.97); 
+    }
+    
+    .btn.primary { 
+        background: var(--primary); 
+        color: #fff; 
+    }
+    
+    .btn.ghost { 
+        background: transparent; 
+        border: 2px solid var(--border); 
+        color: var(--text); 
+    }
+    
+    .btn.sos { 
+        background: #25D366; 
+        color: #fff; 
+    }
+    
+    .list-item { 
+        text-align: left; 
+        width: 100%; 
+        background: #fff; 
+        border: 1px solid var(--border); 
+        border-radius: 16px; 
+        padding: 18px; 
+        margin-bottom: 12px; 
+        cursor: pointer; 
+        transition: 0.2s; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 6px; 
+    }
+    
+    .list-item:active { 
+        transform: scale(0.98); 
+        border-color: var(--primary); 
+        background: var(--highlight); 
+    }
+    
+    .title { 
+        font-weight: 800; 
+        font-size: 16px; 
+        color: var(--text); 
+    }
+    
+    .meta { 
+        font-size: 13px; 
+        color: var(--muted); 
+        font-weight: 500; 
+    }
+    
+    .badge { 
+        display: inline-block; 
+        padding: 4px 10px; 
+        border-radius: 8px; 
+        font-size: 11px; 
+        font-weight: 800; 
+        margin-left: 8px; 
+        text-transform: uppercase; 
+    }
+    
+    .badge.green { 
+        background: #dcfce7; 
+        color: #166534; 
+    }
+    
+    .badge.fast { 
+        background: #fef3c7; 
+        color: #b45309; 
+    }
+    
+    .toggle-box { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between; 
+        background: #f0fdf4; 
+        padding: 16px; 
+        border-radius: 14px; 
+        border: 1px solid #bbf7d0; 
+        margin-bottom: 20px; 
+    }
+    
+    .switch { 
+        position: relative; 
+        display: inline-block; 
+        width: 50px; 
+        height: 28px; 
+    }
+    
+    .switch input { 
+        opacity: 0; 
+        width: 0; 
+        height: 0; 
+    }
+    
+    .slider { 
+        position: absolute; 
+        cursor: pointer; 
+        top: 0; 
+        left: 0; 
+        right: 0; 
+        bottom: 0; 
+        background-color: #cbd5e1; 
+        border-radius: 34px; 
+        transition: .4s; 
+    }
+    
+    .slider:before { 
+        position: absolute; 
+        content: ""; 
+        height: 20px; 
+        width: 20px; 
+        left: 4px; 
+        bottom: 4px; 
+        background-color: white; 
+        border-radius: 50%; 
+        transition: .4s; 
+    }
+    
+    input:checked + .slider { 
+        background-color: var(--success); 
+    }
+    
+    input:checked + .slider:before { 
+        transform: translateX(22px); 
+    }
+    
+    .radar-box { 
+        text-align: center; 
+        padding: 40px 0; 
+    }
+    
+    .pulse { 
+        width: 100px; 
+        height: 100px; 
+        background: rgba(229, 57, 53, 0.15); 
+        border-radius: 50%; 
+        margin: 0 auto 20px; 
+        position: relative; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        font-size: 40px; 
+    }
+    
+    .pulse::after { 
+        content: ""; 
+        position: absolute; 
+        width: 100%; 
+        height: 100%; 
+        background: rgba(229, 57, 53, 0.4); 
+        border-radius: 50%; 
+        z-index: 1; 
+        animation: pulse-anim 1.5s infinite; 
+    }
+    
+    @keyframes pulse-anim { 
+        0% { transform: scale(0.9); opacity: 1; } 
+        100% { transform: scale(2.2); opacity: 0; } 
+    }
 
-    /* Leaflet Map */
-    #map { height: 250px; width: 100%; border-radius: 16px; margin-bottom: 16px; border: 1px solid var(--border); z-index: 1; }
+    #map { 
+        height: 250px; 
+        width: 100%; 
+        border-radius: 16px; 
+        margin-bottom: 16px; 
+        border: 1px solid var(--border); 
+        z-index: 1; 
+    }
     
-    .hidden { display: none !important; }
+    .hidden { 
+        display: none !important; 
+    }
   </style>
 </head>
 <body>
@@ -102,7 +346,9 @@
 <div class="container">
   
   <div id="step1" class="card">
-    <div class="page-header"><h1 data-i18n="booking">Emergency Booking</h1></div>
+    <div class="page-header">
+        <h1 data-i18n="booking">Emergency Booking</h1>
+    </div>
     <p data-i18n="gps">Please provide details. We will automatically detect your location.</p>
     
     <label>Patient Name</label>
@@ -121,6 +367,7 @@
       <button class="back-icon" onclick="goBack()">⬅️</button>
       <h1 data-i18n="what_emerg">What is the Emergency?</h1>
     </div>
+    
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
       <button class="list-item" onclick="selectEmergency('Heart Attack')"><span style="font-size: 24px;">❤️</span> <b>Heart Attack</b></button>
       <button class="list-item" onclick="selectEmergency('Road Accident')"><span style="font-size: 24px;">🚗</span> <b>Road Accident</b></button>
@@ -136,7 +383,7 @@
           <span style="font-size: 24px; margin-right: 10px;">🤒</span> <b>General Sickness / Fever</b>
       </button>
     </div>
-    <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
+    <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
   <div id="step3" class="card hidden">
@@ -148,14 +395,14 @@
     <input type="text" id="hospSearch" oninput="searchDatabase()" placeholder="🔍 Start typing hospital name..." style="margin-bottom: 16px;">
     
     <div class="toggle-box" id="ayushmanFilterBox">
-        <div class="text" style="font-weight: 700; color: #15803d; font-size: 14px;">✅ Show Free / Ayushman Only</div>
+        <div class="text" style="font-weight: 700; color: #15803d; font-size: 14px;" data-i18n="ayushman">✅ Show Free / Ayushman Only</div>
         <label class="switch"><input type="checkbox" id="ayushmanToggle" onchange="fetchHospitals()"><span class="slider"></span></label>
     </div>
     
     <div id="hospitalList"><p>Loading nearby hospitals matching your condition...</p></div>
     
     <div style="text-align: center; margin-top: 20px;">
-        <button class="btn ghost" style="border-color:var(--primary); color:var(--primary);" onclick="customHospital()">➕ Type Custom Name Manually</button>
+        <button class="btn ghost" style="border-color:var(--primary); color:var(--primary);" onclick="customHospital()" data-i18n="custom_hosp">➕ Type Custom Name Manually</button>
     </div>
   </div>
 
@@ -171,7 +418,7 @@
     </button>
     
     <div id="ambulanceOptions"></div>
-    <button class="btn ghost" style="margin-top:16px;" onclick="goBack()">← Back</button>
+    <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
   <div id="step5" class="card hidden" style="text-align:center;">
@@ -181,7 +428,7 @@
         <h2 style="color:var(--primary); font-size:45px; margin: 10px 0;"><span id="timerText">120</span>s</h2>
         <p>Searching 15km radius for the fastest driver.</p>
     </div>
-    <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="confirmCancel()">❌ Cancel Request</button>
+    <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="confirmCancel()" data-i18n="cancel_req">❌ Cancel Request</button>
   </div>
 
   <div id="step6" class="card hidden">
@@ -204,13 +451,13 @@
     
     <div style="display:flex; gap:10px; margin-top:10px;">
       <a href="tel:112" class="btn primary" style="text-decoration:none; background:var(--success); width:50%;">📞 Call Driver</a>
-      <button class="btn ghost" style="width:50%;" onclick="changeDestination()">🔄 Change Dest.</button>
+      <button class="btn ghost" style="width:50%;" onclick="changeDestination()" data-i18n="change_dest">🔄 Change Dest.</button>
     </div>
   </div>
 
   <div id="step7" class="card hidden">
     <div style="text-align:center; padding: 20px 0;">
-        <h1 style="color: var(--success); font-size: 28px; margin:0;">✅ Trip Completed</h1>
+        <h1 style="color: var(--success); font-size: 28px; margin:0;" data-i18n="trip_done">✅ Trip Completed</h1>
     </div>
     
     <div class="list-item" style="cursor:default;">
@@ -228,15 +475,15 @@
           <strong style="font-size: 26px; color: var(--primary);" id="receiptCost">₹--</strong>
       </div>
     </div>
-    <button class="btn ghost" style="margin-top:20px;" onclick="clearSession()">Return to Home</button>
+    <button class="btn ghost" style="margin-top:20px;" onclick="clearSession()" data-i18n="home">Return to Home</button>
   </div>
 
   <div id="step8" class="card hidden" style="text-align:center; border:2px solid red;">
       <h1 style="color:red; font-size:50px; margin: 0;">⚠️</h1>
-      <h2 style="color:var(--text);">All nearby ambulances are busy.</h2>
+      <h2 style="color:var(--text);" data-i18n="all_busy">All nearby ambulances are busy.</h2>
       <p style="color:var(--muted);">We could not find an available driver in the last 120 seconds. Please do not wait.</p>
       <a href="tel:112" class="btn primary" style="text-decoration:none; background:red; padding: 20px; font-size: 18px;">🚨 DIAL 112 INSTANTLY</a>
-      <button class="btn ghost" onclick="clearSession()">Return to Home</button>
+      <button class="btn ghost" onclick="clearSession()" data-i18n="home">Return to Home</button>
   </div>
 
 </div>
@@ -246,11 +493,13 @@
   // SETUP & VARIABLES
   // ==========================================
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
+  
   let currentStep = 1;
   let isUpdatingDestination = false;
   let pollInterval = null;
   let searchTimer = 120;
   let searchInterval = null;
+  let currentPollRate = 5000;
   
   let leafletMap = null;
   let patientMarker = null;
@@ -263,9 +512,17 @@
   ];
 
   let state = { 
-      userLat: null, userLng: null, userId: null, emergency: null, 
-      hospitalId: null, hospitalName: null, customName: null, 
-      ambulanceType: null, distance: 0, rate: 0, bookingId: null 
+      userLat: null, 
+      userLng: null, 
+      userId: null, 
+      emergency: null, 
+      hospitalId: null, 
+      hospitalName: null, 
+      customName: null, 
+      ambulanceType: null, 
+      distance: 0, 
+      rate: 0, 
+      bookingId: null 
   };
 
   // ==========================================
@@ -280,7 +537,15 @@
           choose_dest: "Choose Destination", 
           select_amb: "Select Ambulance", 
           broadcasting: "Broadcasting...", 
-          driver_otw: "✅ Driver is on the way!" 
+          driver_otw: "✅ Driver is on the way!",
+          back: "← Back",
+          ayushman: "✅ Show Free / Ayushman Only",
+          custom_hosp: "➕ Type Custom Name Manually",
+          change_dest: "🔄 Change Dest.",
+          cancel_req: "❌ Cancel Request",
+          trip_done: "✅ Trip Completed",
+          home: "Return to Home",
+          all_busy: "All nearby ambulances are busy."
       },
       hi: { 
           booking: "आपातकालीन बुकिंग", 
@@ -290,7 +555,15 @@
           choose_dest: "गंतव्य चुनें", 
           select_amb: "एम्बुलेंस चुनें", 
           broadcasting: "प्रसारण हो रहा है...", 
-          driver_otw: "✅ ड्राइवर आ रहा है!" 
+          driver_otw: "✅ ड्राइवर आ रहा है!",
+          back: "← वापस",
+          ayushman: "✅ केवल मुफ्त / आयुष्मान दिखाएं",
+          custom_hosp: "➕ कस्टम नाम मैन्युअल रूप से टाइप करें",
+          change_dest: "🔄 गंतव्य बदलें",
+          cancel_req: "❌ अनुरोध रद्द करें",
+          trip_done: "✅ यात्रा पूरी हुई",
+          home: "होम पर लौटें",
+          all_busy: "आसपास की सभी एम्बुलेंस व्यस्त हैं।"
       },
       mr: { 
           booking: "आणीबाणी बुकिंग", 
@@ -300,7 +573,15 @@
           choose_dest: "गंतव्यस्थान निवडा", 
           select_amb: "रुग्णवाहिका निवडा", 
           broadcasting: "प्रसारण करत आहे...", 
-          driver_otw: "✅ चालक वाटेत आहे!" 
+          driver_otw: "✅ चालक वाटेत आहे!",
+          back: "← मागे",
+          ayushman: "✅ फक्त मोफत / आयुष्मान दाखवा",
+          custom_hosp: "➕ सानुकूल नाव व्यक्तिचलितपणे टाइप करा",
+          change_dest: "🔄 गंतव्यस्थान बदला",
+          cancel_req: "❌ विनंती रद्द करा",
+          trip_done: "✅ ट्रिप पूर्ण झाली",
+          home: "मुख्यपृष्ठावर परत जा",
+          all_busy: "जवळील सर्व रुग्णवाहिका व्यस्त आहेत."
       }
   };
 
@@ -320,13 +601,14 @@
     if (savedState) { 
         state = JSON.parse(savedState); 
         if (state.bookingId) { 
-            pollInterval = setInterval(checkStatus, 3000); 
+            pollInterval = setInterval(checkStatus, currentPollRate); 
             checkStatus(); 
             return; 
         } 
     }
     
     const statusEl = document.getElementById('locStatus');
+    
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => { 
@@ -357,8 +639,11 @@
       for(let i=1; i<=8; i++) { 
           let el = document.getElementById('step' + i); 
           if(el) { 
-              if (i === n) el.classList.remove('hidden'); 
-              else el.classList.add('hidden'); 
+              if (i === n) {
+                  el.classList.remove('hidden'); 
+              } else {
+                  el.classList.add('hidden'); 
+              }
           } 
       } 
       window.scrollTo(0, 0); 
@@ -381,15 +666,24 @@
   async function saveUser() {
     const name = document.getElementById('userName').value; 
     const phone = document.getElementById('userPhone').value;
-    if(!name || !phone) return alert("Please enter both your Name and Phone Number.");
+    
+    if(!name || !phone) {
+        return alert("Please enter both your Name and Phone Number.");
+    }
     
     try {
       const res = await fetch(BASE_URL + "/api/save-user", { 
           method: "POST", 
           headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ name, phone, latitude: state.userLat, longitude: state.userLng }) 
+          body: JSON.stringify({ 
+              name: name, 
+              phone: phone, 
+              latitude: state.userLat, 
+              longitude: state.userLng 
+          }) 
       });
       const data = await res.json();
+      
       if (res.ok && data.success) { 
           state.userId = data.user_id; 
           saveState(); 
@@ -465,8 +759,13 @@
           await fetch(`${BASE_URL}/api/bookings/update-destination`, { 
               method: "POST", 
               headers: {"Content-Type":"application/json"}, 
-              body: JSON.stringify({ booking_id: state.bookingId, new_destination: newName, new_distance: newDist }) 
+              body: JSON.stringify({ 
+                  booking_id: state.bookingId, 
+                  new_destination: newName, 
+                  new_distance: newDist 
+              }) 
           });
+          
           alert("Destination Updated! Driver notified."); 
           isUpdatingDestination = false; 
           goStep(6);
@@ -497,6 +796,7 @@
                       <div class="meta">₹${amb.rate}/km</div>
                   </button>`; 
           }); 
+          
           goStep(4);
       }
   }
@@ -527,6 +827,7 @@
               <div class="meta">₹${amb.rate}/km</div>
           </button>`;
     }); 
+    
     goStep(4);
   }
 
@@ -541,17 +842,24 @@
           method: "POST", 
           headers: {"Content-Type":"application/json"}, 
           body: JSON.stringify({ 
-              user_id: state.userId, hospital_id: state.hospitalId, custom_destination: state.customName, 
-              emergency_type: state.emergency, ambulance_type: state.ambulanceType, user_lat: state.userLat, 
-              user_lng: state.userLng, distance_km: state.distance, rate_per_km: state.rate 
+              user_id: state.userId, 
+              hospital_id: state.hospitalId, 
+              custom_destination: state.customName, 
+              emergency_type: state.emergency, 
+              ambulance_type: state.ambulanceType, 
+              user_lat: state.userLat, 
+              user_lng: state.userLng, 
+              distance_km: state.distance, 
+              rate_per_km: state.rate 
           }) 
       });
-      const data = await res.json();
+      
+      const data = await res.json(); 
       state.bookingId = data.booking_id; 
       saveState();
       
       if(pollInterval) clearInterval(pollInterval); 
-      pollInterval = setInterval(checkStatus, 3000);
+      pollInterval = setInterval(checkStatus, currentPollRate);
       
       // 🚨 120 SECOND TIMEOUT LOGIC
       searchTimer = 120; 
@@ -564,7 +872,7 @@
           if(searchTimer <= 0) { 
               clearInterval(searchInterval); 
               confirmCancel(); 
-              goStep(8); // Show the red warning card
+              goStep(8); 
           }
       }, 1000);
       
@@ -596,12 +904,26 @@
       
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
         
-        // Driver found! Stop the 120s timer.
-        clearInterval(searchInterval);
+        clearInterval(searchInterval); // Stop the 120s timer
         
-        if(currentStep !== 6 && !isUpdatingDestination) {
+        // 🔄 DYNAMIC POLLING LOGIC
+        const newDist = parseFloat(data.distance);
+        if (newDist > 5) {
+            if (currentPollRate !== 10000) { 
+                clearInterval(pollInterval); 
+                currentPollRate = 10000; 
+                pollInterval = setInterval(checkStatus, currentPollRate); 
+            }
+        } else {
+            if (currentPollRate !== 3000) { 
+                clearInterval(pollInterval); 
+                currentPollRate = 3000; 
+                pollInterval = setInterval(checkStatus, currentPollRate); 
+            }
+        }
+
+        if(currentStep !== 6 && !isUpdatingDestination) { 
             goStep(6); 
-            // Give Leaflet time to load the map inside the new div
             setTimeout(() => { 
                 initPatientMap(); 
                 leafletMap.invalidateSize(); 
@@ -627,7 +949,9 @@
           alert("This booking was cancelled."); 
           clearSession(); 
       }
-    } catch(err) { console.log("Poll Delay"); }
+    } catch(err) { 
+        console.log("Poll Delay"); 
+    }
   }
 
   function changeDestination() {
@@ -638,7 +962,7 @@
       fetchHospitals(); 
   }
   
-  // 🚨 WHATSAPP SOS FUNCTION
+  // 🚨 PATIENT WHATSAPP SOS FUNCTION
   function sendSOS() { 
       const dest = state.hospitalName || state.customName || "Hospital";
       const msg = `URGENT: I have booked an ambulance via FastRescue for a ${state.emergency}. Driver is arriving soon. Dropoff Location: ${dest}. Please reach there immediately.`; 
@@ -648,9 +972,11 @@
   async function confirmCancel() { 
       clearInterval(pollInterval); 
       clearInterval(searchInterval); 
-      if (state.bookingId) {
+      
+      if (state.bookingId) { 
           await fetch(`${BASE_URL}/api/bookings/cancel`, { 
-              method: "POST", headers: {"Content-Type":"application/json"}, 
+              method: "POST", 
+              headers: {"Content-Type":"application/json"}, 
               body: JSON.stringify({ booking_id: state.bookingId }) 
           }); 
       }
