@@ -20,13 +20,16 @@ const getKmDistance = (lat1, lon1, lat2, lon2) => {
     const rLon1 = parseFloat(lon1) || 0;
     const rLat2 = parseFloat(lat2) || 0;
     const rLon2 = parseFloat(lon2) || 0;
+    
     if (rLat1 === 0 || rLon1 === 0 || rLat2 === 0 || rLon2 === 0) return 999;
 
     const R = 6371; 
     const dLat = (rLat2 - rLat1) * Math.PI / 180; 
     const dLon = (rLon2 - rLon1) * Math.PI / 180;
+    
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + 
               Math.cos(rLat1 * Math.PI / 180) * Math.cos(rLat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+              
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
 };
 
@@ -76,7 +79,6 @@ app.get("/api/hospitals", (req, res) => {
     });
 });
 
-// 🔥 NEW: Deep Database Search API
 app.get("/api/hospitals/search", (req, res) => {
     const { term, lat, lng } = req.query;
     if (!term) return res.json({ hospitals: [] });
@@ -112,7 +114,6 @@ app.post("/api/bookings/cancel", (req, res) => {
     db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [req.body.booking_id], (err) => res.json({ success: !err }));
 });
 
-// 🔥 UPGRADED: Accepts the new distance when patient or driver changes destination manually
 app.post("/api/bookings/update-destination", (req, res) => {
     const { booking_id, new_destination, new_distance } = req.body;
     
@@ -136,7 +137,6 @@ app.get("/api/user/eta", (req, res) => {
         
         const b = rows[0];
         
-        // 🔥 PRICE SYNC: If completed, return the exact final_cost from the DB
         if(b.status === 'COMPLETED') {
             return res.json({ status: 'COMPLETED', final_cost: b.final_cost, distance: parseFloat(b.hospital_distance_km).toFixed(2), hospital: b.hospital_name });
         }
@@ -163,7 +163,6 @@ app.post("/api/driver/request-otp", (req, res) => {
     });
 });
 
-// 🔥 NEW: Verification Status checks added here and KYC saves
 app.post("/api/driver/verify-otp", (req, res) => {
     const { phone, otp, isRegister, name, vehicle_num, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url } = req.body;
     
@@ -171,7 +170,6 @@ app.post("/api/driver/verify-otp", (req, res) => {
         if (err || !otps || otps.length === 0) return res.status(400).json({ error: "Invalid OTP." });
         
         if (isRegister) {
-            // New driver -> set to PENDING, save all KYC URLs
             db.query("INSERT INTO drivers (name, phone, ambulance_number, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url, verification_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'OFFLINE')", 
             [name, phone, vehicle_num, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url], (err, result) => {
                 if(err) return res.status(500).json({error: "Registration failed."});
@@ -180,7 +178,7 @@ app.post("/api/driver/verify-otp", (req, res) => {
         } else {
             db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
                 const drv = drivers[0];
-                if (drv.verification_status !== 'APPROVED') return res.json({ driver_id: drv.driver_id, verification_status: drv.verification_status });
+                if (drv.verification_status !== 'APPROVED') return res.json({ driver_id: drv.driver_id, verification_status: drv.verification_status, rejection_reason: drv.rejection_reason });
                 
                 db.query("UPDATE drivers SET status='ONLINE' WHERE driver_id=?", [drv.driver_id]);
                 res.json({ driver_id: drv.driver_id, verification_status: 'APPROVED', ...drv });
@@ -195,6 +193,23 @@ app.post("/api/driver/update-profile", (req, res) => {
     [name, phone, ambulance_number, ambulance_type, driver_id], (err) => {
         if (err) return res.status(500).json({ error: "Update failed" });
         res.json({ success: true });
+    });
+});
+
+// 🔥 NEW FEATURE: Safe Account Deletion Logic (Mission Lock included)
+app.post("/api/driver/request-delete", (req, res) => {
+    const { driver_id } = req.body;
+    
+    // MISSION LOCK: Check if driver has an active emergency
+    db.query(`SELECT * FROM bookings WHERE driver_id = ? AND status IN ('ASSIGNED', 'IN_TRANSIT')`, [driver_id], (err, rows) => {
+        if (rows && rows.length > 0) {
+            return res.status(400).json({ error: "Cannot delete account: You have an active emergency!" });
+        }
+        
+        // If no active emergency, mark as requested
+        db.query("UPDATE drivers SET verification_status = 'DELETION_REQUESTED' WHERE driver_id = ?", [driver_id], (err) => {
+            res.json({ success: !err });
+        });
     });
 });
 
@@ -215,7 +230,6 @@ app.get("/api/driver/radar", (req, res) => {
         
         const nearby = (results || []).filter(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            // 🔥 STRICT FILTER: Must be within 15km AND (Patient chose 'ANY' OR exact type matches)
             const typeMatches = (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
             return dist <= 15 && typeMatches;
         }).map(b => {
@@ -246,11 +260,9 @@ app.post("/api/driver/pickup", (req, res) => {
     });
 });
 
-// 🔥 NEW: Server calculates exact math to fix mismatch, fallback to estimated distance if GPS is 0
 app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
     
-    // Fetch the rate the patient originally agreed to
     db.query("SELECT price_per_km, hospital_distance_km FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
         if (err || rows.length === 0) return res.status(500).json({ error: "Booking not found" });
         
@@ -258,7 +270,6 @@ app.post("/api/driver/complete", (req, res) => {
         const distToUse = parseFloat(actual_distance) > 0.1 ? parseFloat(actual_distance) : parseFloat(rows[0].hospital_distance_km);
         const finalCost = Math.ceil(distToUse) * rate;
 
-        // Save the exact final cost into the database
         db.query("UPDATE bookings SET status='COMPLETED', completed_at=CURRENT_TIMESTAMP, hospital_distance_km=?, final_cost=? WHERE booking_id=?", 
         [distToUse, finalCost, booking_id], (err) => res.json({ success: !err, final_cost: finalCost }));
     });
@@ -272,7 +283,7 @@ app.get("/api/driver/history", (req, res) => {
             time_booked: formatTime(h.booked_at), 
             time_picked: formatTime(h.picked_up_at), 
             time_dropped: formatTime(h.completed_at), 
-            total_cost: h.final_cost // Using the exact final cost from DB
+            total_cost: h.final_cost 
         }))});
     });
 });
@@ -288,8 +299,18 @@ app.get("/api/admin/drivers", (req, res) => {
     });
 });
 
+// 🔥 NEW FEATURE: Admin can save a custom reason when rejecting
 app.post("/api/admin/verify", (req, res) => {
-    db.query("UPDATE drivers SET verification_status = ? WHERE driver_id = ?", [req.body.status, req.body.driver_id], (err) => {
+    const { driver_id, status, reason } = req.body;
+    db.query("UPDATE drivers SET verification_status = ?, rejection_reason = ? WHERE driver_id = ?", [status, reason || null, driver_id], (err) => {
+        res.json({ success: !err });
+    });
+});
+
+// 🔥 NEW FEATURE: Scrambles the phone number so driver is locked out, but billing history remains safe
+app.post("/api/admin/approve-delete", (req, res) => {
+    const { driver_id } = req.body;
+    db.query("UPDATE drivers SET verification_status = 'DELETED', status = 'OFFLINE', phone = CONCAT(phone, '_DEL_', driver_id) WHERE driver_id = ?", [driver_id], (err) => {
         res.json({ success: !err });
     });
 });
