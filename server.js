@@ -92,9 +92,7 @@ app.post("/api/save-user", (req, res) => {
     db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", 
     [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
         if (err) {
-            // 🔥 This will print the EXACT error in your Render logs
             console.error("❌ SQL ERROR in save-user:", err.message); 
-            // 🔥 This will pop up the EXACT error on your Patient App screen
             return res.status(500).json({ error: "User save failed: " + err.message }); 
         }
         res.json({ success: true, user_id: result.insertId });
@@ -114,8 +112,22 @@ app.post("/api/bookings/cancel", (req, res) => {
     db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [req.body.booking_id], (err) => res.json({ success: !err }));
 });
 
+// 🔥 UPGRADED: Accepts the new distance when patient or driver changes destination manually
 app.post("/api/bookings/update-destination", (req, res) => {
-    db.query("UPDATE bookings SET hospital_id = NULL, custom_destination = ? WHERE booking_id = ?", [req.body.new_destination, req.body.booking_id], (err) => res.json({ success: !err }));
+    const { booking_id, new_destination, new_distance } = req.body;
+    
+    let query = "UPDATE bookings SET hospital_id = NULL, custom_destination = ?";
+    let params = [new_destination];
+    
+    if (new_distance) {
+        query += ", hospital_distance_km = ?";
+        params.push(new_distance);
+    }
+    
+    query += " WHERE booking_id = ?";
+    params.push(booking_id);
+
+    db.query(query, params, (err) => res.json({ success: !err }));
 });
 
 app.get("/api/user/eta", (req, res) => {
@@ -234,20 +246,21 @@ app.post("/api/driver/pickup", (req, res) => {
     });
 });
 
-// 🔥 NEW: Server calculates exact math to fix mismatch
+// 🔥 NEW: Server calculates exact math to fix mismatch, fallback to estimated distance if GPS is 0
 app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
     
     // Fetch the rate the patient originally agreed to
-    db.query("SELECT price_per_km FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
+    db.query("SELECT price_per_km, hospital_distance_km FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
         if (err || rows.length === 0) return res.status(500).json({ error: "Booking not found" });
         
         const rate = parseFloat(rows[0].price_per_km) || 40;
-        const finalCost = Math.ceil(parseFloat(actual_distance)) * rate;
+        const distToUse = parseFloat(actual_distance) > 0.1 ? parseFloat(actual_distance) : parseFloat(rows[0].hospital_distance_km);
+        const finalCost = Math.ceil(distToUse) * rate;
 
         // Save the exact final cost into the database
         db.query("UPDATE bookings SET status='COMPLETED', completed_at=CURRENT_TIMESTAMP, hospital_distance_km=?, final_cost=? WHERE booking_id=?", 
-        [actual_distance, finalCost, booking_id], (err) => res.json({ success: !err, final_cost: finalCost }));
+        [distToUse, finalCost, booking_id], (err) => res.json({ success: !err, final_cost: finalCost }));
     });
 });
 
