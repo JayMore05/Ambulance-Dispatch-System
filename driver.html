@@ -1164,10 +1164,9 @@
     document.getElementById('missionCondition').innerText = m.emergency_category; 
     document.getElementById('missionHospital').innerText = m.hospital_name; 
     document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
+    document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=${m.user_latitude},${m.user_longitude}`;
     
-    document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=$${m.user_latitude},${m.user_longitude}`;
-    
-    let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
+   let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
     document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
     
     if(m.status === 'IN_TRANSIT') { 
