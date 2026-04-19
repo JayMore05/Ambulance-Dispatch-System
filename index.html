@@ -316,6 +316,13 @@
     } catch(e) {}
   }
 
+  // 🛡️ NEW ADDITION: Distance Math for proper real-time ETA
+  const getKmDistance = (lat1, lon1, lat2, lon2) => { 
+      const R = 6371; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180; 
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2); 
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
+  };
+
   // ==========================================
   // SETUP & STATE
   // ==========================================
@@ -453,6 +460,9 @@
       
       if(pollInterval) clearInterval(pollInterval); pollInterval = setInterval(checkStatus, currentPollRate);
       
+      // 🛡️ FIX: Poll immediately instead of waiting 5 seconds
+      checkStatus();
+      
       searchTimer = 120; document.getElementById('timerText').innerText = searchTimer;
       
       searchInterval = setInterval(() => {
@@ -485,24 +495,44 @@
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
         clearInterval(searchInterval);
         
-        const newDist = parseFloat(data.distance);
-        if (newDist > 5) { if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } } else { if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } }
+        // 🛡️ FIX: Pre-initialize map to prevent race conditions before map draw functions
+        if(currentStep !== 6 && !isUpdatingDestination) { 
+            goStep(6); 
+            initPatientMap();
+            setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 200); 
+        }
         
-        if(currentStep !== 6 && !isUpdatingDestination) { goStep(6); setTimeout(() => { initPatientMap(); leafletMap.invalidateSize(); }, 200); }
-        
-        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName; document.getElementById('etaDist').innerText = data.distance; document.getElementById('etaTime').innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : data.eta + " mins";
+        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName; 
         
         if (data.driver_lat && data.driver_lng) { 
+            // 🛡️ ETA BUG FIX: Calculate actual distance from driver to patient!
+            const driverDist = getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
+            
+            if (data.status === 'ASSIGNED') {
+                document.getElementById('etaDist').innerText = driverDist.toFixed(2);
+                document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverDist / 40) * 60)) + " mins";
+            } else {
+                document.getElementById('etaDist').innerText = data.distance; // They are driving to hospital now
+                document.getElementById('etaTime').innerText = "IN TRANSIT";
+            }
+            
             updateDriverOnMap(data.driver_lat, data.driver_lng); 
             // 🛡️ OSRM Ban Protection Check
-            if (!osrmRoute) { drawOSRMRoute(data.driver_lat, data.driver_lng, state.userLat, state.userLng); } 
+            if (!osrmRoute && data.status === 'ASSIGNED') { drawOSRMRoute(data.driver_lat, data.driver_lng, state.userLat, state.userLng); } 
+        } else {
+            document.getElementById('etaDist').innerText = "--";
+            document.getElementById('etaTime').innerText = "Locating...";
         }
+
+        // 🔄 Dynamic polling calculation based on actual distance
+        const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance);
+        if (distToCheck > 5) { if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } } else { if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } }
       }
       
       if (data.status === 'COMPLETED') { clearInterval(pollInterval); goStep(7); document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName; document.getElementById('receiptDist').innerText = data.distance + " km"; document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "--"); localStorage.removeItem('patient_session'); }
       
       if (data.status === 'CANCELLED') { clearInterval(pollInterval); alert("This booking was cancelled."); clearSession(); }
-    } catch(err) { console.log("Poll Delay"); }
+    } catch(err) { console.error("Poll Error:", err); }
   }
 
   function changeDestination() { isUpdatingDestination = true; document.getElementById('step3Title').innerText = "Update Destination"; document.getElementById('ayushmanFilterBox').style.display = "none"; goStep(3); fetchHospitals(); }
