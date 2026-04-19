@@ -353,4 +353,5 @@ app.post("/api/admin/approve-delete", adminAuth, (req, res) => {
 // UptimeRobot Ping Route (Keeps Render Server Awake)
 app.get("/ping", (req, res) => res.send("pong"));
 
-app.listen(4000, () => console.log(`🚀 Production Server live on Port 4000`));
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`🚀 Production Server live on Port ${PORT}`));
