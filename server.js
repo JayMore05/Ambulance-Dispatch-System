@@ -12,29 +12,38 @@ const db = require("./db");
 
 const app = express();
 
-// Security & Performance Middleware
+// ==========================================================
+// 🛡️ SECURITY & PERFORMANCE MIDDLEWARE
+// ==========================================================
+// Helmet secures HTTP headers (CSP disabled so Leaflet Maps load from CDNs)
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(compression());
-app.use(morgan('combined'));
+app.use(compression()); // Gzip compresses API responses to save bandwidth
+app.use(morgan('combined')); // Logs all requests
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Rate Limiting
+// Rate Limiting to prevent DDoS and Spam
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: "Too many requests" }});
 const otpLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 5, message: { error: "Too many OTP requests" }});
 app.use("/api/", apiLimiter);
 
-// JWT & Web Push Setup
+// ==========================================================
+// 🔐 JWT AUTH & WEB PUSH SETUP
+// ==========================================================
 const JWT_SECRET = process.env.JWT_SECRET || "fastrescue_super_secret_key";
 const ADMIN_PASS = process.env.ADMIN_PASSWORD || "admin123";
+
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails('mailto:admin@fastrescue.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
 }
 
 const adminAuth = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1];
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Extracts Bearer <token>
+    
     if (!token) return res.status(401).json({ error: "Unauthorized" });
+    
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(403).json({ error: "Invalid token" });
         next();
@@ -49,14 +58,18 @@ async function pushNotify(subscriptionJson, title, body) {
     } catch (e) { console.error("Push Error:", e.message); }
 }
 
-// ---------------------------------------------------------
-// 🛠️ UTILITY FUNCTIONS
-// ---------------------------------------------------------
+// ==========================================================
+// 🛠️ UTILITY FUNCTIONS (Geospatial Math)
+// ==========================================================
 const getKmDistance = (lat1, lon1, lat2, lon2) => {
     const rLat1 = parseFloat(lat1) || 0, rLon1 = parseFloat(lon1) || 0, rLat2 = parseFloat(lat2) || 0, rLon2 = parseFloat(lon2) || 0;
     if (rLat1 === 0 || rLon1 === 0 || rLat2 === 0 || rLon2 === 0) return 999;
-    const R = 6371, dLat = (rLat2 - rLat1) * Math.PI / 180, dLon = (rLon2 - rLon1) * Math.PI / 180;
+    
+    const R = 6371; 
+    const dLat = (rLat2 - rLat1) * Math.PI / 180;
+    const dLon = (rLon2 - rLon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rLat1 * Math.PI / 180) * Math.cos(rLat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
 };
 
@@ -72,13 +85,14 @@ const formatTime = (dateString) => {
     return new Date(dateString).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
-// ---------------------------------------------------------
+// ==========================================================
 // 🏥 PATIENT SIDE APIS
-// ---------------------------------------------------------
+// ==========================================================
 app.get("/api/hospitals", (req, res) => {
     const { condition, ayushman_only, lat, lng } = req.query;
     const cleanCondition = condition ? condition.replace(/[^\x00-\x7F]/g, "").trim() : "";
     let query = `SELECT DISTINCT h.* FROM hospitals h INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id WHERE hd.department = ?`;
+    
     if (ayushman_only === 'true') query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
 
     db.query(query, [cleanCondition], (err, rows) => {
@@ -134,8 +148,10 @@ app.post("/api/bookings/update-destination", (req, res) => {
 app.get("/api/user/eta", (req, res) => {
     db.query(`SELECT b.*, COALESCE(b.custom_destination, h.name) AS hospital_name, d.latitude AS driver_lat, d.longitude AS driver_lng FROM bookings b LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id LEFT JOIN drivers d ON b.driver_id = d.driver_id WHERE b.booking_id = ?`, [req.query.booking_id], (err, rows) => {
         if (err || !rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
+        
         const b = rows[0];
         if(b.status === 'COMPLETED') return res.json({ status: 'COMPLETED', final_cost: b.final_cost, distance: parseFloat(b.hospital_distance_km).toFixed(2), hospital: b.hospital_name });
+        
         const distKm = parseFloat(b.hospital_distance_km) || 0;
         res.json({ status: b.status, distance: distKm.toFixed(2), eta: distKm > 0 ? Math.max(1, Math.round((distKm / 40) * 60)) : "Calculating...", hospital_name: b.hospital_name, driver_lat: b.driver_lat, driver_lng: b.driver_lng });
     });
@@ -148,14 +164,15 @@ app.get("/api/user/history", (req, res) => {
     });
 });
 
-// ---------------------------------------------------------
+// ==========================================================
 // 🚑 DRIVER SIDE APIS
-// ---------------------------------------------------------
+// ==========================================================
 app.post("/api/driver/request-otp", otpLimiter, (req, res) => {
     const { phone, isRegister } = req.body;
     db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
         if (isRegister && drivers.length > 0) return res.status(400).json({ error: "Phone already registered." });
         if (!isRegister && drivers.length === 0) return res.status(400).json({ error: "Driver not found." });
+        
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
         db.query("DELETE FROM driver_otps WHERE phone = ?", [phone], () => { 
             db.query("INSERT INTO driver_otps (phone, otp, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE))", [phone, otp], (err) => res.json({ success: true, simulated_otp: otp }));
@@ -167,6 +184,7 @@ app.post("/api/driver/verify-otp", (req, res) => {
     const { phone, otp, isRegister, name, vehicle_num, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url } = req.body;
     db.query("SELECT * FROM driver_otps WHERE phone = ? AND otp = ? AND expires_at > NOW()", [phone, otp], (err, otps) => {
         if (err || !otps || otps.length === 0) return res.status(400).json({ error: "Invalid OTP." });
+        
         if (isRegister) {
             db.query("INSERT INTO drivers (name, phone, ambulance_number, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url, verification_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'OFFLINE')", 
             [name, phone, vehicle_num, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url], (err, result) => {
@@ -177,6 +195,7 @@ app.post("/api/driver/verify-otp", (req, res) => {
             db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
                 const drv = drivers[0];
                 if (drv.verification_status !== 'APPROVED') return res.json({ driver_id: drv.driver_id, verification_status: drv.verification_status, rejection_reason: drv.rejection_reason });
+                
                 db.query("UPDATE drivers SET status='ONLINE' WHERE driver_id=?", [drv.driver_id]);
                 res.json({ driver_id: drv.driver_id, verification_status: 'APPROVED', ...drv });
             });
@@ -221,6 +240,7 @@ app.get("/api/driver/active-mission", (req, res) => {
 app.get("/api/driver/radar", (req, res) => {
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booked_at DESC`, (err, results) => {
         if (err) return res.status(500).json({ error: "Radar failed." });
+        
         const driverType = req.query.driverType; 
         const nearby = (results || []).filter(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
@@ -229,16 +249,20 @@ app.get("/api/driver/radar", (req, res) => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
             return { ...b, priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), real_eta: Math.max(1, Math.round((dist / 40) * 60)), formatted_time: formatTime(b.booked_at) };
         });
+        
         res.json({ bookings: nearby });
     });
 });
 
+// 🛡️ CONCURRENCY LOCK: Ensures two drivers can't claim the same trip
 app.post("/api/driver/accept", (req, res) => {
     db.query("UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'", [req.body.driver_id, req.body.booking_id], (err, result) => {
         if (err || result.affectedRows === 0) return res.status(400).json({ error: "Emergency already taken." });
+        
         db.query("SELECT push_subscription FROM bookings WHERE booking_id=?", [req.body.booking_id], (e2, rows) => {
             if (!e2 && rows && rows[0]) pushNotify(rows[0].push_subscription, "🚑 Driver Assigned!", "An ambulance is on the way to your location.");
         });
+        
         res.json({ success: true });
     });
 });
@@ -251,9 +275,11 @@ app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
     db.query("SELECT price_per_km, hospital_distance_km FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
         if (err || rows.length === 0) return res.status(500).json({ error: "Booking not found" });
+        
         const rate = parseFloat(rows[0].price_per_km) || 40;
         const distToUse = parseFloat(actual_distance) > 0.1 ? parseFloat(actual_distance) : parseFloat(rows[0].hospital_distance_km);
         const finalCost = Math.ceil(distToUse) * rate;
+        
         db.query("UPDATE bookings SET status='COMPLETED', completed_at=CURRENT_TIMESTAMP, hospital_distance_km=?, final_cost=? WHERE booking_id=?", 
         [distToUse, finalCost, booking_id], (err) => res.json({ success: !err, final_cost: finalCost }));
     });
@@ -270,9 +296,9 @@ app.post("/api/driver/toggle-status", (req, res) => {
     db.query("UPDATE drivers SET status=? WHERE driver_id=?", [req.body.status, req.body.driver_id], (err) => res.json({ success: !err }));
 });
 
-// ---------------------------------------------------------
+// ==========================================================
 // 🔔 WEB PUSH APIS
-// ---------------------------------------------------------
+// ==========================================================
 app.get("/api/push/vapid-key", (req, res) => {
     res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
@@ -285,9 +311,9 @@ app.post("/api/push/subscribe-driver", (req, res) => {
     db.query("UPDATE drivers SET push_subscription = ? WHERE driver_id = ?", [JSON.stringify(req.body.subscription), req.body.driver_id], (err) => res.json({ success: !err }));
 });
 
-// ---------------------------------------------------------
+// ==========================================================
 // 🛡️ ADMIN APIS
-// ---------------------------------------------------------
+// ==========================================================
 app.post("/api/admin/login", (req, res) => {
     if (req.body.password === ADMIN_PASS) {
         res.json({ success: true, token: jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '12h' }) });
@@ -324,7 +350,7 @@ app.post("/api/admin/approve-delete", adminAuth, (req, res) => {
     db.query("UPDATE drivers SET verification_status = 'DELETED', status = 'OFFLINE', phone = CONCAT(phone, '_DEL_', driver_id) WHERE driver_id = ?", [driver_id], (err) => res.json({ success: !err }));
 });
 
-// UptimeRobot Ping Route
+// UptimeRobot Ping Route (Keeps Render Server Awake)
 app.get("/ping", (req, res) => res.send("pong"));
 
 app.listen(4000, () => console.log(`🚀 Production Server live on Port 4000`));
