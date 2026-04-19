@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FastRescue - Emergency Ambulance</title>
 
-  <!-- ✅ PWA -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#e53935">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -117,7 +116,6 @@
     .badge.green { background: #dcfce7; color: #166534; }
     .badge.fast { background: #fef3c7; color: #b45309; }
 
-    /* 🆕 Cost estimate badge */
     .cost-badge { background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
 
     .toggle-box {
@@ -158,7 +156,6 @@
 
     #map { height: 250px; width: 100%; border-radius: 16px; margin-bottom: 16px; border: 1px solid var(--border); z-index: 1; }
 
-    /* 🆕 Driver live location dot */
     .driver-dot {
         width: 18px; height: 18px; background: var(--primary);
         border-radius: 50%; border: 3px solid white;
@@ -170,7 +167,6 @@
         100% { box-shadow: 0 0 0 10px rgba(229,57,53,0); }
     }
 
-    /* 🆕 History modal */
     .modal-overlay {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
         background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: flex-end;
@@ -182,7 +178,6 @@
     }
     .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
 
-    /* 🆕 Rating stars */
     .star-rating { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
     .star { font-size: 32px; cursor: pointer; opacity: 0.3; transition: 0.2s; }
     .star.active { opacity: 1; }
@@ -207,7 +202,6 @@
 
 <div class="container">
 
-  <!-- STEP 1: User Details -->
   <div id="step1" class="card">
     <div class="page-header">
         <h1 data-i18n="booking">Emergency Booking</h1>
@@ -227,7 +221,6 @@
     <button class="btn primary" style="margin-top:16px;" onclick="saveUser()" data-i18n="find_hosp">Find Hospitals ➔</button>
   </div>
 
-  <!-- STEP 2: Emergency Type -->
   <div id="step2" class="card hidden">
     <div class="page-header">
       <button class="back-icon" onclick="goBack()">⬅️</button>
@@ -252,7 +245,6 @@
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
-  <!-- STEP 3: Choose Hospital -->
   <div id="step3" class="card hidden">
     <div class="page-header">
         <button class="back-icon" onclick="goBack()">⬅️</button>
@@ -273,14 +265,12 @@
     </div>
   </div>
 
-  <!-- STEP 4: Ambulance Type -->
   <div id="step4" class="card hidden">
     <div class="page-header">
         <button class="back-icon" onclick="goBack()">⬅️</button>
         <h1 data-i18n="select_amb">Select Ambulance</h1>
     </div>
 
-    <!-- 🆕 Cost estimate banner -->
     <div id="costEstimate" style="background:#eff6ff; border:1px solid #bfdbfe; padding:14px; border-radius:12px; margin-bottom:16px; text-align:center; display:none;">
       <p style="margin:0; font-size:13px; color:#1d4ed8; font-weight:600;">📏 Distance to hospital: <strong id="estDist">--</strong> km</p>
       <p style="margin:4px 0 0; font-size:13px; color:#1d4ed8;">Estimated cost shown below per ambulance type.</p>
@@ -295,7 +285,6 @@
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
-  <!-- STEP 5: Searching / Broadcasting -->
   <div id="step5" class="card hidden" style="text-align:center;">
     <div class="radar-box">
         <div class="pulse">🚑</div>
@@ -306,7 +295,6 @@
     <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="confirmCancel()" data-i18n="cancel_req">❌ Cancel Request</button>
   </div>
 
-  <!-- STEP 6: Driver On The Way -->
   <div id="step6" class="card hidden">
     <h1 style="color: var(--success);" data-i18n="driver_otw">✅ Driver is on the way!</h1>
 
@@ -331,7 +319,6 @@
     </div>
   </div>
 
-  <!-- STEP 7: Trip Completed + Rating -->
   <div id="step7" class="card hidden">
     <div style="text-align:center; padding: 20px 0;">
         <h1 style="color: var(--success); font-size: 28px; margin:0;" data-i18n="trip_done">✅ Trip Completed</h1>
@@ -353,7 +340,6 @@
       </div>
     </div>
 
-    <!-- 🆕 Driver Rating -->
     <div style="text-align:center; margin-top:24px;">
       <p style="font-weight:700; font-size:15px; margin-bottom:8px;">Rate your driver</p>
       <div class="star-rating" id="starRating">
@@ -369,7 +355,6 @@
     <button class="btn ghost" style="margin-top:20px;" onclick="clearSession()" data-i18n="home">Return to Home</button>
   </div>
 
-  <!-- STEP 8: No Driver Found -->
   <div id="step8" class="card hidden" style="text-align:center; border:2px solid red;">
       <h1 style="color:red; font-size:50px; margin: 0;">⚠️</h1>
       <h2 style="color:var(--text);" data-i18n="all_busy">All nearby ambulances are busy.</h2>
@@ -380,7 +365,6 @@
 
 </div>
 
-<!-- 🆕 History Modal -->
 <div id="historyModal" class="modal-overlay hidden" onclick="closeHistoryIfOutside(event)">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -395,7 +379,7 @@
   // ✅ PWA — Service Worker + Push + Install
   // ==========================================
   let deferredInstallPrompt = null;
-  let osrmRoute = null; // ✅ OSRM routing polyline
+  let osrmRoute = null;
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', async () => {
@@ -406,7 +390,6 @@
     });
   }
 
-  // ✅ PWA Install prompt
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
@@ -421,7 +404,6 @@
     deferredInstallPrompt = null;
   }
 
-  // ✅ Web Push — subscribe patient after booking
   async function subscribePushForBooking(bookingId) {
     if (!('PushManager' in window) || !navigator.serviceWorker) return;
     try {
@@ -450,7 +432,6 @@
     return new Uint8Array([...raw].map(c => c.charCodeAt(0)));
   }
 
-  // ✅ OSRM — Draw actual road route on map
   async function drawOSRMRoute(fromLat, fromLng, toLat, toLng) {
     if (!leafletMap) return;
     try {
@@ -483,13 +464,13 @@
 
   let leafletMap = null;
   let patientMarker = null;
-  let driverMarker = null; // 🆕 Driver live marker
+  let driverMarker = null;
 
   const ambulanceDatabase = [
     { type: "PTV", name: "🚐 Patient Transport", rate: 15, bestFor: ["General Sickness"] },
     { type: "BLS", name: "🚑 Basic Life Support (BLS)", rate: 25, bestFor: ["Fracture", "Bleeding", "General Sickness"] },
     { type: "ALS", name: "🚨 Advanced Life Support (ICU)", rate: 45, bestFor: ["Heart Attack", "Road Accident", "Stroke", "Breathing", "Unconscious", "Poison", "Burns"] },
-    { type: "ECG", name: "💓 ECG Ambulance", rate: 50, bestFor: ["Heart Attack", "Stroke"] }, // 🆕 ECG type added
+    { type: "ECG", name: "💓 ECG Ambulance", rate: 50, bestFor: ["Heart Attack", "Stroke"] },
     { type: "NEO", name: "👶 Neonatal / Incubator", rate: 50, bestFor: ["Pregnancy"] }
   ];
 
@@ -500,9 +481,6 @@
       userPhone: null
   };
 
-  // ==========================================
-  // LANGUAGE DICTIONARY
-  // ==========================================
   const langDict = {
       en: { booking: "Emergency Booking", gps: "Please provide details. We will automatically detect your location.", find_hosp: "Find Hospitals ➔", what_emerg: "What is the Emergency?", choose_dest: "Choose Destination", select_amb: "Select Ambulance", broadcasting: "Broadcasting...", driver_otw: "✅ Driver is on the way!", back: "← Back", ayushman: "✅ Show Free / Ayushman Only", custom_hosp: "➕ Type Custom Name Manually", change_dest: "🔄 Change Dest.", cancel_req: "❌ Cancel Request", trip_done: "✅ Trip Completed", home: "Return to Home", all_busy: "All nearby ambulances are busy." },
       hi: { booking: "आपातकालीन बुकिंग", gps: "कृपया विवरण दें। हम स्वचालित रूप से आपके स्थान का पता लगाएंगे।", find_hosp: "अस्पताल खोजें ➔", what_emerg: "आपात स्थिति क्या है?", choose_dest: "गंतव्य चुनें", select_amb: "एम्बुलेंस चुनें", broadcasting: "प्रसारण हो रहा है...", driver_otw: "✅ ड्राइवर आ रहा है!", back: "← वापस", ayushman: "✅ केवल मुफ्त / आयुष्मान दिखाएं", custom_hosp: "➕ कस्टम नाम मैन्युअल रूप से टाइप करें", change_dest: "🔄 गंतव्य बदलें", cancel_req: "❌ अनुरोध रद्द करें", trip_done: "✅ यात्रा पूरी हुई", home: "होम पर लौटें", all_busy: "आसपास की सभी एम्बुलेंस व्यस्त हैं।" },
@@ -570,9 +548,6 @@
       else if(currentStep === 4) goStep(3);
   }
 
-  // ==========================================
-  // 🛡️ FIXED: INPUT VALIDATION
-  // ==========================================
   function showFieldError(fieldId, msg) {
       document.getElementById(fieldId).classList.add('error');
       const errEl = document.getElementById('err-' + fieldId);
@@ -585,9 +560,6 @@
       if (errEl) errEl.style.display = 'none';
   }
 
-  // ==========================================
-  // API CALLS
-  // ==========================================
   async function saveUser() {
     const name = document.getElementById('userName').value.trim();
     const phone = document.getElementById('userPhone').value.trim();
@@ -623,7 +595,6 @@
       fetchHospitals();
   }
 
-  // 🆕 FIX: Sanitize hospital name to prevent XSS
   function sanitize(str) {
       const d = document.createElement('div');
       d.textContent = str;
@@ -645,7 +616,6 @@
         const safeDist = parseFloat(h.distance_km);
         const safeAddr = sanitize(h.address || "Maharashtra");
 
-        // 🆕 Cost estimate per hospital
         const cheapestRate = 15;
         const costEst = Math.ceil(safeDist) * cheapestRate;
 
@@ -678,7 +648,6 @@
     }
   }
 
-  // 🆕 FIX: Debounced search (300ms) instead of firing on every keystroke
   function debounceSearch() {
       clearTimeout(searchDebounceTimer);
       searchDebounceTimer = setTimeout(searchDatabase, 300);
@@ -739,7 +708,6 @@
     goStep(4);
   }
 
-  // 🆕 Cost estimate banner + ambulance list builder
   function buildAmbulanceOptions(showEstimate) {
     const ambContainer = document.getElementById('ambulanceOptions');
     ambContainer.innerHTML = "";
@@ -798,7 +766,6 @@
       state.bookingId = data.booking_id;
       saveState();
 
-      // ✅ Subscribe patient for push notifications
       subscribePushForBooking(data.booking_id);
 
       if(pollInterval) clearInterval(pollInterval);
@@ -813,7 +780,6 @@
 
           if(searchTimer <= 0) {
               clearInterval(searchInterval);
-              // 🛡️ FIX: Only auto-cancel if still SEARCHING (not already assigned)
               if (currentStep === 5) {
                   confirmCancel();
                   goStep(8);
@@ -824,9 +790,6 @@
     } catch(err) { alert("Network Failed."); goStep(4); }
   }
 
-  // ==========================================
-  // LEAFLET MAP + DRIVER LIVE LOCATION
-  // ==========================================
   function initPatientMap() {
       if (leafletMap) return;
       leafletMap = L.map('map').setView([state.userLat, state.userLng], 14);
@@ -838,7 +801,6 @@
           .openPopup();
   }
 
-  // 🆕 Driver live marker using custom pulsing div icon
   function updateDriverOnMap(dLat, dLng) {
       if (!leafletMap) return;
 
@@ -866,9 +828,8 @@
 
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
 
-        clearInterval(searchInterval); // Stop the 120s timer
+        clearInterval(searchInterval); 
 
-        // 🔄 Dynamic polling
         const newDist = parseFloat(data.distance);
         if (newDist > 5) {
             if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); }
@@ -885,11 +846,12 @@
         document.getElementById('etaDist').innerText = data.distance;
         document.getElementById('etaTime').innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : data.eta + " mins";
 
-        // 🆕 Show driver location on map if provided
         if (data.driver_lat && data.driver_lng) {
             updateDriverOnMap(data.driver_lat, data.driver_lng);
-            // ✅ Draw OSRM road route from driver to patient
-            drawOSRMRoute(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
+            // ✅ FIX: Only request OSRM route if it hasn't been drawn yet to prevent API ban
+            if (!osrmRoute) {
+                drawOSRMRoute(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
+            }
         }
       }
 
@@ -918,7 +880,6 @@
       fetchHospitals();
   }
 
-  // 🆕 RATING SYSTEM
   let selectedRating = 0;
   function setRating(n) {
       selectedRating = n;
@@ -932,7 +893,6 @@
       }, 300);
   }
 
-  // 🆕 HISTORY FEATURE
   async function showHistory() {
       document.getElementById('historyModal').classList.remove('hidden');
       const content = document.getElementById('historyModalContent');
@@ -981,6 +941,10 @@
   function sendSOS() {
       const dest = state.hospitalName || state.customName || "Hospital";
       const msg = `URGENT: I have booked an ambulance via FastRescue for a ${state.emergency}. Driver is arriving soon. Dropoff Location: ${dest}. Please reach there immediately.`;
+      
+      let phone = state.userPhone;
+      if (phone && phone.length === 10) phone = '91' + phone;
+
       window.open('https://wa.me/?text=' + encodeURIComponent(msg));
   }
 
@@ -1000,6 +964,9 @@
 
   function clearSession() {
       localStorage.removeItem('patient_session');
+      // ✅ FIX: Clean up OSRM route object so it doesn't linger to next session
+      if (osrmRoute && leafletMap) leafletMap.removeLayer(osrmRoute);
+      osrmRoute = null;
       window.location.reload();
   }
 </script>
