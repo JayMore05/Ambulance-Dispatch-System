@@ -349,18 +349,49 @@
 
   function changeLang(lang) { document.querySelectorAll('[data-i18n]').forEach(el => { if(langDict[lang][el.dataset.i18n]) el.innerText = langDict[lang][el.dataset.i18n]; }); }
 
-  window.onload = () => {
+    window.onload = () => {
     const savedState = localStorage.getItem('patient_session');
-    if (savedState) { state = JSON.parse(savedState); if (state.bookingId) { pollInterval = setInterval(checkStatus, currentPollRate); checkStatus(); return; } }
+    if (savedState) { 
+        state = JSON.parse(savedState); 
+        if (state.bookingId) { 
+            pollInterval = setInterval(checkStatus, currentPollRate); 
+            checkStatus(); 
+            return; 
+        } 
+    }
     
     const statusEl = document.getElementById('locStatus');
+    
+    // 🛡️ UPDATED GPS LOGIC: More forgiving timeout and detailed error handling
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-            (pos) => { state.userLat = pos.coords.latitude; state.userLng = pos.coords.longitude; statusEl.innerText = "✅ GPS Location Locked"; statusEl.style.color = "var(--success)"; },
-            (err) => { statusEl.innerText = "⚠️ GPS Denied. Using Default."; statusEl.style.color = "#e53935"; state.userLat = 19.0760; state.userLng = 72.8777; },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            (pos) => { 
+                state.userLat = pos.coords.latitude; 
+                state.userLng = pos.coords.longitude; 
+                statusEl.innerText = "✅ GPS Location Locked"; 
+                statusEl.style.color = "var(--success)"; 
+            },
+            (err) => { 
+                console.warn("GPS Error:", err.message);
+                if (err.code === 1) {
+                    statusEl.innerText = "⚠️ Permission Denied. Allow location in browser.";
+                } else if (err.code === 2) {
+                    statusEl.innerText = "⚠️ Signal Lost. Turn on Phone GPS.";
+                } else if (err.code === 3) {
+                    statusEl.innerText = "⚠️ Timeout. Move near a window & refresh.";
+                }
+                statusEl.style.color = "#e53935"; 
+                
+                // Fallback to default (Mumbai) so app doesn't freeze
+                state.userLat = 19.0760; 
+                state.userLng = 72.8777; 
+            },
+            // Give the phone 15 seconds to find you, allow cached locations
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
         );
-    } else { statusEl.innerText = "❌ Browser does not support GPS."; }
+    } else { 
+        statusEl.innerText = "❌ Browser does not support GPS."; 
+    }
   };
 
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
@@ -369,6 +400,7 @@
   
   function showFieldError(fieldId, msg) { document.getElementById(fieldId).classList.add('error'); const errEl = document.getElementById('err-' + fieldId); if (errEl) { errEl.innerText = msg; errEl.style.display = 'block'; } }
   function clearFieldError(fieldId) { document.getElementById(fieldId).classList.remove('error'); const errEl = document.getElementById('err-' + fieldId); if (errEl) errEl.style.display = 'none'; }
+
 
   // ==========================================
   // CORE FUNCTIONS
