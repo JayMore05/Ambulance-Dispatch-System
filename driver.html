@@ -384,6 +384,24 @@
   }
 
   // ==========================================
+  // 🛡️ ENTERPRISE UPGRADE 1 & 2: Freeze Fix & Geocoding
+  // ==========================================
+  document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+          if(driver.activeBookingId) { checkActiveMission(); }
+          else if(driver.isOnline) { fetchRadar(); }
+      }
+  });
+
+  async function fetchCityName(lat, lng) {
+      try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+          const data = await res.json();
+          return data.address.city || data.address.town || data.address.village || data.address.suburb || "Local Area";
+      } catch (e) { return null; }
+  }
+
+  // ==========================================
   // SETUP & VARIABLES
   // ==========================================
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
@@ -406,7 +424,19 @@
     }
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
-            pos => { driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); }, 
+            async pos => { 
+                driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; 
+                if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
+                
+                // Fetch real city name dynamically
+                if (driver.isOnline) {
+                    const city = await fetchCityName(driver.lat, driver.lng);
+                    const tText = document.getElementById('toggleText');
+                    if(tText.innerText.includes("ONLINE")) {
+                        tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
+                    }
+                }
+            }, 
             err => console.log("GPS denied"), { enableHighAccuracy: true }
         );
     }
@@ -517,8 +547,24 @@
     document.getElementById('toggleText').style.color = driver.isOnline ? "var(--success)" : "var(--muted)";
     const audio = document.getElementById('alertBeep'); audio.muted = false; audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => {});
     
-    if(driver.isOnline) { requestWakeLock(); document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; document.querySelector('.pulse').style.display = "flex"; fetchRadar(); radarInterval = setInterval(fetchRadar, 5000); } 
-    else { if (wakeLock) wakeLock.release(); document.getElementById('radarTitle').innerText = "You are Offline"; document.querySelector('.pulse').style.display = "none"; document.getElementById('emergencyList').innerHTML = ""; clearInterval(radarInterval); }
+    if(driver.isOnline) { 
+        requestWakeLock(); 
+        document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
+        document.querySelector('.pulse').style.display = "flex"; 
+        
+        // Refresh city name right away
+        const city = await fetchCityName(driver.lat, driver.lng);
+        document.getElementById('toggleText').innerText = city ? `ONLINE (${city})` : "ONLINE";
+        
+        fetchRadar(); radarInterval = setInterval(fetchRadar, 5000); 
+    } 
+    else { 
+        if (wakeLock) wakeLock.release(); 
+        document.getElementById('radarTitle').innerText = "You are Offline"; 
+        document.querySelector('.pulse').style.display = "none"; 
+        document.getElementById('emergencyList').innerHTML = ""; 
+        clearInterval(radarInterval); 
+    }
     fetch(`${BASE_URL}/api/driver/toggle-status`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ driver_id: driver.id, status: driver.isOnline ? 'ONLINE' : 'OFFLINE' }) });
   }
 
@@ -528,7 +574,13 @@
       const res = await fetch(`${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}`); 
       const data = await res.json(); const list = document.getElementById('emergencyList'); list.innerHTML = "";
       if(data.bookings && data.bookings.length > 0) {
-        if (data.bookings.length > lastEmergencyCount) { document.body.style.backgroundColor = "#fff59d"; setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); if (navigator.vibrate) navigator.vibrate([500, 200, 500]); document.getElementById('alertBeep').play().catch(e => {}); }
+        if (data.bookings.length > lastEmergencyCount) { 
+            document.body.style.backgroundColor = "#fff59d"; 
+            setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); 
+            if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
+            // 🛡️ ENTERPRISE UPGRADE 3: Audio Ping
+            document.getElementById('alertBeep').play().catch(e => {}); 
+        }
         lastEmergencyCount = data.bookings.length;
 
         data.bookings.forEach(b => {
@@ -566,7 +618,6 @@
     
     document.getElementById('missionPatient').innerText = m.user_name; document.getElementById('missionCondition').innerText = m.emergency_category; document.getElementById('missionHospital').innerText = m.hospital_name; document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
     
-    // 🛡️ FIX: Map Links now have the $ sign so GPS opens perfectly
     document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=$${m.user_latitude},${m.user_longitude}`;
     let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
     document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
@@ -604,7 +655,6 @@
   }
 
   async function pickup() { 
-      // 🛡️ FIX: Ghost Odometer fix (prevents double charging)
       if (odometerInterval) clearInterval(odometerInterval);
 
       await fetch(`${BASE_URL}/api/driver/pickup`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId }) }); 
@@ -619,7 +669,6 @@
   async function completeTrip() { 
       clearInterval(odometerInterval); clearInterval(missionInterval);
       
-      // 🛡️ FIX: Deadlock Prevention (Resets intervals to allow 2nd trip)
       odometerInterval = null; missionInterval = null;
 
       const res = await fetch(`${BASE_URL}/api/driver/complete`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) }); 
@@ -632,7 +681,6 @@
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; goStep(2); 
       document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; document.querySelector('.pulse').style.display = "flex"; 
       
-      // 🛡️ FIX: Stop GPS Spam
       stopGPSSending();
 
       fetchRadar(); 
