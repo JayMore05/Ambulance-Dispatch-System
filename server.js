@@ -271,15 +271,15 @@ app.post("/api/driver/accept", (req, res) => {
 });
 
 // ==========================================================
-// 🛡️ PATIENT PICKUP ROUTE (This was missing!)
+// 🛡️ PATIENT PICKUP ROUTE (Fixed SQL)
 // ==========================================================
 app.post("/api/driver/pickup", (req, res) => {
     const { booking_id } = req.body;
     
-    // This updates the database so the Patient App knows to change screens!
-    const query = `UPDATE bookings SET status = 'IN_TRANSIT' WHERE booking_id = ? OR id = ?`;
+    // Fixed: strictly using booking_id so MySQL doesn't crash
+    const query = `UPDATE bookings SET status = 'IN_TRANSIT' WHERE booking_id = ?`;
     
-    db.query(query, [booking_id, booking_id], (err, result) => {
+    db.query(query, [booking_id], (err, result) => {
         if (err) return res.status(500).json({ success: false, error: "Database error" });
         res.json({ success: true, message: "Patient Picked Up!" });
     });
@@ -287,9 +287,9 @@ app.post("/api/driver/pickup", (req, res) => {
 
 app.post("/api/driver/update-status", (req, res) => {
     const { booking_id, status } = req.body;
-    const query = `UPDATE bookings SET status = ? WHERE booking_id = ? OR id = ?`;
+    const query = `UPDATE bookings SET status = ? WHERE booking_id = ?`;
     
-    db.query(query, [status, booking_id, booking_id], (err, result) => {
+    db.query(query, [status, booking_id], (err, result) => {
         if (err) return res.status(500).json({ success: false });
         res.json({ success: true });
     });
@@ -297,15 +297,16 @@ app.post("/api/driver/update-status", (req, res) => {
 
 app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
-    const final_cost = actual_distance ? Math.ceil(actual_distance * 25) : 0; // Fallback math
+    const final_cost = actual_distance ? Math.ceil(actual_distance * 25) : 0; 
 
-    const query = `UPDATE bookings SET status = 'COMPLETED', distance = ?, final_cost = ? WHERE booking_id = ? OR id = ?`;
+    const query = `UPDATE bookings SET status = 'COMPLETED', distance = ?, final_cost = ? WHERE booking_id = ?`;
     
-    db.query(query, [actual_distance, final_cost, booking_id, booking_id], (err, result) => {
+    db.query(query, [actual_distance, final_cost, booking_id], (err, result) => {
         if (err) return res.status(500).json({ success: false, error: "Database error" });
         res.json({ success: true, final_cost: final_cost });
     });
 });
+
 app.get("/api/user/history", (req, res) => {
     const phone = req.query.phone;
     if (!phone) return res.status(400).json({ error: "Phone required" });
