@@ -26,7 +26,7 @@ app.use(express.static(__dirname));
 // Rate Limiting to prevent DDoS and Spam
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: "Too many requests" }});
 const otpLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 5, message: { error: "Too many OTP requests" }});
-app.use("/api/", apiLimiter);
+//app.use("/api/", apiLimiter);
 
 // ==========================================================
 // 🔐 JWT AUTH & WEB PUSH SETUP
@@ -269,20 +269,43 @@ app.post("/api/driver/accept", (req, res) => {
         res.json({ success: true, message: "Booking assigned to you!" });
     });
 });
-app.post("/api/driver/complete", (req, res) => {
-    const { booking_id, actual_distance } = req.body;
-    db.query("SELECT price_per_km, hospital_distance_km FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
-        if (err || rows.length === 0) return res.status(500).json({ error: "Booking not found" });
-        
-        const rate = parseFloat(rows[0].price_per_km) || 40;
-        const distToUse = parseFloat(actual_distance) > 0.1 ? parseFloat(actual_distance) : parseFloat(rows[0].hospital_distance_km);
-        const finalCost = Math.ceil(distToUse) * rate;
-        
-        db.query("UPDATE bookings SET status='COMPLETED', completed_at=CURRENT_TIMESTAMP, hospital_distance_km=?, final_cost=? WHERE booking_id=?", 
-        [distToUse, finalCost, booking_id], (err) => res.json({ success: !err, final_cost: finalCost }));
+
+// ==========================================================
+// 🛡️ PATIENT PICKUP ROUTE (This was missing!)
+// ==========================================================
+app.post("/api/driver/pickup", (req, res) => {
+    const { booking_id } = req.body;
+    
+    // This updates the database so the Patient App knows to change screens!
+    const query = `UPDATE bookings SET status = 'IN_TRANSIT' WHERE booking_id = ? OR id = ?`;
+    
+    db.query(query, [booking_id, booking_id], (err, result) => {
+        if (err) return res.status(500).json({ success: false, error: "Database error" });
+        res.json({ success: true, message: "Patient Picked Up!" });
     });
 });
 
+app.post("/api/driver/update-status", (req, res) => {
+    const { booking_id, status } = req.body;
+    const query = `UPDATE bookings SET status = ? WHERE booking_id = ? OR id = ?`;
+    
+    db.query(query, [status, booking_id, booking_id], (err, result) => {
+        if (err) return res.status(500).json({ success: false });
+        res.json({ success: true });
+    });
+});
+
+app.post("/api/driver/complete", (req, res) => {
+    const { booking_id, actual_distance } = req.body;
+    const final_cost = actual_distance ? Math.ceil(actual_distance * 25) : 0; // Fallback math
+
+    const query = `UPDATE bookings SET status = 'COMPLETED', distance = ?, final_cost = ? WHERE booking_id = ? OR id = ?`;
+    
+    db.query(query, [actual_distance, final_cost, booking_id, booking_id], (err, result) => {
+        if (err) return res.status(500).json({ success: false, error: "Database error" });
+        res.json({ success: true, final_cost: final_cost });
+    });
+});
 app.get("/api/user/history", (req, res) => {
     const phone = req.query.phone;
     if (!phone) return res.status(400).json({ error: "Phone required" });
