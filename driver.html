@@ -22,15 +22,11 @@
         --warning: #ffb300; --info: #2196F3;
     }
 
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 70px; transition: background-color 0.5s ease; }
     .container { width: 100%; max-width: 600px; margin: auto; padding: 16px; }
 
-    .topbar {
-        position: sticky; top: 0; background: rgba(30,30,30,0.95);
-        backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
-        z-index: 10; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
-    }
+    .topbar { position: sticky; top: 0; background: rgba(30,30,30,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); z-index: 10; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
     .brand { font-weight: 800; font-size: 1.2rem; color: var(--primary); }
 
     .status-toggle { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 12px; display: none; }
@@ -59,7 +55,7 @@
     .btn.info { background: var(--info); color: #fff; }
     .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
     .btn.danger { background: #ef4444; color: white; }
-    .btn.whatsapp { background: #25D366; color: white; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2); }
+    .btn.whatsapp { background: #25D366; color: white; }
 
     .auth-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
     .auth-tab { flex: 1; padding: 12px; text-align: center; background: var(--highlight); border-radius: 10px; cursor: pointer; font-weight: bold; color: var(--muted); border: 2px solid transparent; }
@@ -85,7 +81,6 @@
 
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
     .modal { background: var(--card); border: 1px solid var(--primary); padding: 24px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(229, 57, 53, 0.3); }
-    .hidden { display: none !important; }
 
     #uploadProgress { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
     #uploadBar { width: 0%; height: 100%; background: var(--info); transition: 0.3s; }
@@ -109,20 +104,20 @@
 
 <div class="container">
 
-  <div id="step1" class="card">
+  <div id="step1" class="card" style="display: block;">
     <div class="auth-tabs">
       <div class="auth-tab active" id="tabLogin" onclick="switchAuthMode('login')">Login</div>
       <div class="auth-tab" id="tabRegister" onclick="switchAuthMode('register')">Register (KYC)</div>
     </div>
 
-    <div id="rejectionBox" class="hidden" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+    <div id="rejectionBox" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
         <h3 style="color: #ef4444; margin: 0 0 5px 0;">⚠️ Verification Failed</h3>
         <p style="margin: 0; font-size: 13px;" id="rejectionReasonText"></p>
         <p style="margin: 5px 0 0 0; font-size: 12px; font-weight: bold;">Please fix the issue below and re-submit.</p>
     </div>
 
     <div id="loginForm">
-      <div id="regPart1" class="hidden">
+      <div id="regPart1" style="display: none;">
         <label>Full Name</label>
         <input id="regName" placeholder="e.g. Rahul Kumar" oninput="clearFErr('regName')">
         <div class="field-error" id="err-regName">Please enter a valid name.</div>
@@ -146,7 +141,7 @@
         <button class="btn info" style="margin-top:20px;" onclick="goToRegPart2()">Next: Upload Documents ➔</button>
       </div>
 
-      <div id="regPart2" class="hidden">
+      <div id="regPart2" style="display: none;">
         <button class="btn ghost" style="margin-bottom:15px; padding:8px;" onclick="goToRegPart1()">⬅ Back</button>
         <p style="color:var(--warning); font-size:13px; font-weight:bold;">Please upload clear images for verification.</p>
 
@@ -181,7 +176,7 @@
       </div>
     </div>
 
-    <div id="otpForm" class="hidden">
+    <div id="otpForm" style="display: none;">
       <div id="demoOtpBox" style="background: rgba(255, 179, 0, 0.2); border: 1px dashed var(--warning); color: var(--warning); padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 16px; font-weight: bold;">Loading...</div>
       <label>Enter 4-Digit OTP</label>
       <input id="driverOtp" type="number" placeholder="XXXX" style="letter-spacing: 4px; font-weight:bold; text-align:center;">
@@ -190,7 +185,7 @@
     </div>
   </div>
 
-  <div id="stepPending" class="card hidden" style="text-align:center; padding: 40px 20px;">
+  <div id="stepPending" class="card" style="display: none; text-align:center; padding: 40px 20px;">
     <h1 style="font-size: 50px; margin: 0;">⏳</h1>
     <h1 style="color: var(--warning);">Verification Pending</h1>
     <p>Your KYC documents are currently under review by our Admin team.</p>
@@ -198,7 +193,7 @@
     <button class="btn ghost" style="margin-top:10px; color: var(--primary); border-color: var(--primary);" onclick="logout()">Logout</button>
   </div>
 
-  <div id="step2" class="card hidden">
+  <div id="step2" class="card" style="display: none;">
     <div class="radar-box">
         <div class="pulse"></div>
         <h1 style="color: var(--success);" id="radarTitle">Scanning 15km Radius...</h1>
@@ -207,7 +202,7 @@
     <div id="emergencyList"></div>
   </div>
 
-  <div id="step3" class="card hidden">
+  <div id="step3" class="card" style="display: none;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h1 style="color: var(--primary); margin:0;">🚨 ONGOING MISSION</h1>
         <a id="btnCallPatient" href="#" class="btn info" style="width:auto; padding:8px 16px; font-size:14px; text-decoration:none;">📞 Call</a>
@@ -223,26 +218,26 @@
       <div class="req-title" id="missionHospital"></div>
     </div>
 
-    <div id="phase1Box">
+    <div id="phase1Box" style="display: none;">
       <p style="color:var(--warning); font-weight:bold; text-align:center;">Phase 1: Drive to Patient</p>
       <a id="navToPatient" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🗺️ Google Maps Nav</a>
       <button class="btn whatsapp" onclick="sendWhatsAppToPatient()">💬 Send Multilingual ETA (WhatsApp)</button>
       <button class="btn info" onclick="pickup()">📍 Patient Picked Up</button>
     </div>
 
-    <div id="phase2Box" class="hidden">
+    <div id="phase2Box" style="display: none;">
       <div style="background:#333; padding:15px; border-radius:8px; text-align:center; margin-bottom:15px;">
         <p style="margin:0; font-size:12px; color:var(--muted)">LIVE ODOMETER (Actual Distance)</p>
         <h2 style="margin:5px 0 0 0; color:var(--success);"><span id="liveOdo">0.00</span> km</h2>
       </div>
       <p style="color:var(--success); font-weight:bold; text-align:center;">Phase 2: Drive to Hospital</p>
       <a id="navToHospital" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🏥 Google Maps Nav</a>
-      <button class="btn ghost" style="margin-bottom:10px;" onclick="document.getElementById('destModal').classList.remove('hidden')">🔄 Change Destination</button>
+      <button class="btn ghost" style="margin-bottom:10px;" onclick="document.getElementById('destModal').style.display='flex'">🔄 Change Destination</button>
       <button class="btn success" onclick="completeTrip()">✅ Arrived at Dropoff</button>
     </div>
   </div>
 
-  <div id="step6" class="card hidden" style="text-align:center;">
+  <div id="step6" class="card" style="display: none; text-align:center;">
     <h1 style="color:var(--success)">Trip Finished</h1>
     <div style="background:#2c2c2c; padding:20px; border-radius:12px; margin:20px 0;">
       <p style="color:var(--muted); margin:0;">Actual Distance Driven</p>
@@ -254,7 +249,7 @@
     <button class="btn primary" onclick="closeReceipt()">Finish & Return to Radar</button>
   </div>
 
-  <div id="step4" class="card hidden">
+  <div id="step4" class="card" style="display: none;">
     <h1>Mission History</h1>
     <div class="analytics-box">
         <div><h1 style="color:var(--success); margin:0;" id="statEarnings">₹0</h1><small style="color:var(--muted)">Total Earnings</small></div>
@@ -263,7 +258,7 @@
     <div id="historyList">Loading history...</div>
   </div>
 
-  <div id="step5" class="card hidden">
+  <div id="step5" class="card" style="display: none;">
     <h1>Driver Profile</h1>
     <div style="background: rgba(76, 175, 80, 0.1); border: 1px solid var(--success); padding: 10px; border-radius: 8px; margin-bottom: 20px; text-align: center; color: var(--success); font-weight: bold;">✅ KYC Verified</div>
     
@@ -292,19 +287,19 @@
   <button class="nav-item" onclick="navTab(5, this)">👤 Profile</button>
 </div>
 
-<div id="destModal" class="modal-overlay hidden">
+<div id="destModal" class="modal-overlay" style="display: none;">
   <div class="modal">
     <h2 style="margin-top:0;">Change Destination</h2>
     <p style="color:var(--muted); font-size:14px;">Enter exact name of the new hospital.</p>
     <input id="driverNewDest" placeholder="e.g. City Care Hospital" style="text-align:center; margin-bottom:10px;">
     <div style="display:flex; gap:10px; margin-top:10px;">
-      <button class="btn ghost" onclick="document.getElementById('destModal').classList.add('hidden')">Cancel</button>
+      <button class="btn ghost" onclick="document.getElementById('destModal').style.display='none'">Cancel</button>
       <button class="btn primary" onclick="submitDriverDest()">Update Destination</button>
     </div>
   </div>
 </div>
 
-<div id="dispatchModal" class="modal-overlay hidden">
+<div id="dispatchModal" class="modal-overlay" style="display: none;">
     <div class="modal">
         <div class="modal-warning" style="font-size: 40px;">⚠️</div>
         <h2 style="color:var(--primary); margin:0 0 10px;">URGENT DISPATCH</h2>
@@ -345,19 +340,13 @@
       const reg = await navigator.serviceWorker.ready;
       const keyRes = await fetch(`${BASE_URL}/api/push/vapid-key`);
       const { publicKey } = await keyRes.json();
-      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
-      await fetch(`${BASE_URL}/api/push/subscribe-driver`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driver_id: driverId, subscription: sub })
-      });
+      const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+      const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = window.atob(base64);
+      const u8arr = new Uint8Array([...raw].map(c => c.charCodeAt(0)));
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8arr });
+      await fetch(`${BASE_URL}/api/push/subscribe-driver`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver_id: driverId, subscription: sub }) });
     } catch(e) { console.log("Push failed"); }
-  }
-
-  function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const raw = window.atob(base64);
-    return new Uint8Array([...raw].map(c => c.charCodeAt(0)));
   }
 
   // ==========================================
@@ -370,22 +359,16 @@
     gpsSendInterval = setInterval(async () => {
       if (!driver.id || !driver.activeBookingId) return;
       try {
-        await fetch(`${BASE_URL}/api/driver/location`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ driver_id: driver.id, latitude: driver.lat, longitude: driver.lng })
-        });
+        await fetch(`${BASE_URL}/api/driver/location`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver_id: driver.id, latitude: driver.lat, longitude: driver.lng }) });
       } catch(e) {}
     }, 5000);
   }
 
   function stopGPSSending() {
-    if (gpsSendInterval) clearInterval(gpsSendInterval);
-    gpsSendInterval = null;
+    if (gpsSendInterval) clearInterval(gpsSendInterval); gpsSendInterval = null;
   }
 
-  // ==========================================
-  // 🛡️ MOBILE FREEZE FIX (Visibility Change)
-  // ==========================================
+  // 🛡️ FREEZE FIX (Visibility Change)
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
           if(driver.activeBookingId) { checkActiveMission(); }
@@ -424,24 +407,19 @@
     }
     
     let lastCityFetch = 0; 
-    
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
             async pos => { 
                 driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; 
                 if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
-                
-                // 🛡️ ANTI-BAN FIX: Only ask for City Name once every 5 mins
                 if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
                     lastCityFetch = Date.now();
                     const city = await fetchCityName(driver.lat, driver.lng);
                     const tText = document.getElementById('toggleText');
-                    if(tText.innerText.includes("ONLINE")) {
-                        tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
-                    }
+                    if(tText.innerText.includes("ONLINE")) tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
                 }
             }, 
-            err => console.log("GPS denied"), { enableHighAccuracy: true }
+            err => console.log("GPS denied"), { enableHighAccuracy: false, maximumAge: 10000 }
         );
     }
   };
@@ -450,8 +428,8 @@
 
   function goStep(n) { 
       const steps = [1, 'Pending', 2, 3, 4, 5, 6];
-      steps.forEach(i => { let el = document.getElementById('step' + i); if (el) el.classList.add('hidden'); }); 
-      document.getElementById('step' + n).classList.remove('hidden'); window.scrollTo(0, 0); 
+      steps.forEach(i => { let el = document.getElementById('step' + i); if (el) el.style.display = 'none'; }); 
+      document.getElementById('step' + n).style.display = 'block'; window.scrollTo(0, 0); 
   }
 
   function navTab(stepNum, btnElement) { 
@@ -470,7 +448,9 @@
   function switchAuthMode(mode) { 
       isRegisterMode = (mode === 'register'); 
       document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode); document.getElementById('tabRegister').classList.toggle('active', isRegisterMode); 
-      document.getElementById('loginOnlyFields').classList.toggle('hidden', isRegisterMode); document.getElementById('regPart1').classList.toggle('hidden', !isRegisterMode); document.getElementById('regPart2').classList.add('hidden'); 
+      document.getElementById('loginOnlyFields').style.display = isRegisterMode ? 'none' : 'block';
+      document.getElementById('regPart1').style.display = isRegisterMode ? 'block' : 'none';
+      document.getElementById('regPart2').style.display = 'none'; 
   }
 
   function goToRegPart2() { 
@@ -479,11 +459,11 @@
       if (!isValidPhone(phone)) { showFErr('regPhone', 'Enter a valid 10-digit number.'); valid = false; }
       if (!veh) { alert("Please enter vehicle number."); valid = false; }
       if (!valid) return;
-      document.getElementById('regPart1').classList.add('hidden'); document.getElementById('regPart2').classList.remove('hidden'); 
+      document.getElementById('regPart1').style.display = 'none'; document.getElementById('regPart2').style.display = 'block'; 
   }
 
-  function goToRegPart1() { document.getElementById('regPart2').classList.add('hidden'); document.getElementById('regPart1').classList.remove('hidden'); }
-  function cancelLogin() { document.getElementById('otpForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); }
+  function goToRegPart1() { document.getElementById('regPart2').style.display = 'none'; document.getElementById('regPart1').style.display = 'block'; }
+  function cancelLogin() { document.getElementById('otpForm').style.display = 'none'; document.getElementById('loginForm').style.display = 'block'; }
 
   function getBase64(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result.split(',')[1]); reader.onerror = error => reject(error); }); }
 
@@ -516,7 +496,7 @@
     try {
       const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phone, isRegister: isRegisterMode }) });
       const data = await res.json();
-      if (res.ok) { document.getElementById('loginForm').classList.add('hidden'); document.getElementById('otpForm').classList.remove('hidden'); document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`; } else { alert("❌ " + data.error); document.getElementById('btnSubmitKYC').disabled = false; document.getElementById('btnSubmitKYC').innerText = "Upload & Get OTP"; }
+      if (res.ok) { document.getElementById('loginForm').style.display = 'none'; document.getElementById('otpForm').style.display = 'block'; document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`; } else { alert("❌ " + data.error); document.getElementById('btnSubmitKYC').disabled = false; document.getElementById('btnSubmitKYC').innerText = "Upload & Get OTP"; }
     } catch(err) { alert("Server error."); }
   }
 
@@ -527,7 +507,7 @@
       const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
       const data = await res.json();
       if (data.driver_id) {
-        if (data.verification_status === 'REJECTED') { document.getElementById('otpForm').classList.add('hidden'); switchAuthMode('register'); document.getElementById('rejectionBox').classList.remove('hidden'); document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; return; }
+        if (data.verification_status === 'REJECTED') { document.getElementById('otpForm').style.display = 'none'; switchAuthMode('register'); document.getElementById('rejectionBox').style.display = 'block'; document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; return; }
         driver = { id: data.driver_id, type: data.ambulance_type, name: data.name, phone: phone, vehicle_num: data.ambulance_number, status: data.verification_status, isOnline: false };
         localStorage.setItem('driver_session', JSON.stringify(driver));
         if (data.verification_status === 'PENDING') { goStep('Pending'); } else { driver.isOnline = true; document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; subscribeDriverPush(data.driver_id); checkActiveMission(); toggleStatus(); }
@@ -540,7 +520,7 @@
       try {
           const res = await fetch(`${BASE_URL}/api/driver/check-status?driver_id=${driver.id}`); const data = await res.json();
           if (data.verification_status === 'APPROVED') { driver.status = 'APPROVED'; driver.isOnline = true; localStorage.setItem('driver_session', JSON.stringify(driver)); document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; checkActiveMission(); toggleStatus(); } 
-          else if (data.verification_status === 'REJECTED') { driver.status = 'REJECTED'; localStorage.setItem('driver_session', JSON.stringify(driver)); goStep(1); switchAuthMode('register'); document.getElementById('rejectionBox').classList.remove('hidden'); document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; } 
+          else if (data.verification_status === 'REJECTED') { driver.status = 'REJECTED'; localStorage.setItem('driver_session', JSON.stringify(driver)); goStep(1); switchAuthMode('register'); document.getElementById('rejectionBox').style.display = 'block'; document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; } 
           else { alert("Still under review. Please check again later."); }
       } catch(e) { alert("Server error. Try again."); }
   }
@@ -555,10 +535,8 @@
         requestWakeLock(); 
         document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
         document.querySelector('.pulse').style.display = "flex"; 
-        
         const city = await fetchCityName(driver.lat, driver.lng);
         document.getElementById('toggleText').innerText = city ? `ONLINE (${city})` : "ONLINE";
-        
         fetchRadar(); radarInterval = setInterval(fetchRadar, 5000); 
     } 
     else { 
@@ -578,18 +556,15 @@
       const data = await res.json(); const list = document.getElementById('emergencyList'); list.innerHTML = "";
       if(data.bookings && data.bookings.length > 0) {
         if (data.bookings.length > lastEmergencyCount) { 
-            document.body.style.backgroundColor = "#fff59d"; 
-            setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); 
+            document.body.style.backgroundColor = "#fff59d"; setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); 
             if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
             document.getElementById('alertBeep').play().catch(e => {}); 
         }
         lastEmergencyCount = data.bookings.length;
-
         data.bookings.forEach(b => {
           const safeName = b.user_name.replace(/'/g, "\\'"); const safeHosp = b.hospital_name.replace(/'/g, "\\'"); const safeCond = b.emergency_category.replace(/'/g, "\\'");
           const card = document.createElement('div'); card.className = `request-card ${b.priorityStar ? 'priority' : ''}`;
           const starHTML = b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : '';
-          
           card.innerHTML = `${starHTML}<div class="req-header"><div class="req-title"></div><div style="text-align: right;"><div style="font-size: 11px; color: var(--muted);">⏰ </div><div class="req-dist">📍 ~<span></span> mins</div></div></div><div class="req-detail"><strong>Patient:</strong> <span class="pname"></span></div><div class="req-detail"><strong>Dropoff:</strong> <span class="phosp"></span></div><button class="btn primary" style="margin-top:12px;">ACCEPT EMERGENCY</button>`;
           card.querySelector('.req-title').textContent = b.emergency_category; card.querySelectorAll('.req-header div div')[0].textContent = "⏰ " + b.formatted_time; card.querySelector('.req-dist span').textContent = b.real_eta; card.querySelector('.pname').textContent = b.user_name; card.querySelector('.phosp').textContent = b.hospital_name;
           card.querySelector('button').onclick = () => promptModal(b.booking_id, safeName, b.user_phone, safeCond, safeHosp, b.user_latitude, b.user_longitude, b.hosp_lat || 0, b.hosp_lng || 0);
@@ -607,7 +582,7 @@
   function initDriverMap(pLat, pLng) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
-      // 🛡️ CARTODB - Anti Ban!
+      // 🛡️ CARTODB MAPS - NO BAN!
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(dMap);
       driverMarker = L.marker([driver.lat, driver.lng]).addTo(dMap).bindPopup("<b>You (Ambulance)</b>").openPopup();
       patientMarker = L.marker([pLat, pLng]).addTo(dMap).bindPopup("<b>Patient Location</b>").openPopup();
@@ -625,7 +600,15 @@
     let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
     document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
     
-    if(m.status === 'IN_TRANSIT') { document.getElementById('phase1Box').classList.add('hidden'); document.getElementById('phase2Box').classList.remove('hidden'); } else { document.getElementById('phase1Box').classList.remove('hidden'); document.getElementById('phase2Box').classList.add('hidden'); }
+    // 🛡️ STRICT PHASE LOCK
+    if(m.status === 'IN_TRANSIT') { 
+        document.getElementById('phase1Box').style.display = 'none'; 
+        document.getElementById('phase2Box').style.display = 'block'; 
+    } else { 
+        document.getElementById('phase1Box').style.display = 'block'; 
+        document.getElementById('phase2Box').style.display = 'none'; 
+    }
+    
     goStep(3); startGPSSending(); setTimeout(() => { initDriverMap(m.user_latitude, m.user_longitude); dMap.invalidateSize(); }, 200);
     if(!missionInterval) { missionInterval = setInterval(checkActiveMission, 5000); }
   }
@@ -638,35 +621,34 @@
 
   async function submitDriverDest() {
       const newDest = document.getElementById('driverNewDest').value; const newDist = prompt("Enter approximate distance to new hospital (in km):", "5");
-      if(newDest && driver.activeBookingId) { await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest, new_distance: newDist }) }); document.getElementById('destModal').classList.add('hidden'); checkActiveMission(); }
+      if(newDest && driver.activeBookingId) { await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest, new_distance: newDist }) }); document.getElementById('destModal').style.display='none'; checkActiveMission(); }
   }
 
   function promptModal(id, name, phone, cond, hosp, uLat, uLng, hLat, hLng) { 
       pendingAcceptData = { booking_id: id, user_name: name, user_phone: phone, emergency_category: cond, hospital_name: hosp, user_latitude: uLat, user_longitude: uLng, hosp_lat: hLat, hosp_lng: hLng }; 
-      document.getElementById('modalPatient').textContent = name; document.getElementById('modalCondition').textContent = cond; document.getElementById('modalHospital').textContent = hosp; document.getElementById('dispatchModal').classList.remove('hidden'); 
+      document.getElementById('modalPatient').textContent = name; document.getElementById('modalCondition').textContent = cond; document.getElementById('modalHospital').textContent = hosp; document.getElementById('dispatchModal').style.display='flex'; 
   }
   
-  function closeModal() { document.getElementById('dispatchModal').classList.add('hidden'); pendingAcceptData = null; }
+  function closeModal() { document.getElementById('dispatchModal').style.display='none'; pendingAcceptData = null; }
   
   async function confirmAccept() {
-    if(!pendingAcceptData) return; document.getElementById('dispatchModal').classList.add('hidden');
+    if(!pendingAcceptData) return; document.getElementById('dispatchModal').style.display='none';
     try { 
         const res = await fetch(`${BASE_URL}/api/driver/accept`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) }); 
         const data = await res.json();
-        if (res.ok) { clearInterval(radarInterval); checkActiveMission(); } else { alert("❌ Taken by another driver."); fetchRadar(); }
+        if (res.ok && data.success) { clearInterval(radarInterval); checkActiveMission(); } else { alert("❌ Missed it! Taken by another driver."); fetchRadar(); }
     } catch(err) {}
   }
 
   async function pickup() { 
-      // 🛡️ NO OTP REQUIREMENT: Just a fast confirmation dialog
       if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
-
+      document.getElementById('phase1Box').style.display = 'none'; // Instantly hide the button
       if (odometerInterval) clearInterval(odometerInterval);
 
       await fetch(`${BASE_URL}/api/driver/pickup`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId }) }); 
-      checkActiveMission(); 
-      lastLat = driver.lat; lastLng = driver.lng; totalDrivenKm = 0; 
+      checkActiveMission(); // Server verifies and forces Phase 2
       
+      lastLat = driver.lat; lastLng = driver.lng; totalDrivenKm = 0; 
       odometerInterval = setInterval(() => { 
           const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng); 
           if (d > 0.01) { totalDrivenKm += d; lastLat = driver.lat; lastLng = driver.lng; document.getElementById('liveOdo').innerText = totalDrivenKm.toFixed(2); } 
@@ -674,23 +656,16 @@
   }
 
   async function completeTrip() { 
-      clearInterval(odometerInterval); clearInterval(missionInterval);
-      odometerInterval = null; missionInterval = null;
-
+      clearInterval(odometerInterval); clearInterval(missionInterval); odometerInterval = null; missionInterval = null;
       const res = await fetch(`${BASE_URL}/api/driver/complete`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) }); 
       const data = await res.json();
-      
       document.getElementById('receiptDist').innerText = totalDrivenKm.toFixed(2); document.getElementById('receiptCost').innerText = data.final_cost || 0; goStep(6); 
   }
 
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; goStep(2); 
       document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; document.querySelector('.pulse').style.display = "flex"; 
-      
-      stopGPSSending();
-
-      fetchRadar(); 
-      if(radarInterval) { clearInterval(radarInterval); } radarInterval = setInterval(fetchRadar, 5000); 
+      stopGPSSending(); fetchRadar(); if(radarInterval) { clearInterval(radarInterval); } radarInterval = setInterval(fetchRadar, 5000); 
       document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); document.querySelectorAll('.nav-item')[0].classList.add('active'); 
   }
 
@@ -702,13 +677,13 @@
     list.innerHTML = ""; const totalCash = data.history.reduce((sum, t) => sum + (t.total_cost || 0), 0); document.getElementById('statEarnings').innerText = "₹" + totalCash; document.getElementById('statTrips').innerText = data.history.length;
     
     data.history.forEach(h => { 
-        const item = document.createElement('div'); item.className = 'request-card'; item.style.cursor = 'pointer'; item.onclick = () => document.getElementById(`hist-${h.booking_id}`).classList.toggle('hidden');
-        const details = document.createElement('div'); details.id = `hist-${h.booking_id}`; details.className = 'hidden'; details.style.cssText = 'margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);';
+        const item = document.createElement('div'); item.className = 'request-card'; item.style.cursor = 'pointer'; item.onclick = () => { let d = document.getElementById(`hist-${h.booking_id}`); d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
+        const details = document.createElement('div'); details.id = `hist-${h.booking_id}`; details.style.display = 'none'; details.style.cssText = 'display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);';
         
         item.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;"><div style="color:var(--success); font-weight:bold;">✅ COMPLETED</div><div style="font-size:12px; color:var(--muted);">▼ Details</div></div><div class="req-title" style="margin:5px 0;"></div><div class="req-detail">Dropoff: <span class="hosp-name"></span></div>`;
         item.querySelector('.req-title').textContent = h.emergency_category; item.querySelector('.hosp-name').textContent = h.hospital_name;
         
-        details.innerHTML = `<div class="req-detail"><strong>Patient:</strong> <span></span></div><div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${h.time_booked}</div><div class="req-detail"><strong>📍 Picked Up:</strong> ${h.time_picked}</div><div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.time_dropped}</div><div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.total_cost}</div>`;
+        details.innerHTML = `<div class="req-detail"><strong>Patient:</strong> <span></span></div><div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${new Date(h.booked_at).toLocaleTimeString()}</div><div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.completed_at ? new Date(h.completed_at).toLocaleTimeString() : '--'}</div><div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.final_cost}</div>`;
         details.querySelector('span').textContent = h.user_name; item.appendChild(details); list.appendChild(item);
     });
   }
@@ -721,9 +696,7 @@
 
   function logout() { 
       if(!confirm("Are you sure? All session data will be cleared.")) return; 
-      if (radarInterval) clearInterval(radarInterval); if (wakeLock) wakeLock.release(); 
-      stopGPSSending();
-
+      if (radarInterval) clearInterval(radarInterval); if (wakeLock) wakeLock.release(); stopGPSSending();
       localStorage.removeItem('driver_session'); driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null }; 
       document.getElementById('navToggle').style.display = 'none'; document.getElementById('bottomNav').style.display = 'none'; cancelLogin(); goStep(1); 
   }
