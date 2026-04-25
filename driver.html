@@ -418,18 +418,22 @@
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
   };
 
-  window.onload = () => {
+ window.onload = () => {
     if (driver.id) { 
         if (driver.status === 'PENDING') { goStep('Pending'); } else { document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; driver.isOnline = true; checkActiveMission(); }
     }
+    
+    let lastCityFetch = 0; // 🛡️ Added throttle timer!
+    
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
             async pos => { 
                 driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; 
                 if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
                 
-                // Fetch real city name dynamically
-                if (driver.isOnline) {
+                // 🛡️ ANTI-BAN FIX: Only ask for the City Name once every 5 minutes (300000 ms)
+                if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
+                    lastCityFetch = Date.now();
                     const city = await fetchCityName(driver.lat, driver.lng);
                     const tText = document.getElementById('toggleText');
                     if(tText.innerText.includes("ONLINE")) {
@@ -441,7 +445,6 @@
         );
     }
   };
-
   async function requestWakeLock() { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} }
 
   function goStep(n) { 
