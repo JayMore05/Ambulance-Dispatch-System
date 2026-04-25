@@ -17,12 +17,12 @@ const app = express();
 // ==========================================================
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression()); 
-app.use(morgan('combined')); 
+app.use(morgan('dev')); 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// 🛡️ RATE LIMITERS (Set to very high limits so your live GPS never gets blocked!)
+// 🛡️ RATE LIMITERS (Set to 100,000 so your live GPS never gets blocked!)
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100000, message: { error: "Too many requests" }});
 const otpLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 500, message: { error: "Too many OTP requests" }});
 app.use("/api/", apiLimiter);
@@ -55,9 +55,6 @@ async function pushNotify(subscriptionJson, title, body) {
     } catch (e) { console.error("Push Error:", e.message); }
 }
 
-// ==========================================================
-// 🛠️ UTILITY FUNCTIONS (Geospatial Math)
-// ==========================================================
 const getKmDistance = (lat1, lon1, lat2, lon2) => {
     const rLat1 = parseFloat(lat1) || 0, rLon1 = parseFloat(lon1) || 0, rLat2 = parseFloat(lat2) || 0, rLon2 = parseFloat(lon2) || 0;
     if (rLat1 === 0 || rLon1 === 0 || rLat2 === 0 || rLon2 === 0) return 999;
@@ -74,11 +71,6 @@ function processAndSort(rows, userLat, userLng) {
         return { ...h, distance_km: parseFloat(distance.toFixed(2)) };
     }).filter(h => h.distance_km < 500).sort((a, b) => a.distance_km - b.distance_km);
 }
-
-const formatTime = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
-};
 
 // ==========================================================
 // 🏥 PATIENT SIDE APIS
@@ -142,10 +134,8 @@ app.post("/api/bookings/update-destination", (req, res) => {
 app.get("/api/user/eta", (req, res) => {
     db.query(`SELECT b.*, COALESCE(b.custom_destination, h.name) AS hospital_name, d.latitude AS driver_lat, d.longitude AS driver_lng FROM bookings b LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id LEFT JOIN drivers d ON b.driver_id = d.driver_id WHERE b.booking_id = ?`, [req.query.booking_id], (err, rows) => {
         if (err || !rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
-        
         const b = rows[0];
-        if(b.status === 'COMPLETED') return res.json({ status: 'COMPLETED', final_cost: b.final_cost, distance: parseFloat(b.hospital_distance_km).toFixed(2), hospital: b.hospital_name });
-        
+        if(b.status === 'COMPLETED') return res.json({ status: 'COMPLETED', final_cost: b.final_cost, distance: parseFloat(b.hospital_distance_km).toFixed(2), hospital_name: b.hospital_name });
         const distKm = parseFloat(b.hospital_distance_km) || 0;
         res.json({ status: b.status, distance: distKm.toFixed(2), eta: distKm > 0 ? Math.max(1, Math.round((distKm / 40) * 60)) : "Calculating...", hospital_name: b.hospital_name, driver_lat: b.driver_lat, driver_lng: b.driver_lng });
     });
@@ -253,10 +243,11 @@ app.get("/api/driver/radar", (req, res) => {
     });
 });
 
-// 🛡️ MISSION LIFECYCLE APIS (Fixed SQL Queries)
+// 🛡️ MISSION LIFECYCLE APIS (WITH TIMESTAMPS)
 app.post("/api/driver/accept", (req, res) => {
     const { driver_id, booking_id } = req.body;
-    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
+    // Track accepted_at
+    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED', accepted_at = NOW() WHERE booking_id = ? AND status = 'REQUESTED'`;
     
     db.query(query, [driver_id, booking_id], (err, result) => {
         if (err) return res.status(500).json({ success: false, error: "Database error" });
@@ -267,7 +258,8 @@ app.post("/api/driver/accept", (req, res) => {
 
 app.post("/api/driver/pickup", (req, res) => {
     const { booking_id } = req.body;
-    const query = `UPDATE bookings SET status = 'IN_TRANSIT' WHERE booking_id = ?`;
+    // Track picked_up_at. Fix: strictly use booking_id
+    const query = `UPDATE bookings SET status = 'IN_TRANSIT', picked_up_at = NOW() WHERE booking_id = ?`;
     
     db.query(query, [booking_id], (err, result) => {
         if (err) return res.status(500).json({ success: false, error: "Database error" });
@@ -288,8 +280,8 @@ app.post("/api/driver/update-status", (req, res) => {
 app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
     const final_cost = actual_distance ? Math.ceil(actual_distance * 25) : 0; 
-
-    const query = `UPDATE bookings SET status = 'COMPLETED', distance = ?, final_cost = ? WHERE booking_id = ?`;
+    // Track completed_at
+    const query = `UPDATE bookings SET status = 'COMPLETED', distance = ?, final_cost = ?, completed_at = NOW() WHERE booking_id = ?`;
     
     db.query(query, [actual_distance, final_cost, booking_id], (err, result) => {
         if (err) return res.status(500).json({ success: false, error: "Database error" });
@@ -348,10 +340,11 @@ app.get("/api/admin/live-bookings", adminAuth, (req, res) => {
     });
 });
 
-// 📜 THE NEW MASTER HISTORY API
+// 📜 THE NEW MASTER HISTORY API (Pulls all timestamps)
 app.get("/api/admin/history", adminAuth, (req, res) => {
     const query = `
-        SELECT b.booking_id, b.status, b.emergency_category, b.distance, b.final_cost, b.booked_at, 
+        SELECT b.booking_id, b.status, b.emergency_category, b.distance, b.final_cost, 
+        b.booked_at, b.accepted_at, b.picked_up_at, b.completed_at,
         u.name AS patient_name, u.phone AS patient_phone, 
         d.name AS driver_name, d.ambulance_number, d.ambulance_type,
         COALESCE(b.custom_destination, h.name) AS destination 
