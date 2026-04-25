@@ -131,7 +131,7 @@
     <input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="clearFieldError('userPhone')">
     <div class="field-error" id="err-userPhone">Please enter a valid 10-digit number.</div>
     
-    <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Detecting GPS...</p>
+    <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
     <button class="btn primary" style="margin-top:16px;" onclick="saveUser()" data-i18n="find_hosp">Find Hospitals ➔</button>
   </div>
 
@@ -303,14 +303,11 @@
     return new Uint8Array([...raw].map(c => c.charCodeAt(0)));
   }
 
-  // 🛡️ OSRM ANTI-BAN THROTTLE: Prevent spamming route API
+  // 🛡️ OSRM ANTI-BAN THROTTLE
   let lastRouteFetchTime = 0;
   async function drawOSRMRoute(fromLat, fromLng, toLat, toLng) {
     if (!leafletMap) return;
-    
-    // Only fetch route once every 60 seconds to prevent IP ban
     if (Date.now() - lastRouteFetchTime < 60000 && osrmRoute) return; 
-    
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
       const res = await fetch(url);
@@ -324,7 +321,6 @@
     } catch(e) {}
   }
 
-  // 🛡️ HAVERSINE DISTANCE MATH
   const getKmDistance = (lat1, lon1, lat2, lon2) => { 
       const R = 6371; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180; 
       const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2); 
@@ -357,7 +353,6 @@
 
   function changeLang(lang) { document.querySelectorAll('[data-i18n]').forEach(el => { if(langDict[lang][el.dataset.i18n]) el.innerText = langDict[lang][el.dataset.i18n]; }); }
 
-  // 🛡️ REVERSE GEOCODING (Real City Names)
   async function fetchCityName(lat, lng) {
       try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
@@ -366,6 +361,7 @@
       } catch (e) { return null; }
   }
 
+  // ⚡ LIGHTNING FAST GPS ON LOAD
   window.onload = () => {
     const savedState = localStorage.getItem('patient_session');
     if (savedState) { 
@@ -380,42 +376,32 @@
     const statusEl = document.getElementById('locStatus');
     
     if (navigator.geolocation) {
-        // 🚀 SPEED FIX: Fallback to WiFi/Cell triangulation for instant results
         navigator.geolocation.getCurrentPosition(
             (pos) => { 
                 state.userLat = pos.coords.latitude; 
                 state.userLng = pos.coords.longitude; 
-                
-                statusEl.innerText = "✅ GPS Locked"; 
+                statusEl.innerText = "✅ GPS Locked Instantly"; 
                 statusEl.style.color = "var(--success)"; 
                 
-                // Fetch real area name in the background (does not freeze the app!)
                 fetchCityName(state.userLat, state.userLng).then(cityName => {
-                    if(cityName) {
-                        statusEl.innerHTML = `✅ GPS Locked<br><span style="color:var(--muted); font-size:12px; font-weight:500;">📌 Area: <b>${cityName}</b></span>`;
-                    }
+                    if(cityName) statusEl.innerHTML = `✅ GPS Locked<br><span style="color:var(--muted); font-size:12px; font-weight:500;">📌 Area: <b>${cityName}</b></span>`;
                 });
             },
             (err) => { 
                 console.warn("GPS Error:", err.message);
                 statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
                 statusEl.style.color = "#e53935"; 
-                
-                // Instant fallback so the user is never stuck
                 state.userLat = 19.0760; state.userLng = 72.8777; 
             },
-            // ⚡ THE MAGIC SETTINGS: 5-second max wait, accepts 10-minute old cached locations
             { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
         );
     } else { 
         statusEl.innerText = "❌ Browser does not support GPS."; 
     }
   };
-  // 🛡️ MOBILE APP FREEZE FIX: Refresh when returning to browser tab
+
   document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && state.bookingId && currentStep === 6) {
-          checkStatus(); // Force instant refresh on wake!
-      }
+      if (document.visibilityState === "visible" && state.bookingId && currentStep === 6) { checkStatus(); }
   });
 
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
@@ -508,21 +494,13 @@
     try {
       const res = await fetch(BASE_URL + "/api/bookings", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ user_id: state.userId, hospital_id: state.hospitalId, custom_destination: state.customName, emergency_type: state.emergency, ambulance_type: state.ambulanceType, user_lat: state.userLat, user_lng: state.userLng, distance_km: state.distance, rate_per_km: state.rate }) });
       const data = await res.json(); state.bookingId = data.booking_id; saveState();
-      
       subscribePushForBooking(data.booking_id);
       
-      // 🛡️ ZOMBIE INTERVAL FIX
-      if(pollInterval) clearInterval(pollInterval); 
-      if(searchInterval) clearInterval(searchInterval);
-      
-      pollInterval = setInterval(checkStatus, currentPollRate);
-      checkStatus();
+      if(pollInterval) clearInterval(pollInterval); if(searchInterval) clearInterval(searchInterval);
+      pollInterval = setInterval(checkStatus, currentPollRate); checkStatus();
       
       searchTimer = 120; document.getElementById('timerText').innerText = searchTimer;
-      searchInterval = setInterval(() => {
-          searchTimer--; document.getElementById('timerText').innerText = searchTimer;
-          if(searchTimer <= 0) { clearInterval(searchInterval); if (currentStep === 5) { confirmCancel(); goStep(8); } }
-      }, 1000);
+      searchInterval = setInterval(() => { searchTimer--; document.getElementById('timerText').innerText = searchTimer; if(searchTimer <= 0) { clearInterval(searchInterval); if (currentStep === 5) { confirmCancel(); goStep(8); } } }, 1000);
     } catch(err) { alert("Network Failed."); goStep(4); }
   }
 
@@ -530,7 +508,10 @@
   // MAPS & TRACKING
   // ==========================================
   function initPatientMap() {
-      if (leafletMap) return; leafletMap = L.map('map').setView([state.userLat, state.userLng], 14); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(leafletMap);
+      if (leafletMap) return; 
+      leafletMap = L.map('map').setView([state.userLat, state.userLng], 14); 
+      // 🛡️ CARTODB MAPS - NO BAN!
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(leafletMap);
       patientMarker = L.marker([state.userLat, state.userLng]).addTo(leafletMap).bindPopup("<b>Your Location</b>").openPopup();
   }
 
@@ -546,7 +527,6 @@
       const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`); const data = await res.json();
       
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
-        // 🛡️ 120s PULSE FIX: Instantly kill radar and jump to map step!
         clearInterval(searchInterval);
         
         if(currentStep === 5) { 
@@ -559,20 +539,17 @@
         
         if (data.driver_lat && data.driver_lng) { 
             const driverDist = getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
-            
             if (data.status === 'ASSIGNED') {
                 document.getElementById('etaDist').innerText = driverDist.toFixed(2);
                 document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverDist / 40) * 60)) + " mins";
             } else {
-                document.getElementById('etaDist').innerText = data.distance; // They are driving to hospital now
+                document.getElementById('etaDist').innerText = data.distance; 
                 document.getElementById('etaTime').innerText = "IN TRANSIT";
             }
-            
             updateDriverOnMap(data.driver_lat, data.driver_lng); 
             if (data.status === 'ASSIGNED') { drawOSRMRoute(data.driver_lat, data.driver_lng, state.userLat, state.userLng); } 
         } else {
-            document.getElementById('etaDist').innerText = "--";
-            document.getElementById('etaTime').innerText = "Locating...";
+            document.getElementById('etaDist').innerText = "--"; document.getElementById('etaTime').innerText = "Locating...";
         }
 
         const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance);
@@ -580,17 +557,13 @@
       }
       
       if (data.status === 'COMPLETED') { clearInterval(pollInterval); clearInterval(searchInterval); goStep(7); document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName; document.getElementById('receiptDist').innerText = data.distance + " km"; document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "--"); localStorage.removeItem('patient_session'); }
-      
       if (data.status === 'CANCELLED') { clearInterval(pollInterval); clearInterval(searchInterval); alert("This booking was cancelled."); clearSession(); }
     } catch(err) { console.error("Poll Error"); }
   }
 
   function changeDestination() { isUpdatingDestination = true; document.getElementById('step3Title').innerText = "Update Destination"; document.getElementById('ayushmanFilterBox').style.display = "none"; goStep(3); fetchHospitals(); }
-  
-  let selectedRating = 0;
-  function setRating(n) { selectedRating = n; document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); setTimeout(() => { document.getElementById('ratingThanks').style.display = 'block'; document.getElementById('starRating').style.opacity = '0.5'; document.getElementById('starRating').style.pointerEvents = 'none'; }, 300); }
+  let selectedRating = 0; function setRating(n) { selectedRating = n; document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); setTimeout(() => { document.getElementById('ratingThanks').style.display = 'block'; document.getElementById('starRating').style.opacity = '0.5'; document.getElementById('starRating').style.pointerEvents = 'none'; }, 300); }
 
-  // 🛡️ DETAILED HISTORY UI
   async function showHistory() {
       document.getElementById('historyModal').classList.remove('hidden'); 
       const content = document.getElementById('historyModalContent'); 
@@ -602,51 +575,17 @@
       try {
           const res = await fetch(`${BASE_URL}/api/user/history?phone=${phone}`); 
           const data = await res.json();
-          
           if (!data.history || data.history.length === 0) { content.innerHTML = "<p style='color:var(--muted); text-align:center;'>No past trips found.</p>"; return; }
           
           content.innerHTML = data.history.map(b => {
-              // Parse date logic if available
               const dObj = b.created_at ? new Date(b.created_at) : new Date();
-              const dateStr = dObj.toLocaleDateString();
-              const timeStr = dObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-              
-              // Badge Colors
+              const dateStr = dObj.toLocaleDateString(); const timeStr = dObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
               const bgC = b.status==='COMPLETED'?'#dcfce7':b.status==='CANCELLED'?'#fee2e2':'#fef3c7';
               const txtC = b.status==='COMPLETED'?'#166534':b.status==='CANCELLED'?'#991b1b':'#b45309';
               
-              // Build driver info section
-              const driverInfo = b.driver_name ? `
-                  <div style="background:#f8fafc; padding:10px; border-radius:8px; margin-top:12px; font-size:12px; border:1px solid #e2e8f0;">
-                    <strong style="color:var(--text-main);">👨‍✈️ Driver:</strong> ${sanitize(b.driver_name)}<br>
-                    <strong style="color:var(--text-main);">🚑 Vehicle:</strong> ${sanitize(b.ambulance_type)} - <span style="letter-spacing:0.5px; font-weight:600;">${sanitize(b.ambulance_number||'')}</span>
-                  </div>
-              ` : '';
+              const driverInfo = b.driver_name ? `<div style="background:#f8fafc; padding:10px; border-radius:8px; margin-top:12px; font-size:12px; border:1px solid #e2e8f0;"><strong style="color:var(--text-main);">👨‍✈️ Driver:</strong> ${sanitize(b.driver_name)}<br><strong style="color:var(--text-main);">🚑 Vehicle:</strong> ${sanitize(b.ambulance_type)} - <span style="letter-spacing:0.5px; font-weight:600;">${sanitize(b.ambulance_number||'')}</span></div>` : '';
 
-              return `
-              <div style="border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
-                
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-                  <div>
-                      <strong style="font-size:16px; display:block; margin-bottom:4px; color:var(--text-main);">${sanitize(b.emergency_category)}</strong>
-                      <span style="font-size:12px; color:var(--muted); font-weight:600;">📅 ${dateStr} • ⏰ ${timeStr}</span>
-                  </div>
-                  <span style="font-size:10px; font-weight:800; padding:4px 10px; border-radius:8px; background:${bgC}; color:${txtC}; text-transform:uppercase;">${b.status}</span>
-                </div>
-                
-                <div style="font-size:13px; color:var(--text-main); margin-top:12px; display:flex; align-items:center; gap:6px;">
-                    🏥 <strong style="font-weight:600;">Dest:</strong> ${sanitize(b.destination || b.hospital_name || 'Cancelled before destination')}
-                </div>
-                
-                ${driverInfo}
-                
-                ${b.final_cost ? `
-                <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed var(--border); padding-top:12px; margin-top:12px;">
-                  <span style="font-size:12px; color:var(--muted); font-weight:600;">Total Paid</span>
-                  <span style="font-size:18px; color:var(--primary); font-weight:800;">₹${b.final_cost}</span>
-                </div>` : ''}
-                
-              </div>`;
+              return `<div style="border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;"><div><strong style="font-size:16px; display:block; margin-bottom:4px; color:var(--text-main);">${sanitize(b.emergency_category)}</strong><span style="font-size:12px; color:var(--muted); font-weight:600;">📅 ${dateStr} • ⏰ ${timeStr}</span></div><span style="font-size:10px; font-weight:800; padding:4px 10px; border-radius:8px; background:${bgC}; color:${txtC}; text-transform:uppercase;">${b.status}</span></div><div style="font-size:13px; color:var(--text-main); margin-top:12px; display:flex; align-items:center; gap:6px;">🏥 <strong style="font-weight:600;">Dest:</strong> ${sanitize(b.destination || b.hospital_name || 'Cancelled before destination')}</div>${driverInfo}${b.final_cost ? `<div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed var(--border); padding-top:12px; margin-top:12px;"><span style="font-size:12px; color:var(--muted); font-weight:600;">Total Paid</span><span style="font-size:18px; color:var(--primary); font-weight:800;">₹${b.final_cost}</span></div>` : ''}</div>`;
           }).join('');
       } catch(e) { content.innerHTML = "<p style='color:red; text-align:center;'>Failed to load history.</p>"; }
   }
