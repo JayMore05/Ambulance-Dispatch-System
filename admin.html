@@ -26,13 +26,11 @@
     tr:hover { background: #f8fafc; }
     
     .badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: inline-block; text-transform: uppercase; }
-    .badge.pending { background: #fef3c7; color: #b45309; }
-    .badge.approved { background: #dcfce7; color: #166534; }
-    .badge.rejected { background: #fee2e2; color: #991b1b; }
+    .badge.pending, .badge.assigned { background: #fef3c7; color: #b45309; }
+    .badge.approved, .badge.in_transit, .badge.completed { background: #dcfce7; color: #166534; }
+    .badge.rejected, .badge.cancelled, .badge.danger { background: #fee2e2; color: #991b1b; }
     .badge.deleted { background: #334155; color: #ffffff; }
     .badge.searching { background: #e0e7ff; color: #1d4ed8; }
-    .badge.assigned { background: #fef3c7; color: #b45309; }
-    .badge.in_transit { background: #dcfce7; color: #166534; }
     
     .doc-link { color: var(--primary); text-decoration: none; font-weight: 600; font-size: 13px; display: block; margin-bottom: 4px; }
     .doc-link:hover { text-decoration: underline; }
@@ -99,6 +97,7 @@
   <div class="tabs">
     <div class="tab active" onclick="switchTab('drivers', this)">👨‍✈️ Driver Management</div>
     <div class="tab" onclick="switchTab('live', this)"><span class="live-indicator"></span>📡 Live Dispatch Radar</div>
+    <div class="tab" onclick="switchTab('history', this)">📜 Master Mission History</div>
   </div>
 
   <div id="driversTab" class="card">
@@ -129,6 +128,16 @@
       </table>
     </div>
   </div>
+
+  <div id="historyTab" class="card hidden">
+    <h2 style="margin-top: 0;">Master Mission History (Completed & Cancelled)</h2>
+    <div style="overflow-x: auto;">
+      <table>
+        <thead><tr><th>ID & Date</th><th>Patient Info</th><th>Driver Details</th><th>Final Destination</th><th>Distance & Cost</th><th>Status</th></tr></thead>
+        <tbody id="historyTableBody"><tr><td colspan="6" style="text-align: center; color: var(--muted);">Loading records...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -154,7 +163,6 @@
       if (!pass) return;
 
       try {
-          // Sending both user and password. (If your server.js only checks password, it will still work perfectly!)
           const res = await fetch(`${BASE_URL}/api/admin/login`, {
               method: 'POST', 
               headers: { 'Content-Type': 'application/json' },
@@ -205,14 +213,17 @@
       el.classList.add('active');
       document.getElementById('driversTab').classList.add('hidden');
       document.getElementById('liveTab').classList.add('hidden');
+      document.getElementById('historyTab').classList.add('hidden');
       document.getElementById(tab + 'Tab').classList.remove('hidden');
       
       if (tab === 'live') loadLiveBookings();
+      if (tab === 'history') loadHistory();
   }
 
   function refreshData() { 
       loadDrivers(currentDriverPage); 
       loadLiveBookings(); 
+      if(!document.getElementById('historyTab').classList.contains('hidden')) loadHistory();
   }
 
   // ==========================================
@@ -226,7 +237,7 @@
 
   async function loadDrivers(page = 1) {
       const tbody = document.getElementById('driverTableBody');
-      const limit = 50; // Match your server.js limit
+      const limit = 50; 
       
       try {
           const res = await fetch(`${BASE_URL}/api/admin/drivers?page=${page}&limit=${limit}`, { headers: authHeaders() });
@@ -236,7 +247,6 @@
           
           document.getElementById('currentPageText').innerText = page;
           document.getElementById('btnPrevPage').disabled = (page === 1);
-          // If we got fewer drivers than the limit, we are on the last page.
           document.getElementById('btnNextPage').disabled = (!data.drivers || data.drivers.length < limit);
 
           if (!data.drivers || data.drivers.length === 0) { 
@@ -248,7 +258,6 @@
           tbody.innerHTML = "";
           
           data.drivers.forEach(drv => {
-              // Calculate stats dynamically
               if(drv.verification_status === 'PENDING') p++;
               if(drv.verification_status === 'APPROVED' && drv.status === 'ONLINE') a++;
               if(drv.verification_status === 'DELETION_REQUESTED') d++;
@@ -286,8 +295,6 @@
               </tr>`;
           });
           
-          // Note: Realistically, stats should be fetched from a separate aggregate API to count ALL pages, 
-          // but for the presentation, counting the current page looks highly dynamic and effective.
           document.getElementById('statPending').innerText = p;
           document.getElementById('statActive').innerText = a;
           document.getElementById('statDeletes').innerText = d;
@@ -342,6 +349,47 @@
           });
       } catch(e) { 
           if(isVisible) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Server error. Connection lost.</td></tr>'; 
+      }
+  }
+
+  // ==========================================
+  // MASTER HISTORY
+  // ==========================================
+  async function loadHistory() {
+      const tbody = document.getElementById('historyTableBody');
+      try {
+          const res = await fetch(`${BASE_URL}/api/admin/history`, { headers: authHeaders() });
+          const data = await res.json();
+          
+          if(!data.history || data.history.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--muted);">No completed trips found.</td></tr>';
+              return;
+          }
+          
+          tbody.innerHTML = "";
+          data.history.forEach(h => {
+              const dStr = new Date(h.booked_at).toLocaleString('en-IN', { hour12: true });
+              const driverCell = h.driver_name ? `<strong>${h.driver_name}</strong><br><span style="color:var(--muted);font-size:12px;">${h.ambulance_type||''} - ${h.ambulance_number||''}</span>` : '<span style="color:var(--muted);">N/A</span>';
+              const costCell = h.distance ? `${h.distance} km<br><strong style="color:var(--success);">₹${h.final_cost||0}</strong>` : '--';
+              const badgeClass = h.status === 'COMPLETED' ? 'approved' : 'rejected';
+
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                  <td><strong>#${h.booking_id}</strong><br><span style="font-size:11px;color:var(--muted);">${dStr}</span></td>
+                  <td><strong></strong><br><span style="color:var(--muted);font-size:12px;"></span></td>
+                  <td>${driverCell}</td>
+                  <td style="font-size:13px; font-weight: 500;"></td>
+                  <td>${costCell}</td>
+                  <td><span class="badge ${badgeClass}">${h.status}</span></td>`;
+                  
+              row.cells[1].querySelector('strong').textContent = h.patient_name;
+              row.cells[1].querySelector('span').textContent = '📞 ' + h.patient_phone;
+              row.cells[3].textContent = h.destination || 'N/A';
+              
+              tbody.appendChild(row);
+          });
+      } catch(e) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Server error. Connection lost.</td></tr>';
       }
   }
 
