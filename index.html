@@ -380,38 +380,37 @@
     const statusEl = document.getElementById('locStatus');
     
     if (navigator.geolocation) {
+        // 🚀 SPEED FIX: Fallback to WiFi/Cell triangulation for instant results
         navigator.geolocation.getCurrentPosition(
-            async (pos) => { 
+            (pos) => { 
                 state.userLat = pos.coords.latitude; 
                 state.userLng = pos.coords.longitude; 
                 
-                statusEl.innerText = "✅ GPS Location Locked. Fetching Area..."; 
+                statusEl.innerText = "✅ GPS Locked"; 
                 statusEl.style.color = "var(--success)"; 
                 
-                // Fetch and display real area name!
-                const cityName = await fetchCityName(state.userLat, state.userLng);
-                if(cityName) {
-                    statusEl.innerHTML = `✅ GPS Location Locked<br><span style="color:var(--text-muted); font-size:12px; font-weight:500;">📌 Current Area: <b>${cityName}</b></span>`;
-                } else {
-                    statusEl.innerText = "✅ GPS Location Locked";
-                }
+                // Fetch real area name in the background (does not freeze the app!)
+                fetchCityName(state.userLat, state.userLng).then(cityName => {
+                    if(cityName) {
+                        statusEl.innerHTML = `✅ GPS Locked<br><span style="color:var(--muted); font-size:12px; font-weight:500;">📌 Area: <b>${cityName}</b></span>`;
+                    }
+                });
             },
             (err) => { 
                 console.warn("GPS Error:", err.message);
-                if (err.code === 1) statusEl.innerText = "⚠️ Permission Denied. Allow location in browser.";
-                else if (err.code === 2) statusEl.innerText = "⚠️ Signal Lost. Turn on Phone GPS.";
-                else if (err.code === 3) statusEl.innerText = "⚠️ Timeout. Move near a window & refresh.";
-                
+                statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
                 statusEl.style.color = "#e53935"; 
+                
+                // Instant fallback so the user is never stuck
                 state.userLat = 19.0760; state.userLng = 72.8777; 
             },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+            // ⚡ THE MAGIC SETTINGS: 5-second max wait, accepts 10-minute old cached locations
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
         );
     } else { 
         statusEl.innerText = "❌ Browser does not support GPS."; 
     }
   };
-
   // 🛡️ MOBILE APP FREEZE FIX: Refresh when returning to browser tab
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.bookingId && currentStep === 6) {
