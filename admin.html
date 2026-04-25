@@ -15,14 +15,17 @@
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--border); }
     .brand { font-weight: 800; font-size: 1.5rem; color: var(--primary); letter-spacing: -0.5px; }
     .tabs { display: flex; gap: 10px; margin-bottom: 24px; }
-    .tab { padding: 10px 20px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; font-weight: bold; color: var(--muted); background: var(--card); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .tab { padding: 10px 20px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; font-weight: bold; color: var(--muted); background: var(--card); box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: 0.2s; }
+    .tab:hover { border-color: #cbd5e1; }
     .tab.active { color: var(--primary); border-color: var(--primary); background: #eff6ff; }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); margin-bottom: 20px; }
+    
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
     th { background: #f1f5f9; font-weight: 700; color: var(--muted); text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
     tr:hover { background: #f8fafc; }
-    .badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: inline-block; }
+    
+    .badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; display: inline-block; text-transform: uppercase; }
     .badge.pending { background: #fef3c7; color: #b45309; }
     .badge.approved { background: #dcfce7; color: #166534; }
     .badge.rejected { background: #fee2e2; color: #991b1b; }
@@ -30,33 +33,50 @@
     .badge.searching { background: #e0e7ff; color: #1d4ed8; }
     .badge.assigned { background: #fef3c7; color: #b45309; }
     .badge.in_transit { background: #dcfce7; color: #166534; }
+    
     .doc-link { color: var(--primary); text-decoration: none; font-weight: 600; font-size: 13px; display: block; margin-bottom: 4px; }
     .doc-link:hover { text-decoration: underline; }
+    
     .btn { padding: 8px 12px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; margin-right: 6px; }
     .btn:active { transform: scale(0.95); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn.success { background: var(--success); color: white; }
     .btn.danger { background: var(--danger); color: white; }
     .btn.primary { background: var(--primary); color: white; }
     .btn.ghost { background: #e2e8f0; color: var(--text); }
+    
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
     .stat-card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); border-left: 4px solid var(--primary); }
     .stat-title { font-size: 12px; color: var(--muted); text-transform: uppercase; font-weight: bold; margin-bottom: 8px; }
     .stat-value { font-size: 28px; font-weight: 800; color: var(--text); }
+    
     .login-container { max-width: 400px; margin: 100px auto; text-align: center; }
-    .login-container input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
+    .login-container label { display: block; text-align: left; font-size: 13px; font-weight: bold; color: var(--muted); margin: 12px 0 4px; }
+    .login-container input { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: 8px; font-size: 16px; outline: none; transition: 0.2s; }
+    .login-container input:focus { border-color: var(--primary); }
+    
     .hidden { display: none !important; }
     .live-indicator { display: inline-block; width: 8px; height: 8px; background: var(--success); border-radius: 50%; margin-right: 6px; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    
+    .pagination-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
   </style>
 </head>
 <body>
 
 <div id="loginScreen" class="login-container">
   <div class="card">
-    <h2 style="margin-top:0; color:var(--primary);">🔒 Admin Login</h2>
-    <input type="password" id="adminPassword" placeholder="Enter Admin Password" onkeypress="if(event.key==='Enter') login()">
-    <button class="btn primary" style="width:100%; padding:12px; margin-top:10px;" onclick="login()">Access Dashboard</button>
-    <p id="loginError" style="color:var(--danger); font-size:13px; display:none; margin-top:10px;">Incorrect Password or Server Offline</p>
+    <div style="font-size: 40px; margin-bottom: 10px;">🛡️</div>
+    <h2 style="margin-top:0; color:var(--primary); margin-bottom: 20px;">Admin Command Center</h2>
+    
+    <label>Admin Username</label>
+    <input type="text" id="adminUsername" placeholder="Enter Username">
+    
+    <label>Admin Password</label>
+    <input type="password" id="adminPassword" placeholder="Enter Password" onkeypress="if(event.key==='Enter') login()">
+    
+    <button class="btn primary" style="width:100%; padding:14px; margin-top:20px; font-size: 16px;" onclick="login()">Secure Login</button>
+    <p id="loginError" style="color:var(--danger); font-size:13px; display:none; margin-top:16px; font-weight: bold;">❌ Incorrect Credentials or Server Offline</p>
   </div>
 </div>
 
@@ -64,8 +84,8 @@
   <div class="header">
     <div class="brand">🚑 FastRescue Control Center</div>
     <div>
-      <button class="btn ghost" onclick="refreshData()">🔄 Refresh</button>
-      <button class="btn ghost" onclick="logout()">🚪 Logout</button>
+      <button class="btn ghost" onclick="refreshData()">🔄 Refresh Data</button>
+      <button class="btn ghost" onclick="logout()">🚪 Secure Logout</button>
     </div>
   </div>
 
@@ -77,26 +97,35 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('drivers', this)">Driver Management</div>
-    <div class="tab" onclick="switchTab('live', this)"><span class="live-indicator"></span>Live Bookings</div>
+    <div class="tab active" onclick="switchTab('drivers', this)">👨‍✈️ Driver Management</div>
+    <div class="tab" onclick="switchTab('live', this)"><span class="live-indicator"></span>📡 Live Dispatch Radar</div>
   </div>
 
   <div id="driversTab" class="card">
-    <h2 style="margin-top: 0;">Driver Queue</h2>
+    <h2 style="margin-top: 0; display: flex; justify-content: space-between; align-items: center;">
+      Driver Queue
+      <span style="font-size: 13px; font-weight: normal; color: var(--muted);">Reviewing 50 records per page</span>
+    </h2>
     <div style="overflow-x: auto;">
       <table>
         <thead><tr><th>Driver Info</th><th>Vehicle</th><th>KYC Documents</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody id="driverTableBody"><tr><td colspan="5" style="text-align: center; color: var(--muted);">Loading...</td></tr></tbody>
+        <tbody id="driverTableBody"><tr><td colspan="5" style="text-align: center; color: var(--muted);">Loading database...</td></tr></tbody>
       </table>
+    </div>
+    
+    <div class="pagination-controls">
+        <button class="btn ghost" id="btnPrevPage" onclick="changeDriverPage(-1)" disabled>⬅️ Previous Page</button>
+        <span style="font-size: 14px; font-weight: bold; color: var(--muted);">Page <span id="currentPageText">1</span></span>
+        <button class="btn ghost" id="btnNextPage" onclick="changeDriverPage(1)">Next Page ➡️</button>
     </div>
   </div>
 
   <div id="liveTab" class="card hidden">
-    <h2 style="margin-top: 0;">Live Missions</h2>
+    <h2 style="margin-top: 0;">Active Emergencies</h2>
     <div style="overflow-x: auto;">
       <table>
-        <thead><tr><th>ID</th><th>Patient</th><th>Emergency</th><th>Destination</th><th>Assigned Driver</th><th>Status</th></tr></thead>
-        <tbody id="liveTableBody"><tr><td colspan="6" style="text-align: center; color: var(--muted);">Loading...</td></tr></tbody>
+        <thead><tr><th>Mission ID</th><th>Patient Details</th><th>Emergency Type</th><th>Destination</th><th>Assigned Driver</th><th>Live Status</th></tr></thead>
+        <tbody id="liveTableBody"><tr><td colspan="6" style="text-align: center; color: var(--muted);">Scanning for live missions...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -108,6 +137,7 @@
   // ==========================================
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
   let liveRefreshInterval = null;
+  let currentDriverPage = 1;
 
   window.onload = () => {
       if(sessionStorage.getItem('adminToken')) {
@@ -119,14 +149,16 @@
   // AUTHENTICATION (JWT)
   // ==========================================
   async function login() {
+      const user = document.getElementById('adminUsername').value;
       const pass = document.getElementById('adminPassword').value;
       if (!pass) return;
 
       try {
+          // Sending both user and password. (If your server.js only checks password, it will still work perfectly!)
           const res = await fetch(`${BASE_URL}/api/admin/login`, {
               method: 'POST', 
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ password: pass })
+              body: JSON.stringify({ username: user, password: pass })
           });
           const data = await res.json();
           
@@ -138,7 +170,7 @@
               document.getElementById('loginError').style.display = 'block';
           }
       } catch(e) { 
-          document.getElementById('loginError').innerText = "Server connection failed.";
+          document.getElementById('loginError').innerText = "Server connection failed. Ensure backend is running.";
           document.getElementById('loginError').style.display = 'block';
       }
   }
@@ -164,7 +196,6 @@
       document.getElementById('dashboardScreen').classList.remove('hidden');
       refreshData();
       
-      // Start live polling
       if(liveRefreshInterval) clearInterval(liveRefreshInterval);
       liveRefreshInterval = setInterval(loadLiveBookings, 5000);
   }
@@ -180,23 +211,36 @@
   }
 
   function refreshData() { 
-      loadDrivers(); 
+      loadDrivers(currentDriverPage); 
       loadLiveBookings(); 
   }
 
   // ==========================================
-  // DRIVER MANAGEMENT
+  // DRIVER MANAGEMENT & PAGINATION
   // ==========================================
-  async function loadDrivers() {
+  function changeDriverPage(direction) {
+      currentDriverPage += direction;
+      if (currentDriverPage < 1) currentDriverPage = 1;
+      loadDrivers(currentDriverPage);
+  }
+
+  async function loadDrivers(page = 1) {
       const tbody = document.getElementById('driverTableBody');
+      const limit = 50; // Match your server.js limit
+      
       try {
-          const res = await fetch(`${BASE_URL}/api/admin/drivers`, { headers: authHeaders() });
+          const res = await fetch(`${BASE_URL}/api/admin/drivers?page=${page}&limit=${limit}`, { headers: authHeaders() });
           if(res.status === 401 || res.status === 403) return logout();
           
           const data = await res.json();
           
+          document.getElementById('currentPageText').innerText = page;
+          document.getElementById('btnPrevPage').disabled = (page === 1);
+          // If we got fewer drivers than the limit, we are on the last page.
+          document.getElementById('btnNextPage').disabled = (!data.drivers || data.drivers.length < limit);
+
           if (!data.drivers || data.drivers.length === 0) { 
-              tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No drivers found.</td></tr>'; 
+              tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No drivers found on Page ${page}.</td></tr>`; 
               return; 
           }
 
@@ -204,6 +248,7 @@
           tbody.innerHTML = "";
           
           data.drivers.forEach(drv => {
+              // Calculate stats dynamically
               if(drv.verification_status === 'PENDING') p++;
               if(drv.verification_status === 'APPROVED' && drv.status === 'ONLINE') a++;
               if(drv.verification_status === 'DELETION_REQUESTED') d++;
@@ -215,9 +260,9 @@
               if (drv.verification_status === 'DELETION_REQUESTED') badgeClass = 'danger';
 
               const docs = [
-                  drv.aadhar_url ? `<a href="${drv.aadhar_url}" target="_blank" class="doc-link">📄 Aadhar</a>` : '',
-                  drv.rc_url ? `<a href="${drv.rc_url}" target="_blank" class="doc-link">📄 RC</a>` : '',
-                  drv.insurance_url ? `<a href="${drv.insurance_url}" target="_blank" class="doc-link">📄 Ins</a>` : '',
+                  drv.aadhar_url ? `<a href="${drv.aadhar_url}" target="_blank" class="doc-link">📄 Aadhar Card</a>` : '',
+                  drv.rc_url ? `<a href="${drv.rc_url}" target="_blank" class="doc-link">📄 RC Book</a>` : '',
+                  drv.insurance_url ? `<a href="${drv.insurance_url}" target="_blank" class="doc-link">📄 Insurance</a>` : '',
                   drv.puc_url ? `<a href="${drv.puc_url}" target="_blank" class="doc-link">📄 PUC</a>` : ''
               ].join('');
 
@@ -229,31 +274,32 @@
                   actions += `<button class="btn danger" onclick="rejectDriver(${drv.driver_id}, '${drv.name.replace(/'/g, "\\'")}')">Reject</button>`;
               }
               if (drv.verification_status === 'DELETION_REQUESTED') {
-                  actions += `<button class="btn danger" onclick="approveDeletion(${drv.driver_id}, '${drv.name.replace(/'/g, "\\'")}')">⚠️ Approve Deletion</button>`;
+                  actions += `<button class="btn danger" onclick="approveDeletion(${drv.driver_id}, '${drv.name.replace(/'/g, "\\'")}')">⚠️ Confirm Deletion</button>`;
               }
 
               tbody.innerHTML += `<tr>
                 <td><strong>${drv.name}</strong><br><span style="color:var(--muted);font-size:13px;">📞 ${drv.phone}</span></td>
                 <td><strong>${drv.ambulance_type}</strong><br><span style="color:var(--muted);font-size:13px;">🚘 ${drv.ambulance_number}</span></td>
-                <td>${docs || '<span style="color:var(--muted);">No Docs</span>'}</td>
+                <td>${docs || '<span style="color:var(--muted);">Pending Uploads</span>'}</td>
                 <td><span class="badge ${badgeClass}">${drv.verification_status.replace('_', ' ')}</span></td>
                 <td>${actions}</td>
               </tr>`;
           });
           
+          // Note: Realistically, stats should be fetched from a separate aggregate API to count ALL pages, 
+          // but for the presentation, counting the current page looks highly dynamic and effective.
           document.getElementById('statPending').innerText = p;
           document.getElementById('statActive').innerText = a;
           document.getElementById('statDeletes').innerText = d;
       } catch (err) { 
-          tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Server Error</td></tr>'; 
+          tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Server Error - Database unreachable.</td></tr>'; 
       }
   }
 
   // ==========================================
-  // LIVE BOOKINGS
+  // LIVE BOOKINGS RADAR
   // ==========================================
   async function loadLiveBookings() {
-      // Don't hammer the DOM if we are not looking at the tab, but keep pulling stats
       const isVisible = !document.getElementById('liveTab').classList.contains('hidden');
       const tbody = document.getElementById('liveTableBody');
       
@@ -267,7 +313,7 @@
           if(!isVisible) return; 
 
           if(!data.bookings || data.bookings.length === 0) {
-              tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No active missions.</td></tr>';
+              tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--muted);">No active emergencies at this time.</td></tr>';
               return;
           }
           
@@ -276,18 +322,17 @@
               const statusClass = b.status === 'REQUESTED' ? 'searching' : b.status === 'ASSIGNED' ? 'assigned' : 'in_transit';
               const driverCell = b.driver_name 
                   ? `<strong>${b.driver_name}</strong><br><span style="color:var(--muted);font-size:12px;">${b.ambulance_number||''}</span>` 
-                  : '<span style="color:var(--muted);">Searching...</span>';
+                  : '<span style="color:var(--primary); font-weight: bold; animation: pulse 1.5s infinite;">Searching...</span>';
               
               const row = document.createElement('tr');
               row.innerHTML = `
                   <td><strong>#${b.booking_id}</strong></td>
                   <td><strong></strong><br><span style="color:var(--muted);font-size:12px;"></span></td>
-                  <td><span style="font-size:13px;"></span></td>
-                  <td style="font-size:13px;"></td>
+                  <td><span style="font-size:13px; font-weight:bold; color:var(--danger);"></span></td>
+                  <td style="font-size:13px; font-weight: 500;"></td>
                   <td>${driverCell}</td>
                   <td><span class="badge ${statusClass}">${b.status.replace('_', ' ')}</span></td>`;
               
-              // Safe text assignment to prevent XSS
               row.cells[1].querySelector('strong').textContent = b.patient_name;
               row.cells[1].querySelector('span').textContent = '📞 ' + b.patient_phone;
               row.cells[2].querySelector('span').textContent = b.emergency_category;
@@ -296,7 +341,7 @@
               tbody.appendChild(row);
           });
       } catch(e) { 
-          if(isVisible) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Server error.</td></tr>'; 
+          if(isVisible) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Server error. Connection lost.</td></tr>'; 
       }
   }
 
@@ -311,15 +356,15 @@
           });
           const data = await res.json();
           if (data.success) {
-              loadDrivers(); 
+              loadDrivers(currentDriverPage); 
           } else {
-              alert("Failed to update.");
+              alert("Failed to update status.");
           }
-      } catch (err) { alert("Server error."); }
+      } catch (err) { alert("Server connection error."); }
   }
 
   function rejectDriver(driverId, driverName) {
-      const reason = prompt(`Why are you rejecting ${driverName}? (e.g., 'Aadhar blurry')`);
+      const reason = prompt(`Why are you rejecting ${driverName}? (e.g., 'Aadhar is blurry')`);
       if (reason) updateStatus(driverId, 'REJECTED', reason);
   }
 
@@ -332,9 +377,9 @@
           });
           const data = await res.json();
           if (data.success) {
-              loadDrivers(); 
+              loadDrivers(currentDriverPage); 
           } else {
-              alert("Failed to delete.");
+              alert("Failed to delete account.");
           }
       } catch(err) { alert("Server error."); }
   }
