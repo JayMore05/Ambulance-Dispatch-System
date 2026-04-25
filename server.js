@@ -256,14 +256,15 @@ app.get("/api/driver/radar", (req, res) => {
 
 // 🛡️ CONCURRENCY LOCK: Ensures two drivers can't claim the same trip
 app.post("/api/driver/accept", (req, res) => {
-    db.query("UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'", [req.body.driver_id, req.body.booking_id], (err, result) => {
-        if (err || result.affectedRows === 0) return res.status(400).json({ error: "Emergency already taken." });
-        
-        db.query("SELECT push_subscription FROM bookings WHERE booking_id=?", [req.body.booking_id], (e2, rows) => {
-            if (!e2 && rows && rows[0]) pushNotify(rows[0].push_subscription, "🚑 Driver Assigned!", "An ambulance is on the way to your location.");
-        });
-        
-        res.json({ success: true });
+    const { driver_id, booking_id } = req.body;
+    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
+    
+    db.query(query, [driver_id, booking_id], (err, result) => {
+        if (err) return res.status(500).json({ success: false, error: "Database error" });
+        if (result.affectedRows === 0) {
+            return res.json({ success: false, message: "Too late! Another driver accepted this emergency." });
+        }
+        res.json({ success: true, message: "Booking assigned to you!" });
     });
 });
 
@@ -285,15 +286,22 @@ app.post("/api/driver/complete", (req, res) => {
     });
 });
 
-app.get("/api/driver/history", (req, res) => {
-    db.query(`SELECT b.*, u.name AS user_name, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.driver_id = ? AND b.status = 'COMPLETED' ORDER BY b.completed_at DESC LIMIT 10`, [req.query.driver_id], (err, results) => {
-        if (err) return res.json({ history: [] });
-        res.json({ history: (results || []).map(h => ({ ...h, time_booked: formatTime(h.booked_at), time_picked: formatTime(h.picked_up_at), time_dropped: formatTime(h.completed_at), total_cost: h.final_cost }))});
-    });
-});
+app.get("/api/user/history", (req, res) => {
+    const phone = req.query.phone;
+    if (!phone) return res.status(400).json({ error: "Phone required" });
 
-app.post("/api/driver/toggle-status", (req, res) => {
-    db.query("UPDATE drivers SET status=? WHERE driver_id=?", [req.body.status, req.body.driver_id], (err) => res.json({ success: !err }));
+    const query = `
+        SELECT b.*, d.name as driver_name, d.ambulance_type, d.ambulance_number 
+        FROM bookings b 
+        LEFT JOIN drivers d ON b.driver_id = d.driver_id 
+        WHERE b.patient_phone = ? 
+        ORDER BY b.created_at DESC
+    `;
+
+    db.query(query, [phone], (err, rows) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        res.json({ success: true, history: rows });
+    });
 });
 
 // ==========================================================
@@ -320,8 +328,17 @@ app.post("/api/admin/login", (req, res) => {
     } else res.status(401).json({ success: false, error: "Invalid password" });
 });
 
-app.get("/api/admin/drivers", adminAuth, (req, res) => {
-    db.query("SELECT * FROM drivers ORDER BY verification_status DESC, driver_id DESC", (err, rows) => res.json({ drivers: rows || [] }));
+app.get("/api/admin/drivers", (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    const query = `SELECT * FROM drivers ORDER BY verification_status DESC, driver_id DESC LIMIT ? OFFSET ?`;
+    
+    db.query(query, [limit, offset], (err, rows) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        res.json({ drivers: rows || [], page, limit });
+    });
 });
 
 app.get("/api/admin/live-bookings", adminAuth, (req, res) => {
