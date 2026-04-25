@@ -257,6 +257,8 @@ app.get("/api/driver/radar", (req, res) => {
 // 🛡️ CONCURRENCY LOCK: Ensures two drivers can't claim the same trip
 app.post("/api/driver/accept", (req, res) => {
     const { driver_id, booking_id } = req.body;
+    
+    // IMPORTANT: Make sure your WHERE clause uses "id" or "booking_id" depending on what your database table uses! Usually, it is just "id".
     const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
     
     db.query(query, [driver_id, booking_id], (err, result) => {
@@ -267,11 +269,6 @@ app.post("/api/driver/accept", (req, res) => {
         res.json({ success: true, message: "Booking assigned to you!" });
     });
 });
-
-app.post("/api/driver/pickup", (req, res) => {
-    db.query("UPDATE bookings SET status='IN_TRANSIT', picked_up_at=CURRENT_TIMESTAMP WHERE booking_id=?", [req.body.booking_id], (err) => res.json({ success: !err }));
-});
-
 app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
     db.query("SELECT price_per_km, hospital_distance_km FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
