@@ -361,7 +361,7 @@
   }
 
   // ==========================================
-  // 🛡️ GPS SENDER LOGIC (Memory Leak Fixed)
+  // 🛡️ GPS SENDER LOGIC
   // ==========================================
   let gpsSendInterval = null;
 
@@ -384,7 +384,7 @@
   }
 
   // ==========================================
-  // 🛡️ ENTERPRISE UPGRADE 1 & 2: Freeze Fix & Geocoding
+  // 🛡️ MOBILE FREEZE FIX (Visibility Change)
   // ==========================================
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
@@ -418,12 +418,12 @@
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
   };
 
- window.onload = () => {
+  window.onload = () => {
     if (driver.id) { 
         if (driver.status === 'PENDING') { goStep('Pending'); } else { document.getElementById('navToggle').style.display = 'flex'; document.getElementById('bottomNav').style.display = 'flex'; driver.isOnline = true; checkActiveMission(); }
     }
     
-    let lastCityFetch = 0; // 🛡️ Added throttle timer!
+    let lastCityFetch = 0; 
     
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
@@ -431,7 +431,7 @@
                 driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; 
                 if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
                 
-                // 🛡️ ANTI-BAN FIX: Only ask for the City Name once every 5 minutes (300000 ms)
+                // 🛡️ ANTI-BAN FIX: Only ask for City Name once every 5 mins
                 if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
                     lastCityFetch = Date.now();
                     const city = await fetchCityName(driver.lat, driver.lng);
@@ -445,6 +445,7 @@
         );
     }
   };
+
   async function requestWakeLock() { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} }
 
   function goStep(n) { 
@@ -555,7 +556,6 @@
         document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
         document.querySelector('.pulse').style.display = "flex"; 
         
-        // Refresh city name right away
         const city = await fetchCityName(driver.lat, driver.lng);
         document.getElementById('toggleText').innerText = city ? `ONLINE (${city})` : "ONLINE";
         
@@ -581,7 +581,6 @@
             document.body.style.backgroundColor = "#fff59d"; 
             setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); 
             if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
-            // 🛡️ ENTERPRISE UPGRADE 3: Audio Ping
             document.getElementById('alertBeep').play().catch(e => {}); 
         }
         lastEmergencyCount = data.bookings.length;
@@ -608,7 +607,8 @@
   function initDriverMap(pLat, pLng) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(dMap);
+      // 🛡️ CARTODB - Anti Ban!
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(dMap);
       driverMarker = L.marker([driver.lat, driver.lng]).addTo(dMap).bindPopup("<b>You (Ambulance)</b>").openPopup();
       patientMarker = L.marker([pLat, pLng]).addTo(dMap).bindPopup("<b>Patient Location</b>").openPopup();
       let group = new L.featureGroup([driverMarker, patientMarker]); dMap.fitBounds(group.getBounds().pad(0.5));
@@ -658,10 +658,14 @@
   }
 
   async function pickup() { 
+      // 🛡️ NO OTP REQUIREMENT: Just a fast confirmation dialog
+      if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
+
       if (odometerInterval) clearInterval(odometerInterval);
 
       await fetch(`${BASE_URL}/api/driver/pickup`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId }) }); 
-      checkActiveMission(); lastLat = driver.lat; lastLng = driver.lng; totalDrivenKm = 0; 
+      checkActiveMission(); 
+      lastLat = driver.lat; lastLng = driver.lng; totalDrivenKm = 0; 
       
       odometerInterval = setInterval(() => { 
           const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng); 
@@ -671,7 +675,6 @@
 
   async function completeTrip() { 
       clearInterval(odometerInterval); clearInterval(missionInterval);
-      
       odometerInterval = null; missionInterval = null;
 
       const res = await fetch(`${BASE_URL}/api/driver/complete`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) }); 
