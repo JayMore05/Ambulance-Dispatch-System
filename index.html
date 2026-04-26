@@ -18,65 +18,222 @@
 
   <style>
     :root {
-        --bg: #f4f7f6; --card: #ffffff; --border: #e2e8f0;
-        --primary: #e53935; --success: #10b981; --text: #1e293b;
-        --muted: #64748b; --highlight: #fee2e2;
+        --bg: #f4f7f6; 
+        --card: #ffffff; 
+        --border: #e2e8f0;
+        --primary: #e53935; 
+        --success: #10b981; 
+        --text: #1e293b;
+        --muted: #64748b; 
+        --highlight: #fee2e2;
     }
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 40px; }
-    .container { width: 100%; max-width: 600px; margin: auto; padding: 16px; }
+    
+    * { 
+        box-sizing: border-box; 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; 
+    }
+    
+    body { 
+        margin: 0; 
+        background: var(--bg); 
+        color: var(--text); 
+        padding-bottom: 40px; 
+    }
+    
+    .container { 
+        width: 100%; 
+        max-width: 600px; 
+        margin: auto; 
+        padding: 16px; 
+    }
     
     .topbar {
-        position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
-        border-bottom: 1px solid var(--border); z-index: 10; padding: 14px 16px;
-        display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        position: sticky; 
+        top: 0; 
+        background: rgba(255,255,255,0.95); 
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border); 
+        z-index: 10; 
+        padding: 14px 16px;
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
-    .brand { font-weight: 800; font-size: 1.3rem; color: var(--primary); letter-spacing: -0.5px; }
-    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    
+    .brand { 
+        font-weight: 800; 
+        font-size: 1.3rem; 
+        color: var(--primary); 
+        letter-spacing: -0.5px; 
+    }
+    
+    .topbar-right { 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+    }
     
     .lang-selector, .history-btn {
-        padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
-        font-weight: 600; background: #f8fafc; outline: none; cursor: pointer; color: var(--text); font-size: 13px;
+        padding: 6px 12px; 
+        border-radius: 8px; 
+        border: 1px solid var(--border);
+        font-weight: 600; 
+        background: #f8fafc; 
+        outline: none; 
+        cursor: pointer; 
+        color: var(--text); 
+        font-size: 13px;
     }
     
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.03); margin-bottom: 16px; }
-    p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.6; }
-    .page-header { display: flex; align-items: center; margin-bottom: 16px; }
-    .page-header h1 { margin: 0; font-size: 22px; font-weight: 800; }
+    .card { 
+        background: var(--card); 
+        border: 1px solid var(--border); 
+        border-radius: 20px; 
+        padding: 24px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.03); 
+        margin-bottom: 16px; 
+    }
+    
+    p { 
+        margin: 0 0 16px; 
+        color: var(--muted); 
+        font-size: 14px; 
+        line-height: 1.6; 
+    }
+    
+    .page-header { 
+        display: flex; 
+        align-items: center; 
+        margin-bottom: 16px; 
+    }
+    
+    .page-header h1 { 
+        margin: 0; 
+        font-size: 22px; 
+        font-weight: 800; 
+    }
     
     .back-icon {
-        background: #f1f5f9; border: none; font-size: 18px; margin-right: 12px;
-        cursor: pointer; display: flex; align-items: center; justify-content: center;
-        width: 36px; height: 36px; border-radius: 10px; transition: 0.2s;
+        background: #f1f5f9; 
+        border: none; 
+        font-size: 18px; 
+        margin-right: 12px;
+        cursor: pointer; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        width: 36px; 
+        height: 36px; 
+        border-radius: 10px; 
+        transition: 0.2s;
     }
-    .back-icon:active { transform: scale(0.95); background: #e2e8f0; }
     
-    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 700; text-transform: uppercase; }
-    input { width: 100%; padding: 16px; border-radius: 12px; border: 2px solid var(--border); font-size: 16px; outline: none; transition: 0.2s; background: #f8fafc; }
-    input:focus, input.error { border-color: var(--primary); background: #fff; }
-    .field-error { color: var(--primary); font-size: 12px; margin: 4px 0 0; font-weight: 600; display: none; }
+    .back-icon:active { 
+        transform: scale(0.95); 
+        background: #e2e8f0; 
+    }
     
-    .btn { width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; text-align: center; margin-bottom: 10px; }
+    label { 
+        display: block; 
+        font-size: 13px; 
+        color: var(--muted); 
+        margin: 12px 0 6px; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+    }
+    
+    input { 
+        width: 100%; 
+        padding: 16px; 
+        border-radius: 12px; 
+        border: 2px solid var(--border); 
+        font-size: 16px; 
+        outline: none; 
+        transition: 0.2s; 
+        background: #f8fafc; 
+    }
+    
+    input:focus, input.error { 
+        border-color: var(--primary); 
+        background: #fff; 
+    }
+    
+    .field-error { 
+        color: var(--primary); 
+        font-size: 12px; 
+        margin: 4px 0 0; 
+        font-weight: 600; 
+        display: none; 
+    }
+    
+    .btn { 
+        width: 100%; 
+        padding: 16px; 
+        border: none; 
+        border-radius: 14px; 
+        font-size: 16px; 
+        font-weight: 700; 
+        cursor: pointer; 
+        transition: 0.2s; 
+        text-align: center; 
+        margin-bottom: 10px; 
+    }
+    
     .btn:active { transform: scale(0.97); }
     .btn.primary { background: var(--primary); color: #fff; }
     .btn.ghost { background: transparent; border: 2px solid var(--border); color: var(--text); }
     .btn.sos { background: #25D366; color: #fff; }
     
     .list-item {
-        text-align: left; width: 100%; background: #fff; border: 1px solid var(--border);
-        border-radius: 16px; padding: 18px; margin-bottom: 12px; cursor: pointer;
-        transition: 0.2s; display: flex; flex-direction: column; gap: 6px;
+        text-align: left; 
+        width: 100%; 
+        background: #fff; 
+        border: 1px solid var(--border);
+        border-radius: 16px; 
+        padding: 18px; 
+        margin-bottom: 12px; 
+        cursor: pointer;
+        transition: 0.2s; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 6px;
     }
-    .list-item:active { transform: scale(0.98); border-color: var(--primary); background: var(--highlight); }
+    
+    .list-item:active { 
+        transform: scale(0.98); 
+        border-color: var(--primary); 
+        background: var(--highlight); 
+    }
     
     .title { font-weight: 800; font-size: 16px; color: var(--text); }
     .meta { font-size: 13px; color: var(--muted); font-weight: 500; }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; margin-left: 8px; text-transform: uppercase; }
+    
+    .badge { 
+        display: inline-block; 
+        padding: 4px 10px; 
+        border-radius: 8px; 
+        font-size: 11px; 
+        font-weight: 800; 
+        margin-left: 8px; 
+        text-transform: uppercase; 
+    }
+    
     .badge.green { background: #dcfce7; color: #166534; }
     .badge.fast { background: #fef3c7; color: #b45309; }
     .cost-badge { background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
     
-    .toggle-box { display: flex; align-items: center; justify-content: space-between; background: #f0fdf4; padding: 16px; border-radius: 14px; border: 1px solid #bbf7d0; margin-bottom: 20px; }
+    .toggle-box { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between; 
+        background: #f0fdf4; 
+        padding: 16px; 
+        border-radius: 14px; 
+        border: 1px solid #bbf7d0; 
+        margin-bottom: 20px; 
+    }
+    
     .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; border-radius: 34px; transition: .4s; }
@@ -85,21 +242,102 @@
     input:checked + .slider:before { transform: translateX(22px); }
     
     .radar-box { text-align: center; padding: 40px 0; }
-    .pulse { width: 100px; height: 100px; background: rgba(229, 57, 53, 0.15); border-radius: 50%; margin: 0 auto 20px; position: relative; display: flex; justify-content: center; align-items: center; font-size: 40px; }
-    .pulse::after { content: ""; position: absolute; width: 100%; height: 100%; background: rgba(229, 57, 53, 0.4); border-radius: 50%; z-index: 1; animation: pulse-anim 1.5s infinite; }
-    @keyframes pulse-anim { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
+    .pulse { 
+        width: 100px; 
+        height: 100px; 
+        background: rgba(229, 57, 53, 0.15); 
+        border-radius: 50%; 
+        margin: 0 auto 20px; 
+        position: relative; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        font-size: 40px; 
+    }
+    .pulse::after { 
+        content: ""; 
+        position: absolute; 
+        width: 100%; 
+        height: 100%; 
+        background: rgba(229, 57, 53, 0.4); 
+        border-radius: 50%; 
+        z-index: 1; 
+        animation: pulse-anim 1.5s infinite; 
+    }
     
-    #map { height: 250px; width: 100%; border-radius: 16px; margin-bottom: 16px; border: 1px solid var(--border); z-index: 1; }
+    @keyframes pulse-anim { 
+        0% { transform: scale(0.9); opacity: 1; } 
+        100% { transform: scale(2.2); opacity: 0; } 
+    }
     
-    .driver-dot { width: 18px; height: 18px; background: var(--primary); border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 4px rgba(229,57,53,0.3); animation: driverPulse 1.5s infinite; }
-    @keyframes driverPulse { 0% { box-shadow: 0 0 0 4px rgba(229,57,53,0.3); } 100% { box-shadow: 0 0 0 10px rgba(229,57,53,0); } }
+    #map { 
+        height: 250px; 
+        width: 100%; 
+        border-radius: 16px; 
+        margin-bottom: 16px; 
+        border: 1px solid var(--border); 
+        z-index: 1; 
+    }
     
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: flex-end; z-index: 100; backdrop-filter: blur(4px); transition: 0.3s; }
-    .modal { background: var(--card); border-radius: 24px 24px 0 0; padding: 24px; width: 100%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
-    .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+    .driver-dot { 
+        width: 18px; 
+        height: 18px; 
+        background: var(--primary); 
+        border-radius: 50%; 
+        border: 3px solid white; 
+        box-shadow: 0 0 0 4px rgba(229,57,53,0.3); 
+        animation: driverPulse 1.5s infinite; 
+    }
     
-    .star-rating { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
-    .star { font-size: 32px; cursor: pointer; opacity: 0.3; transition: 0.2s; }
+    @keyframes driverPulse { 
+        0% { box-shadow: 0 0 0 4px rgba(229,57,53,0.3); } 
+        100% { box-shadow: 0 0 0 10px rgba(229,57,53,0); } 
+    }
+    
+    .modal-overlay { 
+        position: fixed; 
+        top: 0; left: 0; right: 0; bottom: 0; 
+        background: rgba(0,0,0,0.5); 
+        display: flex; 
+        justify-content: center; 
+        align-items: flex-end; 
+        z-index: 100; 
+        backdrop-filter: blur(4px); 
+        transition: 0.3s; 
+    }
+    
+    .modal { 
+        background: var(--card); 
+        border-radius: 24px 24px 0 0; 
+        padding: 24px; 
+        width: 100%; 
+        max-width: 600px; 
+        max-height: 80vh; 
+        overflow-y: auto; 
+    }
+    
+    .modal-handle { 
+        width: 40px; 
+        height: 4px; 
+        background: var(--border); 
+        border-radius: 2px; 
+        margin: 0 auto 20px; 
+    }
+    
+    .star-rating { 
+        display: flex; 
+        gap: 8px; 
+        justify-content: center; 
+        margin: 16px 0; 
+    }
+    
+    .star { 
+        font-size: 32px; 
+        cursor: pointer; 
+        opacity: 0.3; 
+        transition: 0.2s; 
+    }
+    
     .star.active { opacity: 1; }
     .hidden { display: none !important; }
   </style>
@@ -112,7 +350,9 @@
     <button id="installBtn" class="history-btn" style="display:none; background:#e53935; color:white; border-color:#e53935;" onclick="installPWA()">📲 Install</button>
     <button class="history-btn" onclick="showHistory()">📋 History</button>
     <select class="lang-selector" onchange="changeLang(this.value)">
-      <option value="en">English</option><option value="hi">हिंदी</option><option value="mr">मराठी</option>
+      <option value="en">English</option>
+      <option value="hi">हिंदी</option>
+      <option value="mr">मराठी</option>
     </select>
   </div>
 </div>
@@ -132,11 +372,16 @@
     <div class="field-error" id="err-userPhone">Please enter a valid 10-digit number.</div>
     
     <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
+    
     <button class="btn primary" style="margin-top:16px;" onclick="saveUser()" data-i18n="find_hosp">Find Hospitals ➔</button>
   </div>
 
   <div id="step2" class="card hidden">
-    <div class="page-header"><button class="back-icon" onclick="goBack()">⬅️</button><h1 data-i18n="what_emerg">What is the Emergency?</h1></div>
+    <div class="page-header">
+        <button class="back-icon" onclick="goBack()">⬅️</button>
+        <h1 data-i18n="what_emerg">What is the Emergency?</h1>
+    </div>
+    
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
       <button class="list-item" onclick="selectEmergency('Heart Attack')"><span style="font-size: 24px;">❤️</span> <b>Heart Attack</b></button>
       <button class="list-item" onclick="selectEmergency('Road Accident')"><span style="font-size: 24px;">🚗</span> <b>Road Accident</b></button>
@@ -152,26 +397,38 @@
         <span style="font-size: 24px; margin-right: 10px;">🤒</span> <b>General Sickness / Fever</b>
       </button>
     </div>
+    
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
   <div id="step3" class="card hidden">
-    <div class="page-header"><button class="back-icon" onclick="goBack()">⬅️</button><h1 id="step3Title" data-i18n="choose_dest">Choose Destination</h1></div>
+    <div class="page-header">
+        <button class="back-icon" onclick="goBack()">⬅️</button>
+        <h1 id="step3Title" data-i18n="choose_dest">Choose Destination</h1>
+    </div>
+    
     <input type="text" id="hospSearch" oninput="debounceSearch()" placeholder="🔍 Start typing hospital name..." style="margin-bottom: 16px;">
     
     <div class="toggle-box" id="ayushmanFilterBox">
       <div class="text" style="font-weight: 700; color: #15803d; font-size: 14px;" data-i18n="ayushman">✅ Show Free / Ayushman Only</div>
-      <label class="switch"><input type="checkbox" id="ayushmanToggle" onchange="fetchHospitals()"><span class="slider"></span></label>
+      <label class="switch">
+          <input type="checkbox" id="ayushmanToggle" onchange="fetchHospitals()">
+          <span class="slider"></span>
+      </label>
     </div>
     
     <div id="hospitalList"><p>Loading nearby hospitals matching your condition...</p></div>
+    
     <div style="text-align: center; margin-top: 20px;">
       <button class="btn ghost" style="border-color:var(--primary); color:var(--primary);" onclick="customHospital()" data-i18n="custom_hosp">➕ Type Custom Name Manually</button>
     </div>
   </div>
 
   <div id="step4" class="card hidden">
-    <div class="page-header"><button class="back-icon" onclick="goBack()">⬅️</button><h1 data-i18n="select_amb">Select Ambulance</h1></div>
+    <div class="page-header">
+        <button class="back-icon" onclick="goBack()">⬅️</button>
+        <h1 data-i18n="select_amb">Select Ambulance</h1>
+    </div>
     
     <div id="costEstimate" style="background:#eff6ff; border:1px solid #bfdbfe; padding:14px; border-radius:12px; margin-bottom:16px; text-align:center; display:none;">
       <p style="margin:0; font-size:13px; color:#1d4ed8; font-weight:600;">📏 Distance to hospital: <strong id="estDist">--</strong> km</p>
@@ -184,12 +441,14 @@
     </button>
     
     <div id="ambulanceOptions"></div>
+    
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
   <div id="step5" class="card hidden" style="text-align:center;">
     <div class="radar-box">
-      <div class="pulse">🚑</div><h1 data-i18n="broadcasting">Broadcasting...</h1>
+      <div class="pulse">🚑</div>
+      <h1 data-i18n="broadcasting">Broadcasting...</h1>
       <h2 style="color:var(--primary); font-size:45px; margin: 10px 0;"><span id="timerText">120</span>s</h2>
       <p>Searching 15km radius for the fastest driver.</p>
     </div>
@@ -198,6 +457,7 @@
 
   <div id="step6" class="card hidden">
     <h1 style="color: var(--success);" data-i18n="driver_otw">✅ Driver is on the way!</h1>
+    
     <div id="map"></div> 
     
     <div style="background:#f8fafc; padding:20px; border-radius:16px; border: 1px solid var(--border); margin-bottom:16px; text-align: center;">
@@ -206,8 +466,13 @@
       <div class="meta" style="font-size: 14px;">Driver is <span id="etaDist" style="font-weight:bold; color:var(--primary);">--</span> km away</div>
     </div>
     
-    <div class="list-item" style="cursor: default;"><div class="meta">Destination</div><div class="title" id="trackHospital">Loading...</div></div>
+    <div class="list-item" style="cursor: default;">
+        <div class="meta">Destination</div>
+        <div class="title" id="trackHospital">Loading...</div>
+    </div>
+    
     <button class="btn sos" onclick="sendSOS()">💬 Send WhatsApp SOS</button>
+    
     <div style="display:flex; gap:10px; margin-top:10px;">
       <a href="tel:112" class="btn primary" style="text-decoration:none; background:var(--success); width:50%;">📞 Call 112</a>
       <button class="btn ghost" style="width:50%;" onclick="changeDestination()" data-i18n="change_dest">🔄 Change Dest.</button>
@@ -215,26 +480,38 @@
   </div>
 
   <div id="step7" class="card hidden">
-    <div style="text-align:center; padding: 20px 0;"><h1 style="color: var(--success); font-size: 28px; margin:0;" data-i18n="trip_done">✅ Trip Completed</h1></div>
-    <div class="list-item" style="cursor:default;"><div class="meta">Dropoff Location</div><div class="title" id="receiptHospital">--</div></div>
+    <div style="text-align:center; padding: 20px 0;">
+        <h1 style="color: var(--success); font-size: 28px; margin:0;" data-i18n="trip_done">✅ Trip Completed</h1>
+    </div>
+    
+    <div class="list-item" style="cursor:default;">
+        <div class="meta">Dropoff Location</div>
+        <div class="title" id="receiptHospital">--</div>
+    </div>
     
     <div style="background: var(--highlight); padding: 20px; border-radius: 16px; border: 1px solid #fca5a5; margin-top: 16px;">
       <div style="display:flex; justify-content:space-between; margin-bottom: 12px;">
-        <span class="meta" style="color: #991b1b;">Actual Distance Driven:</span><strong id="receiptDist" style="color: #991b1b;">-- km</strong>
+        <span class="meta" style="color: #991b1b;">Actual Distance Driven:</span>
+        <strong id="receiptDist" style="color: #991b1b;">-- km</strong>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed #fca5a5; padding-top: 16px;">
-        <span class="title" style="font-size: 18px; color: #7f1d1d;">Total Cost:</span><strong style="font-size: 26px; color: var(--primary);" id="receiptCost">₹--</strong>
+        <span class="title" style="font-size: 18px; color: #7f1d1d;">Total Cost:</span>
+        <strong style="font-size: 26px; color: var(--primary);" id="receiptCost">₹--</strong>
       </div>
     </div>
     
     <div style="text-align:center; margin-top:24px;">
       <p style="font-weight:700; font-size:15px; margin-bottom:8px;">Rate your driver</p>
       <div class="star-rating" id="starRating">
-        <span class="star" onclick="setRating(1)">⭐</span><span class="star" onclick="setRating(2)">⭐</span>
-        <span class="star" onclick="setRating(3)">⭐</span><span class="star" onclick="setRating(4)">⭐</span><span class="star" onclick="setRating(5)">⭐</span>
+        <span class="star" onclick="setRating(1)">⭐</span>
+        <span class="star" onclick="setRating(2)">⭐</span>
+        <span class="star" onclick="setRating(3)">⭐</span>
+        <span class="star" onclick="setRating(4)">⭐</span>
+        <span class="star" onclick="setRating(5)">⭐</span>
       </div>
       <p id="ratingThanks" style="color:var(--success); font-weight:600; display:none;">Thanks for your feedback! 🙏</p>
     </div>
+    
     <button class="btn ghost" style="margin-top:20px;" onclick="clearSession()" data-i18n="home">Return to Home</button>
   </div>
 
@@ -254,7 +531,9 @@
       📋 My Past Trips
       <button class="btn ghost" style="width:auto; padding:4px 10px; font-size:12px; margin:0;" onclick="document.getElementById('historyModal').classList.add('hidden')">Close</button>
     </h2>
-    <div id="historyModalContent"><p style="color:var(--muted); text-align: center;">Loading your records...</p></div>
+    <div id="historyModalContent">
+        <p style="color:var(--muted); text-align: center;">Loading your records...</p>
+    </div>
   </div>
 </div>
 
@@ -281,7 +560,9 @@
     if (!deferredInstallPrompt) return;
     deferredInstallPrompt.prompt();
     const res = await deferredInstallPrompt.userChoice;
-    if (res.outcome === 'accepted') document.getElementById('installBtn').style.display = 'none';
+    if (res.outcome === 'accepted') {
+        document.getElementById('installBtn').style.display = 'none';
+    }
     deferredInstallPrompt = null;
   }
 
@@ -291,19 +572,21 @@
       const reg = await navigator.serviceWorker.ready;
       const keyRes = await fetch(BASE_URL + "/api/push/vapid-key");
       const { publicKey } = await keyRes.json();
-      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
-      await fetch(BASE_URL + "/api/push/subscribe-patient", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ booking_id: bookingId, subscription: sub }) });
+      
+      const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+      const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = window.atob(base64);
+      const u8arr = new Uint8Array([...raw].map(c => c.charCodeAt(0)));
+      
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8arr });
+      await fetch(BASE_URL + "/api/push/subscribe-patient", { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" }, 
+          body: JSON.stringify({ booking_id: bookingId, subscription: sub }) 
+      });
     } catch(e) {}
   }
 
-  function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const raw = window.atob(base64);
-    return new Uint8Array([...raw].map(c => c.charCodeAt(0)));
-  }
-
-  // 🛡️ OSRM ANTI-BAN THROTTLE
   let lastRouteFetchTime = 0;
   async function drawOSRMRoute(fromLat, fromLng, toLat, toLng) {
     if (!leafletMap) return;
@@ -322,7 +605,9 @@
   }
 
   const getKmDistance = (lat1, lon1, lat2, lon2) => { 
-      const R = 6371; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180; 
+      const R = 6371; 
+      const dLat = (lat2 - lat1) * Math.PI / 180; 
+      const dLon = (lon2 - lon1) * Math.PI / 180; 
       const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2); 
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
   };
@@ -331,9 +616,16 @@
   // SETUP & STATE
   // ==========================================
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
-  let currentStep = 1; let isUpdatingDestination = false; let pollInterval = null; 
-  let searchTimer = 120; let searchInterval = null; let currentPollRate = 5000; let searchDebounceTimer = null;
-  let leafletMap = null; let patientMarker = null; let driverMarker = null;
+  let currentStep = 1; 
+  let isUpdatingDestination = false; 
+  let pollInterval = null; 
+  let searchTimer = 120; 
+  let searchInterval = null; 
+  let currentPollRate = 5000; 
+  let searchDebounceTimer = null;
+  let leafletMap = null; 
+  let patientMarker = null; 
+  let driverMarker = null;
 
   const ambulanceDatabase = [
     { type: "PTV", name: "🚐 Patient Transport", rate: 15, bestFor: ["General Sickness"] },
@@ -343,15 +635,24 @@
     { type: "NEO", name: "👶 Neonatal / Incubator", rate: 50, bestFor: ["Pregnancy"] }
   ];
 
-  let state = { userLat: null, userLng: null, userId: null, emergency: null, hospitalId: null, hospitalName: null, customName: null, ambulanceType: null, distance: 0, rate: 0, bookingId: null, userPhone: null };
+  let state = { 
+      userLat: null, userLng: null, userId: null, emergency: null, 
+      hospitalId: null, hospitalName: null, customName: null, 
+      ambulanceType: null, distance: 0, rate: 0, bookingId: null, userPhone: null 
+  };
 
+  // 🌍 LOCALIZATION / TRANSLATIONS
   const langDict = {
       en: { booking: "Emergency Booking", gps: "Please provide details. We will automatically detect your location.", find_hosp: "Find Hospitals ➔", what_emerg: "What is the Emergency?", choose_dest: "Choose Destination", select_amb: "Select Ambulance", broadcasting: "Broadcasting...", driver_otw: "✅ Driver is on the way!", back: "← Back", ayushman: "✅ Show Free / Ayushman Only", custom_hosp: "➕ Type Custom Name Manually", change_dest: "🔄 Change Dest.", cancel_req: "❌ Cancel Request", trip_done: "✅ Trip Completed", home: "Return to Home", all_busy: "All nearby ambulances are busy." },
       hi: { booking: "आपातकालीन बुकिंग", gps: "कृपया विवरण दें। हम स्वचालित रूप से आपके स्थान का पता लगाएंगे।", find_hosp: "अस्पताल खोजें ➔", what_emerg: "आपात स्थिति क्या है?", choose_dest: "गंतव्य चुनें", select_amb: "एम्बुलेंस चुनें", broadcasting: "प्रसारण हो रहा है...", driver_otw: "✅ ड्राइवर आ रहा है!", back: "← वापस", ayushman: "✅ केवल मुफ्त / आयुष्मान दिखाएं", custom_hosp: "➕ कस्टम नाम मैन्युअल रूप से टाइप करें", change_dest: "🔄 गंतव्य बदलें", cancel_req: "❌ अनुरोध रद्द करें", trip_done: "✅ यात्रा पूरी हुई", home: "होम पर लौटें", all_busy: "आसपास की सभी एम्बुलेंस व्यस्त हैं।" },
       mr: { booking: "आणीबाणी बुकिंग", gps: "कृपया तपशील द्या. आम्ही आपोआप तुमचे स्थान शोधू.", find_hosp: "रुग्णालय शोधा ➔", what_emerg: "आणीबाणी काय आहे?", choose_dest: "गंतव्यस्थान निवडा", select_amb: "रुग्णवाहिका निवडा", broadcasting: "प्रसारण करत आहे...", driver_otw: "✅ चालक वाटेत आहे!", back: "← मागे", ayushman: "✅ फक्त मोफत / आयुष्मान दाखवा", custom_hosp: "➕ सानुकूल नाव व्यक्तिचलितपणे टाइप करा", change_dest: "🔄 गंतव्यस्थान बदला", cancel_req: "❌ विनंती रद्द करा", trip_done: "✅ ट्रिप पूर्ण झाली", home: "मुख्यपृष्ठावर परत जा", all_busy: "जवळील सर्व रुग्णवाहिका व्यस्त आहेत." }
   };
 
-  function changeLang(lang) { document.querySelectorAll('[data-i18n]').forEach(el => { if(langDict[lang][el.dataset.i18n]) el.innerText = langDict[lang][el.dataset.i18n]; }); }
+  function changeLang(lang) { 
+      document.querySelectorAll('[data-i18n]').forEach(el => { 
+          if(langDict[lang][el.dataset.i18n]) el.innerText = langDict[lang][el.dataset.i18n]; 
+      }); 
+  }
 
   async function fetchCityName(lat, lng) {
       try {
@@ -384,7 +685,9 @@
                 statusEl.style.color = "var(--success)"; 
                 
                 fetchCityName(state.userLat, state.userLng).then(cityName => {
-                    if(cityName) statusEl.innerHTML = `✅ GPS Locked<br><span style="color:var(--muted); font-size:12px; font-weight:500;">📌 Area: <b>${cityName}</b></span>`;
+                    if(cityName) {
+                        statusEl.innerHTML = `✅ GPS Locked<br><span style="color:var(--muted); font-size:12px; font-weight:500;">📌 Area: <b>${cityName}</b></span>`;
+                    }
                 });
             },
             (err) => { 
@@ -393,6 +696,7 @@
                 statusEl.style.color = "#e53935"; 
                 state.userLat = 19.0760; state.userLng = 72.8777; 
             },
+            // Fast GPS configuration (no accuracy wait, fast timeout)
             { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
         );
     } else { 
@@ -405,11 +709,36 @@
   });
 
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
-  function goStep(n) { currentStep = n; for(let i=1; i<=8; i++) { let el = document.getElementById('step' + i); if(el) { i === n ? el.classList.remove('hidden') : el.classList.add('hidden'); } } window.scrollTo(0, 0); }
-  function goBack() { if (isUpdatingDestination && currentStep === 3) { isUpdatingDestination = false; goStep(6); return; } if(currentStep === 2) goStep(1); else if(currentStep === 3) goStep(2); else if(currentStep === 4) goStep(3); }
   
-  function showFieldError(fieldId, msg) { document.getElementById(fieldId).classList.add('error'); const errEl = document.getElementById('err-' + fieldId); if (errEl) { errEl.innerText = msg; errEl.style.display = 'block'; } }
-  function clearFieldError(fieldId) { document.getElementById(fieldId).classList.remove('error'); const errEl = document.getElementById('err-' + fieldId); if (errEl) errEl.style.display = 'none'; }
+  function goStep(n) { 
+      currentStep = n; 
+      for(let i=1; i<=8; i++) { 
+          let el = document.getElementById('step' + i); 
+          if(el) { 
+              i === n ? el.classList.remove('hidden') : el.classList.add('hidden'); 
+          } 
+      } 
+      window.scrollTo(0, 0); 
+  }
+  
+  function goBack() { 
+      if (isUpdatingDestination && currentStep === 3) { isUpdatingDestination = false; goStep(6); return; } 
+      if(currentStep === 2) goStep(1); 
+      else if(currentStep === 3) goStep(2); 
+      else if(currentStep === 4) goStep(3); 
+  }
+  
+  function showFieldError(fieldId, msg) { 
+      document.getElementById(fieldId).classList.add('error'); 
+      const errEl = document.getElementById('err-' + fieldId); 
+      if (errEl) { errEl.innerText = msg; errEl.style.display = 'block'; } 
+  }
+  
+  function clearFieldError(fieldId) { 
+      document.getElementById(fieldId).classList.remove('error'); 
+      const errEl = document.getElementById('err-' + fieldId); 
+      if (errEl) errEl.style.display = 'none'; 
+  }
 
   // ==========================================
   // CORE FUNCTIONS
@@ -424,83 +753,212 @@
     if (!valid) return;
     
     try {
-      const res = await fetch(BASE_URL + "/api/save-user", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ name, phone, latitude: state.userLat, longitude: state.userLng }) });
+      const res = await fetch(BASE_URL + "/api/save-user", { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ name, phone, latitude: state.userLat, longitude: state.userLng }) 
+      });
       const data = await res.json();
-      if (res.ok && data.success) { state.userId = data.user_id; state.userPhone = phone; saveState(); goStep(2); } else { alert(data.error || "Database Error"); }
+      if (res.ok && data.success) { 
+          state.userId = data.user_id; 
+          state.userPhone = phone; 
+          saveState(); 
+          goStep(2); 
+      } else { 
+          alert(data.error || "Database Error"); 
+      }
     } catch(err) { alert("🚨 SERVER ERROR"); }
   }
 
-  function selectEmergency(type) { state.emergency = type; saveState(); goStep(3); fetchHospitals(); }
-  function sanitize(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+  function selectEmergency(type) { 
+      state.emergency = type; 
+      saveState(); 
+      goStep(3); 
+      fetchHospitals(); 
+  }
+  
+  function sanitize(str) { 
+      const d = document.createElement('div'); 
+      d.textContent = str; 
+      return d.innerHTML; 
+  }
 
   function renderHospitals(hospitals) {
       const list = document.getElementById('hospitalList');
-      if(!hospitals || hospitals.length === 0) { list.innerHTML = "<p style='color:var(--primary); font-weight:bold;'>No hospitals found. Please type custom name below.</p>"; return; }
+      if(!hospitals || hospitals.length === 0) { 
+          list.innerHTML = "<p style='color:var(--primary); font-weight:bold;'>No hospitals found. Please type custom name below.</p>"; 
+          return; 
+      }
       list.innerHTML = "";
       
       hospitals.forEach(h => {
         const badge = (h.is_gov == 1 || h.accepts_ayushman == 1) ? "<span class='badge green'>✅ PM-JAY</span>" : "";
-        const safeId = parseInt(h.hospital_id); const safeName = sanitize(h.name); const safeDist = parseFloat(h.distance_km); const safeAddr = sanitize(h.address || "Maharashtra");
+        const safeId = parseInt(h.hospital_id); 
+        const safeName = sanitize(h.name); 
+        const safeDist = parseFloat(h.distance_km); 
+        const safeAddr = sanitize(h.address || "Maharashtra");
         const costEst = Math.ceil(safeDist) * 15;
         
-        const item = document.createElement('button'); item.className = 'list-item'; item.onclick = () => selectHospital(safeId, h.name, safeDist);
-        item.innerHTML = `<div class="title">${safeName} ${badge}</div><div class="meta">📍 ${safeDist} km away • ${safeAddr}</div><div style="margin-top:4px;"><span class="cost-badge">From ~₹${costEst}</span></div>`;
+        const item = document.createElement('button'); 
+        item.className = 'list-item'; 
+        item.onclick = () => selectHospital(safeId, h.name, safeDist);
+        
+        item.innerHTML = `
+            <div class="title">${safeName} ${badge}</div>
+            <div class="meta">📍 ${safeDist} km away • ${safeAddr}</div>
+            <div style="margin-top:4px;"><span class="cost-badge">From ~₹${costEst}</span></div>
+        `;
         list.appendChild(item);
       });
   }
 
   async function fetchHospitals() {
-    const list = document.getElementById('hospitalList'); list.innerHTML = "<p>Scanning nearby hospitals...</p>";
+    const list = document.getElementById('hospitalList'); 
+    list.innerHTML = "<p>Scanning nearby hospitals...</p>";
     const url = `${BASE_URL}/api/hospitals?lat=${state.userLat}&lng=${state.userLng}&ayushman_only=${document.getElementById('ayushmanToggle').checked}&condition=${encodeURIComponent(state.emergency || "General Sickness")}`;
-    try { const res = await fetch(url); const data = await res.json(); renderHospitals(data.hospitals); } catch(e) { list.innerHTML = "<p style='color:red;'>🚨 ERROR: Backend disconnected.</p>"; }
+    
+    try { 
+        const res = await fetch(url); 
+        const data = await res.json(); 
+        renderHospitals(data.hospitals); 
+    } catch(e) { 
+        list.innerHTML = "<p style='color:red;'>🚨 ERROR: Backend disconnected.</p>"; 
+    }
   }
 
-  function debounceSearch() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(searchDatabase, 300); }
+  function debounceSearch() { 
+      clearTimeout(searchDebounceTimer); 
+      searchDebounceTimer = setTimeout(searchDatabase, 300); 
+  }
   
   async function searchDatabase() {
-      const term = document.getElementById('hospSearch').value; if (!term || term.length < 2) return fetchHospitals();
+      const term = document.getElementById('hospSearch').value; 
+      if (!term || term.length < 2) return fetchHospitals();
       document.getElementById('hospitalList').innerHTML = "<p>Searching database...</p>";
-      try { const res = await fetch(`${BASE_URL}/api/hospitals/search?term=${encodeURIComponent(term)}&lat=${state.userLat}&lng=${state.userLng}`); const data = await res.json(); renderHospitals(data.hospitals); } catch(e) { document.getElementById('hospitalList').innerHTML = "<p style='color:red;'>Search failed.</p>"; }
+      
+      try { 
+          const res = await fetch(`${BASE_URL}/api/hospitals/search?term=${encodeURIComponent(term)}&lat=${state.userLat}&lng=${state.userLng}`); 
+          const data = await res.json(); 
+          renderHospitals(data.hospitals); 
+      } catch(e) { 
+          document.getElementById('hospitalList').innerHTML = "<p style='color:red;'>Search failed.</p>"; 
+      }
   }
 
   async function submitDestinationUpdate(newName, newDist) {
-      if(state.bookingId) { await fetch(`${BASE_URL}/api/bookings/update-destination`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: state.bookingId, new_destination: newName, new_distance: newDist }) }); alert("Destination Updated! Driver notified."); isUpdatingDestination = false; goStep(6); }
+      if(state.bookingId) { 
+          await fetch(`${BASE_URL}/api/bookings/update-destination`, { 
+              method: "POST", 
+              headers: {"Content-Type":"application/json"}, 
+              body: JSON.stringify({ booking_id: state.bookingId, new_destination: newName, new_distance: newDist }) 
+          }); 
+          alert("Destination Updated! Driver notified."); 
+          isUpdatingDestination = false; 
+          goStep(6); 
+      }
   }
 
   function customHospital() {
       const name = prompt("Enter the Exact Name of the Hospital:");
-      if(name) { if (isUpdatingDestination) { submitDestinationUpdate(name, 5); return; } state.hospitalId = null; state.customName = name; state.hospitalName = name; state.distance = 5; saveState(); buildAmbulanceOptions(false); goStep(4); }
+      if(name) { 
+          if (isUpdatingDestination) { submitDestinationUpdate(name, 5); return; } 
+          state.hospitalId = null; 
+          state.customName = name; 
+          state.hospitalName = name; 
+          state.distance = 5; 
+          saveState(); 
+          buildAmbulanceOptions(false); 
+          goStep(4); 
+      }
   }
 
   function selectHospital(id, name, dist) {
     if (isUpdatingDestination) { submitDestinationUpdate(name, dist); return; }
-    state.hospitalId = id; state.hospitalName = name; state.customName = null; state.distance = dist; saveState(); buildAmbulanceOptions(true); goStep(4);
+    state.hospitalId = id; 
+    state.hospitalName = name; 
+    state.customName = null; 
+    state.distance = dist; 
+    saveState(); 
+    buildAmbulanceOptions(true); 
+    goStep(4);
   }
 
   function buildAmbulanceOptions(showEstimate) {
-    const ambContainer = document.getElementById('ambulanceOptions'); ambContainer.innerHTML = "";
-    if (showEstimate && state.distance > 0) { document.getElementById('estDist').innerText = parseFloat(state.distance).toFixed(1); document.getElementById('costEstimate').style.display = 'block'; } else { document.getElementById('costEstimate').style.display = 'none'; }
+    const ambContainer = document.getElementById('ambulanceOptions'); 
+    ambContainer.innerHTML = "";
+    
+    if (showEstimate && state.distance > 0) { 
+        document.getElementById('estDist').innerText = parseFloat(state.distance).toFixed(1); 
+        document.getElementById('costEstimate').style.display = 'block'; 
+    } else { 
+        document.getElementById('costEstimate').style.display = 'none'; 
+    }
     
     ambulanceDatabase.forEach(amb => {
-      let isRec = amb.bestFor.includes(state.emergency); let badge = isRec ? `<span class="badge green">⭐ Recommended</span>` : ""; let bStyle = isRec ? `border-left: 5px solid var(--success);` : ``; let estCost = state.distance > 0 ? `~₹${Math.ceil(parseFloat(state.distance)) * amb.rate}` : `₹${amb.rate}/km`;
-      const item = document.createElement('button'); item.className = 'list-item'; item.style.cssText = bStyle; item.onclick = () => selectAmbulance(amb.type, amb.rate);
-      item.innerHTML = `<div class="title">${amb.name} ${badge}</div><div style="display:flex; justify-content:space-between; align-items:center;"><div class="meta">₹${amb.rate}/km</div><span class="cost-badge">${estCost}</span></div>`;
+      let isRec = amb.bestFor.includes(state.emergency); 
+      let badge = isRec ? `<span class="badge green">⭐ Recommended</span>` : ""; 
+      let bStyle = isRec ? `border-left: 5px solid var(--success);` : ``; 
+      let estCost = state.distance > 0 ? `~₹${Math.ceil(parseFloat(state.distance)) * amb.rate}` : `₹${amb.rate}/km`;
+      
+      const item = document.createElement('button'); 
+      item.className = 'list-item'; 
+      item.style.cssText = bStyle; 
+      item.onclick = () => selectAmbulance(amb.type, amb.rate);
+      
+      item.innerHTML = `
+          <div class="title">${amb.name} ${badge}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div class="meta">₹${amb.rate}/km</div>
+              <span class="cost-badge">${estCost}</span>
+          </div>`;
       ambContainer.appendChild(item);
     });
   }
 
   async function selectAmbulance(type, rate) {
-    state.ambulanceType = type; state.rate = rate; saveState(); goStep(5);
+    state.ambulanceType = type; 
+    state.rate = rate; 
+    saveState(); 
+    goStep(5);
+    
     try {
-      const res = await fetch(BASE_URL + "/api/bookings", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ user_id: state.userId, hospital_id: state.hospitalId, custom_destination: state.customName, emergency_type: state.emergency, ambulance_type: state.ambulanceType, user_lat: state.userLat, user_lng: state.userLng, distance_km: state.distance, rate_per_km: state.rate }) });
-      const data = await res.json(); state.bookingId = data.booking_id; saveState();
+      const res = await fetch(BASE_URL + "/api/bookings", { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ 
+              user_id: state.userId, 
+              hospital_id: state.hospitalId, 
+              custom_destination: state.customName, 
+              emergency_type: state.emergency, 
+              ambulance_type: state.ambulanceType, 
+              user_lat: state.userLat, 
+              user_lng: state.userLng, 
+              distance_km: state.distance, 
+              rate_per_km: state.rate 
+          }) 
+      });
+      const data = await res.json(); 
+      state.bookingId = data.booking_id; 
+      saveState();
+      
       subscribePushForBooking(data.booking_id);
       
-      if(pollInterval) clearInterval(pollInterval); if(searchInterval) clearInterval(searchInterval);
-      pollInterval = setInterval(checkStatus, currentPollRate); checkStatus();
+      if(pollInterval) clearInterval(pollInterval); 
+      if(searchInterval) clearInterval(searchInterval);
       
-      searchTimer = 120; document.getElementById('timerText').innerText = searchTimer;
-      searchInterval = setInterval(() => { searchTimer--; document.getElementById('timerText').innerText = searchTimer; if(searchTimer <= 0) { clearInterval(searchInterval); if (currentStep === 5) { confirmCancel(); goStep(8); } } }, 1000);
+      pollInterval = setInterval(checkStatus, currentPollRate); 
+      checkStatus();
+      
+      searchTimer = 120; 
+      document.getElementById('timerText').innerText = searchTimer;
+      searchInterval = setInterval(() => { 
+          searchTimer--; 
+          document.getElementById('timerText').innerText = searchTimer; 
+          if(searchTimer <= 0) { 
+              clearInterval(searchInterval); 
+              if (currentStep === 5) { confirmCancel(); goStep(8); } 
+          } 
+      }, 1000);
     } catch(err) { alert("Network Failed."); goStep(4); }
   }
 
@@ -510,6 +968,7 @@
   function initPatientMap() {
       if (leafletMap) return; 
       leafletMap = L.map('map').setView([state.userLat, state.userLng], 14); 
+      
       // 🛡️ CARTODB MAPS - NO BAN!
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(leafletMap);
       patientMarker = L.marker([state.userLat, state.userLng]).addTo(leafletMap).bindPopup("<b>Your Location</b>").openPopup();
@@ -518,21 +977,27 @@
   function updateDriverOnMap(dLat, dLng) {
       if (!leafletMap) return;
       const driverIcon = L.divIcon({ className: '', html: '<div class="driver-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
-      if (!driverMarker) { driverMarker = L.marker([dLat, dLng], { icon: driverIcon }).addTo(leafletMap).bindPopup("<b>🚑 Your Ambulance</b>"); } else { driverMarker.setLatLng([dLat, dLng]); }
+      if (!driverMarker) { 
+          driverMarker = L.marker([dLat, dLng], { icon: driverIcon }).addTo(leafletMap).bindPopup("<b>🚑 Your Ambulance</b>"); 
+      } else { 
+          driverMarker.setLatLng([dLat, dLng]); 
+      }
   }
 
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
-      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`); const data = await res.json();
+      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`); 
+      const data = await res.json();
       
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
         clearInterval(searchInterval);
         
-        if(currentStep === 5) { 
+        // 🛡️ STUCK ON PULSE FIX: Force transition instantly!
+        if(currentStep !== 6) { 
             goStep(6); 
             initPatientMap();
-            setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 200); 
+            setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500); 
         }
         
         document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName; 
@@ -549,20 +1014,51 @@
             updateDriverOnMap(data.driver_lat, data.driver_lng); 
             if (data.status === 'ASSIGNED') { drawOSRMRoute(data.driver_lat, data.driver_lng, state.userLat, state.userLng); } 
         } else {
-            document.getElementById('etaDist').innerText = "--"; document.getElementById('etaTime').innerText = "Locating...";
+            document.getElementById('etaDist').innerText = "--"; 
+            document.getElementById('etaTime').innerText = "Locating...";
         }
 
         const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance);
-        if (distToCheck > 5) { if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } } else { if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } }
+        if (distToCheck > 5) { 
+            if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } 
+        } else { 
+            if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } 
+        }
       }
       
-      if (data.status === 'COMPLETED') { clearInterval(pollInterval); clearInterval(searchInterval); goStep(7); document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName; document.getElementById('receiptDist').innerText = data.distance + " km"; document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "--"); localStorage.removeItem('patient_session'); }
-      if (data.status === 'CANCELLED') { clearInterval(pollInterval); clearInterval(searchInterval); alert("This booking was cancelled."); clearSession(); }
+      if (data.status === 'COMPLETED') { 
+          clearInterval(pollInterval); clearInterval(searchInterval); 
+          goStep(7); 
+          document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName; 
+          document.getElementById('receiptDist').innerText = data.distance + " km"; 
+          document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "--"); 
+          localStorage.removeItem('patient_session'); 
+      }
+      if (data.status === 'CANCELLED') { 
+          clearInterval(pollInterval); clearInterval(searchInterval); 
+          alert("This booking was cancelled."); 
+          clearSession(); 
+      }
     } catch(err) { console.error("Poll Error"); }
   }
 
-  function changeDestination() { isUpdatingDestination = true; document.getElementById('step3Title').innerText = "Update Destination"; document.getElementById('ayushmanFilterBox').style.display = "none"; goStep(3); fetchHospitals(); }
-  let selectedRating = 0; function setRating(n) { selectedRating = n; document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); setTimeout(() => { document.getElementById('ratingThanks').style.display = 'block'; document.getElementById('starRating').style.opacity = '0.5'; document.getElementById('starRating').style.pointerEvents = 'none'; }, 300); }
+  function changeDestination() { 
+      isUpdatingDestination = true; 
+      document.getElementById('step3Title').innerText = "Update Destination"; 
+      document.getElementById('ayushmanFilterBox').style.display = "none"; 
+      goStep(3); fetchHospitals(); 
+  }
+  
+  let selectedRating = 0; 
+  function setRating(n) { 
+      selectedRating = n; 
+      document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
+      setTimeout(() => { 
+          document.getElementById('ratingThanks').style.display = 'block'; 
+          document.getElementById('starRating').style.opacity = '0.5'; 
+          document.getElementById('starRating').style.pointerEvents = 'none'; 
+      }, 300); 
+  }
 
   async function showHistory() {
       document.getElementById('historyModal').classList.remove('hidden'); 
@@ -570,27 +1066,46 @@
       content.innerHTML = "<p style='color:var(--muted); text-align:center;'>Loading your records...</p>";
       
       const phone = state.userPhone || (localStorage.getItem('patient_session') ? JSON.parse(localStorage.getItem('patient_session')).userPhone : null);
-      if (!phone) { content.innerHTML = "<p style='color:var(--muted); text-align:center;'>Please complete a booking first to view history.</p>"; return; }
+      if (!phone) { 
+          content.innerHTML = "<p style='color:var(--muted); text-align:center;'>Please complete a booking first to view history.</p>"; 
+          return; 
+      }
       
       try {
           const res = await fetch(`${BASE_URL}/api/user/history?phone=${phone}`); 
           const data = await res.json();
-          if (!data.history || data.history.length === 0) { content.innerHTML = "<p style='color:var(--muted); text-align:center;'>No past trips found.</p>"; return; }
+          if (!data.history || data.history.length === 0) { 
+              content.innerHTML = "<p style='color:var(--muted); text-align:center;'>No past trips found.</p>"; 
+              return; 
+          }
           
           content.innerHTML = data.history.map(b => {
               const dObj = b.created_at ? new Date(b.created_at) : new Date();
-              const dateStr = dObj.toLocaleDateString(); const timeStr = dObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+              const dateStr = dObj.toLocaleDateString(); 
+              const timeStr = dObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
               const bgC = b.status==='COMPLETED'?'#dcfce7':b.status==='CANCELLED'?'#fee2e2':'#fef3c7';
               const txtC = b.status==='COMPLETED'?'#166534':b.status==='CANCELLED'?'#991b1b':'#b45309';
               
               const driverInfo = b.driver_name ? `<div style="background:#f8fafc; padding:10px; border-radius:8px; margin-top:12px; font-size:12px; border:1px solid #e2e8f0;"><strong style="color:var(--text-main);">👨‍✈️ Driver:</strong> ${sanitize(b.driver_name)}<br><strong style="color:var(--text-main);">🚑 Vehicle:</strong> ${sanitize(b.ambulance_type)} - <span style="letter-spacing:0.5px; font-weight:600;">${sanitize(b.ambulance_number||'')}</span></div>` : '';
 
-              return `<div style="border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;"><div><strong style="font-size:16px; display:block; margin-bottom:4px; color:var(--text-main);">${sanitize(b.emergency_category)}</strong><span style="font-size:12px; color:var(--muted); font-weight:600;">📅 ${dateStr} • ⏰ ${timeStr}</span></div><span style="font-size:10px; font-weight:800; padding:4px 10px; border-radius:8px; background:${bgC}; color:${txtC}; text-transform:uppercase;">${b.status}</span></div><div style="font-size:13px; color:var(--text-main); margin-top:12px; display:flex; align-items:center; gap:6px;">🏥 <strong style="font-weight:600;">Dest:</strong> ${sanitize(b.destination || b.hospital_name || 'Cancelled before destination')}</div>${driverInfo}${b.final_cost ? `<div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed var(--border); padding-top:12px; margin-top:12px;"><span style="font-size:12px; color:var(--muted); font-weight:600;">Total Paid</span><span style="font-size:18px; color:var(--primary); font-weight:800;">₹${b.final_cost}</span></div>` : ''}</div>`;
+              return `<div style="border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                      <div><strong style="font-size:16px; display:block; margin-bottom:4px; color:var(--text-main);">${sanitize(b.emergency_category)}</strong><span style="font-size:12px; color:var(--muted); font-weight:600;">📅 ${dateStr} • ⏰ ${timeStr}</span></div>
+                      <span style="font-size:10px; font-weight:800; padding:4px 10px; border-radius:8px; background:${bgC}; color:${txtC}; text-transform:uppercase;">${b.status}</span>
+                  </div>
+                  <div style="font-size:13px; color:var(--text-main); margin-top:12px; display:flex; align-items:center; gap:6px;">🏥 <strong style="font-weight:600;">Dest:</strong> ${sanitize(b.destination || b.hospital_name || 'Cancelled before destination')}</div>
+                  ${driverInfo}
+                  ${b.final_cost ? `<div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed var(--border); padding-top:12px; margin-top:12px;"><span style="font-size:12px; color:var(--muted); font-weight:600;">Total Paid</span><span style="font-size:18px; color:var(--primary); font-weight:800;">₹${b.final_cost}</span></div>` : ''}
+              </div>`;
           }).join('');
       } catch(e) { content.innerHTML = "<p style='color:red; text-align:center;'>Failed to load history.</p>"; }
   }
 
-  function closeHistoryIfOutside(e) { if (e.target === document.getElementById('historyModal')) { document.getElementById('historyModal').classList.add('hidden'); } }
+  function closeHistoryIfOutside(e) { 
+      if (e.target === document.getElementById('historyModal')) { 
+          document.getElementById('historyModal').classList.add('hidden'); 
+      } 
+  }
 
   function sendSOS() {
       const dest = state.hospitalName || state.customName || "Hospital"; 
