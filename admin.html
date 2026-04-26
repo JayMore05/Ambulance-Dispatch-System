@@ -250,7 +250,7 @@
           document.getElementById('btnNextPage').disabled = (!data.drivers || data.drivers.length < limit);
 
           if (!data.drivers || data.drivers.length === 0) { 
-              tbody.innerHTML = `<tr><td colspan=\"5\" style=\"text-align:center;\">No drivers found on Page ${page}.</td></tr>`; 
+              tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No drivers found on Page ${page}.</td></tr>`; 
               return; 
           }
 
@@ -269,28 +269,28 @@
               if (drv.verification_status === 'DELETION_REQUESTED') badgeClass = 'danger';
 
               const docs = [
-                  drv.aadhar_url ? `<a href=\"${drv.aadhar_url}\" target=\"_blank\" class=\"doc-link\">📄 Aadhar Card</a>` : '',
-                  drv.rc_url ? `<a href=\"${drv.rc_url}\" target=\"_blank\" class=\"doc-link\">📄 RC Book</a>` : '',
-                  drv.insurance_url ? `<a href=\"${drv.insurance_url}\" target=\"_blank\" class=\"doc-link\">📄 Insurance</a>` : '',
-                  drv.puc_url ? `<a href=\"${drv.puc_url}\" target=\"_blank\" class=\"doc-link\">📄 PUC</a>` : ''
+                  drv.aadhar_url ? `<a href="${drv.aadhar_url}" target="_blank" class="doc-link">📄 Aadhar Card</a>` : '',
+                  drv.rc_url ? `<a href="${drv.rc_url}" target="_blank" class="doc-link">📄 RC Book</a>` : '',
+                  drv.insurance_url ? `<a href="${drv.insurance_url}" target="_blank" class="doc-link">📄 Insurance</a>` : '',
+                  drv.puc_url ? `<a href="${drv.puc_url}" target="_blank" class="doc-link">📄 PUC</a>` : ''
               ].join('');
 
               let actions = "";
               if (!['APPROVED','DELETED','DELETION_REQUESTED'].includes(drv.verification_status)) {
-                  actions += `<button class=\"btn success\" onclick=\"updateStatus(${drv.driver_id}, 'APPROVED')\">Approve</button>`;
+                  actions += `<button class="btn success" onclick="updateStatus(${drv.driver_id}, 'APPROVED')">Approve</button>`;
               }
               if (!['REJECTED','DELETED','DELETION_REQUESTED'].includes(drv.verification_status)) {
-                  actions += `<button class=\"btn danger\" onclick=\"rejectDriver(${drv.driver_id}, '${drv.name.replace(/'/g, \"\\\\'\")}')\">Reject</button>`;
+                  actions += `<button class="btn danger" onclick="rejectDriver(${drv.driver_id}, '${drv.name.replace(/'/g, "\\'")}')">Reject</button>`;
               }
               if (drv.verification_status === 'DELETION_REQUESTED') {
-                  actions += `<button class=\"btn danger\" onclick=\"approveDeletion(${drv.driver_id}, '${drv.name.replace(/'/g, \"\\\\'\")}')\">⚠️ Confirm Deletion</button>`;
+                  actions += `<button class="btn danger" onclick="approveDeletion(${drv.driver_id}, '${drv.name.replace(/'/g, "\\'")}')">⚠️ Confirm Deletion</button>`;
               }
 
               tbody.innerHTML += `<tr>
-                <td><strong>${drv.name}</strong><br><span style=\"color:var(--muted);font-size:13px;\">📞 ${drv.phone}</span></td>
-                <td><strong>${drv.ambulance_type}</strong><br><span style=\"color:var(--muted);font-size:13px;\">🚘 ${drv.ambulance_number}</span></td>
-                <td>${docs || '<span style=\"color:var(--muted);\">Pending Uploads</span>'}</td>
-                <td><span class=\"badge ${badgeClass}\">${drv.verification_status.replace('_', ' ')}</span></td>
+                <td><strong>${drv.name}</strong><br><span style="color:var(--muted);font-size:13px;">📞 ${drv.phone}</span></td>
+                <td><strong>${drv.ambulance_type}</strong><br><span style="color:var(--muted);font-size:13px;">🚘 ${drv.ambulance_number}</span></td>
+                <td>${docs || '<span style="color:var(--muted);">Pending Uploads</span>'}</td>
+                <td><span class="badge ${badgeClass}">${drv.verification_status.replace('_', ' ')}</span></td>
                 <td>${actions}</td>
               </tr>`;
           });
@@ -299,7 +299,7 @@
           document.getElementById('statActive').innerText = a;
           document.getElementById('statDeletes').innerText = d;
       } catch (err) { 
-          tbody.innerHTML = '<tr><td colspan=\"5\" style=\"color:red; text-align:center;\">Server Error - Database unreachable.</td></tr>'; 
+          tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Server Error - Database unreachable.</td></tr>'; 
       }
   }
 
@@ -320,7 +320,7 @@
           if(!isVisible) return; 
 
           if(!data.bookings || data.bookings.length === 0) {
-              tbody.innerHTML = '<tr><td colspan=\"6\" style=\"text-align:center; padding: 30px; color: var(--muted);\">No active emergencies at this time.</td></tr>';
+              tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--muted);">No active emergencies at this time.</td></tr>`;
               return;
           }
           
@@ -328,18 +328,19 @@
           data.bookings.forEach(b => {
               const statusClass = b.status === 'REQUESTED' ? 'searching' : b.status === 'ASSIGNED' ? 'assigned' : 'in_transit';
               const driverCell = b.driver_name 
-                  ? `<strong>${b.driver_name}</strong><br><span style=\"color:var(--muted);font-size:12px;\">${b.ambulance_number||''}</span>` 
-                  : '<span style=\"color:var(--primary); font-weight: bold; animation: pulse 1.5s infinite;\">Searching...</span>';
+                  ? `<strong>${b.driver_name}</strong><br><span style="color:var(--muted);font-size:12px;">${b.ambulance_number||''}</span>` 
+                  : `<span style="color:var(--primary); font-weight: bold; animation: pulse 1.5s infinite;">Searching...</span>`;
               
               const row = document.createElement('tr');
               row.innerHTML = `
                   <td><strong>#${b.booking_id}</strong></td>
-                  <td><strong></strong><br><span style=\"color:var(--muted);font-size:12px;\"></span></td>
-                  <td><span style=\"font-size:13px; font-weight:bold; color:var(--danger);\"></span></td>
-                  <td style=\"font-size:13px; font-weight: 500;\"></td>
+                  <td><strong></strong><br><span style="color:var(--muted);font-size:12px;"></span></td>
+                  <td><span style="font-size:13px; font-weight:bold; color:var(--danger);"></span></td>
+                  <td style="font-size:13px; font-weight: 500;"></td>
                   <td>${driverCell}</td>
-                  <td><span class=\"badge ${statusClass}\">${b.status.replace('_', ' ')}</span></td>`;
+                  <td><span class="badge ${statusClass}">${b.status.replace('_', ' ')}</span></td>`;
               
+              // Prevent XSS
               row.cells[1].querySelector('strong').textContent = b.patient_name;
               row.cells[1].querySelector('span').textContent = '📞 ' + b.patient_phone;
               row.cells[2].querySelector('span').textContent = b.emergency_category;
@@ -348,7 +349,7 @@
               tbody.appendChild(row);
           });
       } catch(e) { 
-          if(isVisible) tbody.innerHTML = '<tr><td colspan=\"6\" style=\"text-align:center; color:red;\">Server error. Connection lost.</td></tr>'; 
+          if(isVisible) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Server error. Connection lost.</td></tr>`; 
       }
   }
 
@@ -362,7 +363,7 @@
           const data = await res.json();
           
           if(!data.history || data.history.length === 0) {
-              tbody.innerHTML = '<tr><td colspan=\"6\" style=\"text-align:center; padding: 30px; color: var(--muted);\">No completed trips found.</td></tr>';
+              tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--muted);">No completed trips found.</td></tr>`;
               return;
           }
           
@@ -373,18 +374,18 @@
               const pTime = h.picked_up_at ? new Date(h.picked_up_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--';
               const cTime = h.completed_at ? new Date(h.completed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--';
 
-              const driverCell = h.driver_name ? `<strong>${h.driver_name}</strong><br><span style=\"color:var(--muted);font-size:12px;\">${h.ambulance_type||''} - ${h.ambulance_number||''}</span>` : '<span style=\"color:var(--muted);\">N/A</span>';
-              const costCell = h.distance ? `${h.distance} km<br><strong style=\"color:var(--success);\">₹${h.final_cost||0}</strong>` : '--';
+              const driverCell = h.driver_name ? `<strong>${h.driver_name}</strong><br><span style="color:var(--muted);font-size:12px;">${h.ambulance_type||''} - ${h.ambulance_number||''}</span>` : `<span style="color:var(--muted);">N/A</span>`;
+              const costCell = h.distance ? `${h.distance} km<br><strong style="color:var(--success);">₹${h.final_cost||0}</strong>` : '--';
               const badgeClass = h.status === 'COMPLETED' ? 'approved' : 'rejected';
 
               const row = document.createElement('tr');
               row.innerHTML = `
-                  <td><strong>#${h.booking_id}</strong><br><span style=\"font-size:11px;color:var(--muted);\">${new Date(h.booked_at).toLocaleDateString()}</span></td>
-                  <td style=\"font-size:12px; color:var(--muted);\"><b>Booked:</b> ${bTime}<br><b>Accepted:</b> ${aTime}<br><b>Picked Up:</b> ${pTime}<br><b>Completed:</b> ${cTime}</td>
-                  <td><strong></strong><br><span style=\"color:var(--muted);font-size:12px;\"></span></td>
+                  <td><strong>#${h.booking_id}</strong><br><span style="font-size:11px;color:var(--muted);">${new Date(h.booked_at).toLocaleDateString()}</span></td>
+                  <td style="font-size:12px; color:var(--muted);"><b>Booked:</b> ${bTime}<br><b>Accepted:</b> ${aTime}<br><b>Picked Up:</b> ${pTime}<br><b>Completed:</b> ${cTime}</td>
+                  <td><strong></strong><br><span style="color:var(--muted);font-size:12px;"></span></td>
                   <td>${driverCell}</td>
                   <td>${costCell}</td>
-                  <td><span class=\"badge ${badgeClass}\">${h.status}</span></td>`;
+                  <td><span class="badge ${badgeClass}">${h.status}</span></td>`;
                   
               row.cells[2].querySelector('strong').textContent = h.patient_name;
               row.cells[2].querySelector('span').textContent = '📞 ' + h.patient_phone;
@@ -392,7 +393,7 @@
               tbody.appendChild(row);
           });
       } catch(e) {
-          tbody.innerHTML = '<tr><td colspan=\"6\" style=\"text-align:center; color:red;\">Server error. Connection lost.</td></tr>';
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Server error. Connection lost.</td></tr>`;
       }
   }
 
@@ -402,16 +403,16 @@
   async function updateStatus(driverId, newStatus, reason = null) {
       try {
           const res = await fetch(`${BASE_URL}/api/admin/verify`, {
-              method: \"POST\", headers: authHeaders(),
+              method: "POST", headers: authHeaders(),
               body: JSON.stringify({ driver_id: driverId, status: newStatus, reason: reason })
           });
           const data = await res.json();
           if (data.success) {
               loadDrivers(currentDriverPage); 
           } else {
-              alert(\"Failed to update status.\");
+              alert("Failed to update status.");
           }
-      } catch (err) { alert(\"Server connection error.\"); }
+      } catch (err) { alert("Server connection error."); }
   }
 
   function rejectDriver(driverId, driverName) {
@@ -423,16 +424,16 @@
       if(!confirm(`Permanently delete ${driverName}'s account? Billing history will be safely preserved.`)) return;
       try {
           const res = await fetch(`${BASE_URL}/api/admin/approve-delete`, {
-              method: \"POST\", headers: authHeaders(),
+              method: "POST", headers: authHeaders(),
               body: JSON.stringify({ driver_id: driverId })
           });
           const data = await res.json();
           if (data.success) {
               loadDrivers(currentDriverPage); 
           } else {
-              alert(\"Failed to delete account.\");
+              alert("Failed to delete account.");
           }
-      } catch(err) { alert(\"Server error.\"); }
+      } catch(err) { alert("Server error."); }
   }
 </script>
 </body>
