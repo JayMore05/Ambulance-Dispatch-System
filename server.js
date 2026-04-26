@@ -13,6 +13,16 @@ const db = require("./db");
 const app = express();
 
 // ==========================================================
+// 🛡️ CRASH PREVENTION SHIELD (Prevents 503 Errors!)
+// ==========================================================
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL ERROR CAUGHT (Server kept alive):', err.message);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Promise Rejection (Server kept alive):', reason);
+});
+
+// ==========================================================
 // 🛡️ SECURITY & PERFORMANCE MIDDLEWARE
 // ==========================================================
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -22,9 +32,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// 🛡️ RATE LIMITERS (Set to 100,000 so your live GPS never gets blocked!)
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100000, message: { error: "Too many requests" }});
-const otpLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 500, message: { error: "Too many OTP requests" }});
 app.use("/api/", apiLimiter);
 
 // ==========================================================
@@ -82,7 +90,7 @@ app.get("/api/hospitals", (req, res) => {
     if (ayushman_only === 'true') query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
 
     db.query(query, [cleanCondition], (err, rows) => {
-        if (err) return res.status(500).json({ error: "Database error" });
+        if (err || !rows) return res.status(500).json({ error: "Database error" });
         if (rows.length === 0) {
             const fallbackSQL = `SELECT h.* FROM hospitals h INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id WHERE hd.department = 'General Sickness' ${ayushman_only === 'true' ? ' AND (h.accepts_ayushman = 1 OR h.is_gov = 1)' : ''}`;
             db.query(fallbackSQL, (err2, fallbackRows) => res.json({ hospitals: processAndSort(fallbackRows || [], lat, lng) }));
@@ -142,7 +150,7 @@ app.get("/api/user/eta", (req, res) => {
 });
 
 app.get("/api/user/history", (req, res) => {
-    db.query(`SELECT b.*, d.name as driver_name, d.ambulance_type, d.ambulance_number, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id LEFT JOIN drivers d ON b.driver_id = d.driver_id WHERE u.phone = ? ORDER BY b.booked_at DESC LIMIT 10`, [req.query.phone], (err, results) => {
+    db.query(`SELECT b.*, d.name as driver_name, d.ambulance_type, d.ambulance_number, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id LEFT JOIN drivers d ON b.driver_id = d.driver_id WHERE u.phone = ? ORDER BY b.booking_id DESC LIMIT 10`, [req.query.phone], (err, results) => {
         if (err) return res.status(500).json({ error: "Failed" });
         res.json({ history: results || [] });
     });
@@ -151,11 +159,11 @@ app.get("/api/user/history", (req, res) => {
 // ==========================================================
 // 🚑 DRIVER SIDE APIS
 // ==========================================================
-app.post("/api/driver/request-otp", otpLimiter, (req, res) => {
+app.post("/api/driver/request-otp", (req, res) => {
     const { phone, isRegister } = req.body;
     db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
-        if (isRegister && drivers.length > 0) return res.status(400).json({ error: "Phone already registered." });
-        if (!isRegister && drivers.length === 0) return res.status(400).json({ error: "Driver not found." });
+        if (isRegister && drivers && drivers.length > 0) return res.status(400).json({ error: "Phone already registered." });
+        if (!isRegister && (!drivers || drivers.length === 0)) return res.status(400).json({ error: "Driver not found." });
         
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
         db.query("DELETE FROM driver_otps WHERE phone = ?", [phone], () => { 
@@ -177,6 +185,7 @@ app.post("/api/driver/verify-otp", (req, res) => {
             });
         } else {
             db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
+                if(!drivers || drivers.length === 0) return res.status(400).json({ error: "Driver not found" });
                 const drv = drivers[0];
                 if (drv.verification_status !== 'APPROVED') return res.json({ driver_id: drv.driver_id, verification_status: drv.verification_status, rejection_reason: drv.rejection_reason });
                 
@@ -189,7 +198,7 @@ app.post("/api/driver/verify-otp", (req, res) => {
 
 app.get("/api/driver/check-status", (req, res) => {
     db.query("SELECT verification_status, rejection_reason FROM drivers WHERE driver_id = ?", [req.query.driver_id], (err, rows) => {
-        if (err || rows.length === 0) return res.status(400).json({ error: "Not found" });
+        if (err || !rows || rows.length === 0) return res.status(400).json({ error: "Not found" });
         res.json(rows[0]);
     });
 });
@@ -227,7 +236,7 @@ app.get("/api/driver/active-mission", (req, res) => {
 });
 
 app.get("/api/driver/radar", (req, res) => {
-    db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booked_at DESC`, (err, results) => {
+    db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booking_id DESC`, (err, results) => {
         if (err) return res.status(500).json({ error: "Radar failed." });
         
         const driverType = req.query.driverType; 
@@ -236,21 +245,20 @@ app.get("/api/driver/radar", (req, res) => {
             return dist <= 15 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
         }).map(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            return { ...b, priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), real_eta: Math.max(1, Math.round((dist / 40) * 60)), formatted_time: formatTime(b.booked_at) };
+            const rawTime = b.booked_at || b.created_at;
+            const formatT = rawTime ? new Date(rawTime).toLocaleTimeString() : "--";
+            return { ...b, priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), real_eta: Math.max(1, Math.round((dist / 40) * 60)), formatted_time: formatT };
         });
-        
         res.json({ bookings: nearby });
     });
 });
 
-// 🛡️ MISSION LIFECYCLE APIS (WITH TIMESTAMPS)
+// 🛡️ MISSION LIFECYCLE APIS (WITH EXACT TIMESTAMPS)
 app.post("/api/driver/accept", (req, res) => {
     const { driver_id, booking_id } = req.body;
-    // Track accepted_at
     const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED', accepted_at = NOW() WHERE booking_id = ? AND status = 'REQUESTED'`;
-    
     db.query(query, [driver_id, booking_id], (err, result) => {
-        if (err) return res.status(500).json({ success: false, error: "Database error" });
+        if (err) return res.status(500).json({ success: false, error: err.message });
         if (result.affectedRows === 0) return res.json({ success: false, message: "Too late! Another driver accepted this emergency." });
         res.json({ success: true, message: "Booking assigned to you!" });
     });
@@ -258,11 +266,9 @@ app.post("/api/driver/accept", (req, res) => {
 
 app.post("/api/driver/pickup", (req, res) => {
     const { booking_id } = req.body;
-    // Track picked_up_at. Fix: strictly use booking_id
     const query = `UPDATE bookings SET status = 'IN_TRANSIT', picked_up_at = NOW() WHERE booking_id = ?`;
-    
     db.query(query, [booking_id], (err, result) => {
-        if (err) return res.status(500).json({ success: false, error: "Database error" });
+        if (err) return res.status(500).json({ success: false, error: err.message });
         res.json({ success: true, message: "Patient Picked Up!" });
     });
 });
@@ -270,7 +276,6 @@ app.post("/api/driver/pickup", (req, res) => {
 app.post("/api/driver/update-status", (req, res) => {
     const { booking_id, status } = req.body;
     const query = `UPDATE bookings SET status = ? WHERE booking_id = ?`;
-    
     db.query(query, [status, booking_id], (err, result) => {
         if (err) return res.status(500).json({ success: false });
         res.json({ success: true });
@@ -280,22 +285,20 @@ app.post("/api/driver/update-status", (req, res) => {
 app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
     const final_cost = actual_distance ? Math.ceil(actual_distance * 25) : 0; 
-    // Track completed_at
-    const query = `UPDATE bookings SET status = 'COMPLETED', distance = ?, final_cost = ?, completed_at = NOW() WHERE booking_id = ?`;
-    
+    const query = `UPDATE bookings SET status = 'COMPLETED', hospital_distance_km = ?, final_cost = ?, completed_at = NOW() WHERE booking_id = ?`;
     db.query(query, [actual_distance, final_cost, booking_id], (err, result) => {
-        if (err) return res.status(500).json({ success: false, error: "Database error" });
+        if (err) return res.status(500).json({ success: false, error: err.message });
         res.json({ success: true, final_cost: final_cost });
     });
 });
 
 app.get("/api/driver/history", (req, res) => {
-    const query = `SELECT b.*, u.name as user_name, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.driver_id = ? AND b.status IN ('COMPLETED', 'CANCELLED') ORDER BY b.booked_at DESC LIMIT 15`;
+    const query = `SELECT b.*, u.name as user_name, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.driver_id = ? AND b.status IN ('COMPLETED', 'CANCELLED') ORDER BY b.booking_id DESC LIMIT 15`;
     db.query(query, [req.query.driver_id], (err, rows) => {
+        if (err) return res.status(500).json({ error: "Failed" });
         res.json({ history: rows || [] });
     });
 });
-
 
 // ==========================================================
 // 🔔 WEB PUSH APIS
@@ -321,13 +324,11 @@ app.post("/api/admin/login", (req, res) => {
     } else res.status(401).json({ success: false, error: "Invalid password" });
 });
 
-app.get("/api/admin/drivers", (req, res) => {
+app.get("/api/admin/drivers", adminAuth, (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
     const offset = (page - 1) * limit;
-
     const query = `SELECT * FROM drivers ORDER BY verification_status DESC, driver_id DESC LIMIT ? OFFSET ?`;
-    
     db.query(query, [limit, offset], (err, rows) => {
         if (err) return res.status(500).json({ error: "Database error" });
         res.json({ drivers: rows || [], page, limit });
@@ -335,25 +336,24 @@ app.get("/api/admin/drivers", (req, res) => {
 });
 
 app.get("/api/admin/live-bookings", adminAuth, (req, res) => {
-    db.query(`SELECT b.booking_id, b.status, b.emergency_category, b.ambulance_type, u.name AS patient_name, u.phone AS patient_phone, d.name AS driver_name, d.ambulance_number, COALESCE(b.custom_destination, h.name) AS destination FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN drivers d ON b.driver_id = d.driver_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.status IN ('REQUESTED', 'ASSIGNED', 'IN_TRANSIT') ORDER BY b.booked_at DESC`, (err, rows) => {
+    const query = `SELECT b.*, u.name AS patient_name, u.phone AS patient_phone, d.name AS driver_name, d.ambulance_number, COALESCE(b.custom_destination, h.name) AS destination FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN drivers d ON b.driver_id = d.driver_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.status IN ('REQUESTED', 'ASSIGNED', 'IN_TRANSIT') ORDER BY b.booking_id DESC`;
+    db.query(query, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
         res.json({ bookings: rows || [] });
     });
 });
 
-// 📜 THE NEW MASTER HISTORY API (Pulls all timestamps)
 app.get("/api/admin/history", adminAuth, (req, res) => {
     const query = `
-        SELECT b.booking_id, b.status, b.emergency_category, b.distance, b.final_cost, 
-        b.booked_at, b.accepted_at, b.picked_up_at, b.completed_at,
-        u.name AS patient_name, u.phone AS patient_phone, 
-        d.name AS driver_name, d.ambulance_number, d.ambulance_type,
+        SELECT b.*, u.name AS patient_name, u.phone AS patient_phone, 
+        d.name AS driver_name, d.ambulance_number, d.ambulance_type AS drv_amb_type,
         COALESCE(b.custom_destination, h.name) AS destination 
         FROM bookings b 
         JOIN users u ON b.user_id = u.user_id 
         LEFT JOIN drivers d ON b.driver_id = d.driver_id 
         LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id 
         WHERE b.status IN ('COMPLETED', 'CANCELLED') 
-        ORDER BY b.booked_at DESC LIMIT 100
+        ORDER BY b.booking_id DESC LIMIT 100
     `;
     db.query(query, (err, rows) => {
         if (err) return res.status(500).json({ error: "Database error" });
@@ -381,7 +381,6 @@ app.post("/api/admin/approve-delete", adminAuth, (req, res) => {
     db.query("UPDATE drivers SET verification_status = 'DELETED', status = 'OFFLINE', phone = CONCAT(phone, '_DEL_', driver_id) WHERE driver_id = ?", [driver_id], (err) => res.json({ success: !err }));
 });
 
-// UptimeRobot Ping Route
 app.get("/ping", (req, res) => res.send("pong"));
 
 const PORT = process.env.PORT || 4000;
