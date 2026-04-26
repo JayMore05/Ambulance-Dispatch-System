@@ -33,8 +33,6 @@
     .badge.searching { background: #e0e7ff; color: #1d4ed8; }
     
     .doc-link { color: var(--primary); text-decoration: none; font-weight: 600; font-size: 13px; display: block; margin-bottom: 4px; }
-    .doc-link:hover { text-decoration: underline; }
-    
     .btn { padding: 8px 12px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; margin-right: 6px; }
     .btn:active { transform: scale(0.95); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -141,22 +139,14 @@
 </div>
 
 <script>
-  // ==========================================
-  // CONFIG & STATE
-  // ==========================================
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
   let liveRefreshInterval = null;
   let currentDriverPage = 1;
 
   window.onload = () => {
-      if(sessionStorage.getItem('adminToken')) {
-          showDashboard();
-      }
+      if(sessionStorage.getItem('adminToken')) showDashboard();
   };
 
-  // ==========================================
-  // AUTHENTICATION (JWT)
-  // ==========================================
   async function login() {
       const user = document.getElementById('adminUsername').value;
       const pass = document.getElementById('adminPassword').value;
@@ -196,9 +186,6 @@
       };
   }
 
-  // ==========================================
-  // UI & TABS
-  // ==========================================
   function showDashboard() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('dashboardScreen').classList.remove('hidden');
@@ -226,9 +213,6 @@
       if(!document.getElementById('historyTab').classList.contains('hidden')) loadHistory();
   }
 
-  // ==========================================
-  // DRIVER MANAGEMENT & PAGINATION
-  // ==========================================
   function changeDriverPage(direction) {
       currentDriverPage += direction;
       if (currentDriverPage < 1) currentDriverPage = 1;
@@ -340,7 +324,6 @@
                   <td>${driverCell}</td>
                   <td><span class="badge ${statusClass}">${b.status.replace('_', ' ')}</span></td>`;
               
-              // Prevent XSS
               row.cells[1].querySelector('strong').textContent = b.patient_name;
               row.cells[1].querySelector('span').textContent = '📞 ' + b.patient_phone;
               row.cells[2].querySelector('span').textContent = b.emergency_category;
@@ -354,7 +337,7 @@
   }
 
   // ==========================================
-  // MASTER HISTORY (WITH EXACT TIMESTAMPS)
+  // MASTER HISTORY
   // ==========================================
   async function loadHistory() {
       const tbody = document.getElementById('historyTableBody');
@@ -369,18 +352,21 @@
           
           tbody.innerHTML = "";
           data.history.forEach(h => {
-              const bTime = h.booked_at ? new Date(h.booked_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--';
+              // Safely handle both created_at (older DB) and booked_at (newer DB)
+              const rawBookedTime = h.booked_at || h.created_at;
+              const bTime = rawBookedTime ? new Date(rawBookedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--';
+              
               const aTime = h.accepted_at ? new Date(h.accepted_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--';
               const pTime = h.picked_up_at ? new Date(h.picked_up_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--';
               const cTime = h.completed_at ? new Date(h.completed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '--';
 
-              const driverCell = h.driver_name ? `<strong>${h.driver_name}</strong><br><span style="color:var(--muted);font-size:12px;">${h.ambulance_type||''} - ${h.ambulance_number||''}</span>` : `<span style="color:var(--muted);">N/A</span>`;
-              const costCell = h.distance ? `${h.distance} km<br><strong style="color:var(--success);">₹${h.final_cost||0}</strong>` : '--';
+              const driverCell = h.driver_name ? `<strong>${h.driver_name}</strong><br><span style="color:var(--muted);font-size:12px;">${h.drv_amb_type||h.ambulance_type||''} - ${h.ambulance_number||''}</span>` : `<span style="color:var(--muted);">N/A</span>`;
+              const costCell = h.hospital_distance_km ? `${h.hospital_distance_km} km<br><strong style="color:var(--success);">₹${h.final_cost||0}</strong>` : '--';
               const badgeClass = h.status === 'COMPLETED' ? 'approved' : 'rejected';
 
               const row = document.createElement('tr');
               row.innerHTML = `
-                  <td><strong>#${h.booking_id}</strong><br><span style="font-size:11px;color:var(--muted);">${new Date(h.booked_at).toLocaleDateString()}</span></td>
+                  <td><strong>#${h.booking_id}</strong><br><span style="font-size:11px;color:var(--muted);">${rawBookedTime ? new Date(rawBookedTime).toLocaleDateString() : ''}</span></td>
                   <td style="font-size:12px; color:var(--muted);"><b>Booked:</b> ${bTime}<br><b>Accepted:</b> ${aTime}<br><b>Picked Up:</b> ${pTime}<br><b>Completed:</b> ${cTime}</td>
                   <td><strong></strong><br><span style="color:var(--muted);font-size:12px;"></span></td>
                   <td>${driverCell}</td>
