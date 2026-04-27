@@ -695,8 +695,11 @@
     }
   };  
 
+  // 🛡️ TAB SWITCH FIX: Instantly updates radar screen when you switch back to Patient App
   document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && state.bookingId && currentStep === 6) { checkStatus(); }
+      if (document.visibilityState === "visible" && state.bookingId && (currentStep === 5 || currentStep === 6)) { 
+          checkStatus(); 
+      }
   });
 
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
