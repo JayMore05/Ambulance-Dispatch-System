@@ -720,10 +720,12 @@
   }
 
   // 🛡️ FRONTEND UPDATE ONLY: Formatting time and calculating elapsed minutes
-  async function fetchRadar() {
+ async function fetchRadar() {
     if(!driver.isOnline || driver.activeBookingId) return;
     try {
-      const res = await fetch(`${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}`); 
+      // Magic Fix: &t=${Date.now()} prevents the phone from showing "Ghost" bookings
+      const url = `${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}&t=${Date.now()}_${Math.random()}`;
+      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json(); 
       const list = document.getElementById('emergencyList'); 
       list.innerHTML = "";
@@ -745,7 +747,6 @@
           card.className = `request-card ${b.priorityStar ? 'priority' : ''}`;
           const starHTML = b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : '';
 
-          // Calculate exact time and elapsed minutes
           const rawTime = b.booked_at || b.created_at || Date.now();
           const bookingTime = new Date(rawTime);
           const timeStr = bookingTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
@@ -768,20 +769,23 @@
       }
     } catch(err) { }
   }
-
   async function checkActiveMission() {
-    const res = await fetch(`${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}`); 
-    const data = await res.json();
-    if(data.hasMission) { 
-        clearInterval(radarInterval); 
-        setupActiveMissionUI(data.mission); 
-    } else { 
-        goStep(2); 
-        fetchRadar(); 
-        if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
-    }
+    try {
+        // Cache buster here too!
+        const url = `${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}_${Math.random()}`;
+        const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
+        const data = await res.json();
+        
+        if(data.hasMission) { 
+            clearInterval(radarInterval); 
+            setupActiveMissionUI(data.mission); 
+        } else { 
+            goStep(2); 
+            fetchRadar(); 
+            if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
+        }
+    } catch(err) {}
   }
-
   function initDriverMap(pLat, pLng) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
