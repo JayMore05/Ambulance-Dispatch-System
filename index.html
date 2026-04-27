@@ -662,6 +662,7 @@
   }
 
   // ⚡ LIGHTNING FAST GPS ON LOAD
+  // ⚡ ULTRA FAST GPS ON LOAD
   window.onload = () => {
     const savedState = localStorage.getItem('patient_session');
     if (savedState) { 
@@ -675,6 +676,15 @@
     
     const statusEl = document.getElementById('locStatus');
     
+    // Fallback function if GPS takes more than 2 seconds
+    const useFallback = () => {
+        console.warn("GPS timeout. Using estimated location.");
+        statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
+        statusEl.style.color = "#e53935"; 
+        state.userLat = 19.0760; 
+        state.userLng = 72.8777; 
+    };
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => { 
@@ -682,27 +692,18 @@
                 state.userLng = pos.coords.longitude; 
                 statusEl.innerText = "✅ GPS Locked Instantly"; 
                 statusEl.style.color = "var(--success)"; 
-                
-                fetchCityName(state.userLat, state.userLng).then(cityName => {
-                    if(cityName) {
-                        statusEl.innerHTML = `✅ GPS Locked<br><span style="color:var(--muted); font-size:12px; font-weight:500;">📌 Area: <b>${cityName}</b></span>`;
-                    }
-                });
             },
             (err) => { 
-                console.warn("GPS Error:", err.message);
-                statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
-                statusEl.style.color = "#e53935"; 
-                state.userLat = 19.0760; state.userLng = 72.8777; 
+                useFallback();
             },
-            // Fast GPS configuration (no accuracy wait, fast timeout)
-            { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
+            // 🚀 MAGIC SPEED SETTINGS: 2 seconds max, accept ANY cached location instantly
+            { enableHighAccuracy: false, timeout: 2000, maximumAge: Infinity }
         );
     } else { 
-        statusEl.innerText = "❌ Browser does not support GPS."; 
+        useFallback();
     }
-  };
-
+  };  
+  
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.bookingId && currentStep === 6) { checkStatus(); }
   });
