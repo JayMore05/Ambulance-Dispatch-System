@@ -653,15 +653,6 @@
       }); 
   }
 
-  async function fetchCityName(lat, lng) {
-      try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-          const data = await res.json();
-          return data.address.city || data.address.town || data.address.village || data.address.suburb || "Local Area";
-      } catch (e) { return null; }
-  }
-
-  // ⚡ LIGHTNING FAST GPS ON LOAD
   // ⚡ ULTRA FAST GPS ON LOAD
   window.onload = () => {
     const savedState = localStorage.getItem('patient_session');
@@ -676,7 +667,6 @@
     
     const statusEl = document.getElementById('locStatus');
     
-    // Fallback function if GPS takes more than 2 seconds
     const useFallback = () => {
         console.warn("GPS timeout. Using estimated location.");
         statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
@@ -696,14 +686,13 @@
             (err) => { 
                 useFallback();
             },
-            // 🚀 MAGIC SPEED SETTINGS: 2 seconds max, accept ANY cached location instantly
             { enableHighAccuracy: false, timeout: 2000, maximumAge: Infinity }
         );
     } else { 
         useFallback();
     }
   };  
-  
+
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.bookingId && currentStep === 6) { checkStatus(); }
   });
@@ -984,23 +973,25 @@
       }
   }
 
+  // 🛡️ ULTIMATE BUG FIX: Added Cache-Busting parameters to the GET Request
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
-      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`); 
+      // The `t=${Date.now()}` prevents mobile browsers from caching the 'REQUESTED' status forever!
+      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`;
+      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json();
       
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
         clearInterval(searchInterval);
         
-        // 🛡️ STUCK ON PULSE FIX: Force transition instantly!
         if(currentStep !== 6) { 
             goStep(6); 
             initPatientMap();
             setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500); 
         }
         
-        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName; 
+        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
         
         if (data.driver_lat && data.driver_lng) { 
             const driverDist = getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
@@ -1008,7 +999,7 @@
                 document.getElementById('etaDist').innerText = driverDist.toFixed(2);
                 document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverDist / 40) * 60)) + " mins";
             } else {
-                document.getElementById('etaDist').innerText = data.distance; 
+                document.getElementById('etaDist').innerText = data.distance || "0.0"; 
                 document.getElementById('etaTime').innerText = "IN TRANSIT";
             }
             updateDriverOnMap(data.driver_lat, data.driver_lng); 
@@ -1018,7 +1009,7 @@
             document.getElementById('etaTime').innerText = "Locating...";
         }
 
-        const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance);
+        const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
         if (distToCheck > 5) { 
             if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } 
         } else { 
@@ -1029,17 +1020,17 @@
       if (data.status === 'COMPLETED') { 
           clearInterval(pollInterval); clearInterval(searchInterval); 
           goStep(7); 
-          document.getElementById('receiptHospital').innerText = data.hospital || state.hospitalName; 
-          document.getElementById('receiptDist').innerText = data.distance + " km"; 
-          document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "--"); 
+          document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
+          document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
+          document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
           localStorage.removeItem('patient_session'); 
       }
       if (data.status === 'CANCELLED') { 
           clearInterval(pollInterval); clearInterval(searchInterval); 
-          alert("This booking was cancelled."); 
+          alert("This booking was cancelled by the driver or system."); 
           clearSession(); 
       }
-    } catch(err) { console.error("Poll Error"); }
+    } catch(err) { console.error("Poll Error:", err); }
   }
 
   function changeDestination() { 
@@ -1072,7 +1063,8 @@
       }
       
       try {
-          const res = await fetch(`${BASE_URL}/api/user/history?phone=${phone}`); 
+          // Added cache-busting here as well just to be safe
+          const res = await fetch(`${BASE_URL}/api/user/history?phone=${phone}&t=${Date.now()}`); 
           const data = await res.json();
           if (!data.history || data.history.length === 0) { 
               content.innerHTML = "<p style='color:var(--muted); text-align:center;'>No past trips found.</p>"; 
@@ -1080,7 +1072,6 @@
           }
           
           content.innerHTML = data.history.map(b => {
-              // Read from booked_at safely, fallback to created_at
               const rawTime = b.booked_at || b.created_at || Date.now();
               const dObj = new Date(rawTime);
               const dateStr = dObj.toLocaleDateString(); 
