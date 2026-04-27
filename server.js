@@ -244,7 +244,7 @@ app.get("/api/driver/radar", (req, res) => {
         const driverType = req.query.driverType; 
         const nearby = (results || []).filter(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            return dist <= 15 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
+            return dist <= 8 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
         }).map(b => {
             // Retrieve exact database time
             const rawTime = b.booked_at || b.created_at;
