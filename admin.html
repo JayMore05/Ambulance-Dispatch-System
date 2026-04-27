@@ -86,22 +86,29 @@
   </div>
 
   <div class="stats-grid">
-    <div class="stat-card" style="border-left-color: var(--warning);"><div class="stat-title">Pending KYC</div><div class="stat-value" id="statPending">0</div></div>
-    <div class="stat-card" style="border-left-color: var(--success);"><div class="stat-title">Active Drivers</div><div class="stat-value" id="statActive">0</div></div>
-    <div class="stat-card" style="border-left-color: var(--primary);"><div class="stat-title">Live Missions</div><div class="stat-value" id="statMissions">0</div></div>
-    <div class="stat-card" style="border-left-color: var(--danger);"><div class="stat-title">Deletion Requests</div><div class="stat-value" id="statDeletes">0</div></div>
+    <div class="stat-card" style="border-left-color: var(--warning); cursor: pointer;" onclick="switchTab('drivers', document.querySelectorAll('.tab')[0])">
+        <div class="stat-title">Pending KYC</div><div class="stat-value" id="statPending">0</div>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--success); cursor: pointer;" onclick="switchTab('drivers', document.querySelectorAll('.tab')[0])">
+        <div class="stat-title">Active Drivers</div><div class="stat-value" id="statActive">0</div>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--primary); cursor: pointer;" onclick="switchTab('live', document.querySelectorAll('.tab')[1])">
+        <div class="stat-title">Live Missions</div><div class="stat-value" id="statMissions">0</div>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--danger); cursor: pointer;" onclick="switchTab('drivers', document.querySelectorAll('.tab')[0])">
+        <div class="stat-title">Deletion Requests</div><div class="stat-value" id="statDeletes">0</div>
+    </div>
   </div>
-
   <div class="tabs">
     <div class="tab active" onclick="switchTab('drivers', this)">👨‍✈️ Driver Management</div>
     <div class="tab" onclick="switchTab('live', this)"><span class="live-indicator"></span>📡 Live Dispatch Radar</div>
     <div class="tab" onclick="switchTab('history', this)">📜 Master Mission History</div>
   </div>
 
-  <div id="driversTab" class="card">
+<div id="driversTab" class="card">
     <h2 style="margin-top: 0; display: flex; justify-content: space-between; align-items: center;">
       Driver Queue
-      <span style="font-size: 13px; font-weight: normal; color: var(--muted);">Reviewing 50 records per page</span>
+      <input type="text" placeholder="🔍 Search Driver... (min 2 chars)" style="padding: 8px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px;" onkeyup="filterTable(this.value, 'driverTableBody')">
     </h2>
     <div style="overflow-x: auto;">
       <table>
@@ -117,8 +124,11 @@
     </div>
   </div>
 
-  <div id="liveTab" class="card hidden">
-    <h2 style="margin-top: 0;">Active Emergencies</h2>
+ <div id="liveTab" class="card hidden">
+    <h2 style="margin-top: 0; display: flex; justify-content: space-between; align-items: center;">
+        Active Emergencies
+        <input type="text" placeholder="🔍 Search Mission... (min 2 chars)" style="padding: 8px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px;" onkeyup="filterTable(this.value, 'liveTableBody')">
+    </h2>
     <div style="overflow-x: auto;">
       <table>
         <thead><tr><th>Mission ID</th><th>Patient Details</th><th>Emergency Type</th><th>Destination</th><th>Assigned Driver</th><th>Live Status</th></tr></thead>
@@ -126,9 +136,11 @@
       </table>
     </div>
   </div>
-
-  <div id="historyTab" class="card hidden">
-    <h2 style="margin-top: 0;">Master Mission History (Completed & Cancelled)</h2>
+<div id="historyTab" class="card hidden">
+    <h2 style="margin-top: 0; display: flex; justify-content: space-between; align-items: center;">
+        Master Mission History
+        <input type="text" placeholder="🔍 Search History... (min 2 chars)" style="padding: 8px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px;" onkeyup="filterTable(this.value, 'historyTableBody')">
+    </h2>
     <div style="overflow-x: auto;">
       <table>
         <thead><tr><th>ID & Date</th><th>Precise Timestamps</th><th>Patient Info</th><th>Driver & Vehicle</th><th>Distance & Cost</th><th>Status</th></tr></thead>
@@ -421,6 +433,32 @@
           }
       } catch(err) { alert("Server error."); }
   }
+  // Function for Live Search filtering
+function filterTable(query, tableBodyId) {
+    query = query.toLowerCase().trim();
+    const rows = document.getElementById(tableBodyId).getElementsByTagName('tr');
+    
+    for(let i = 0; i < rows.length; i++) {
+        // If typing, wait for at least 2 characters to search
+        if(query.length > 0 && query.length < 2) {
+            continue; 
+        }
+        
+        // If search is cleared, show all rows
+        if(query.length === 0) {
+            rows[i].style.display = '';
+            continue;
+        }
+
+        // Search text content of the row
+        const textData = rows[i].textContent.toLowerCase();
+        if(textData.includes(query)) {
+            rows[i].style.display = '';
+        } else {
+            rows[i].style.display = 'none';
+        }
+    }
+}
 </script>
 </body>
 </html>
