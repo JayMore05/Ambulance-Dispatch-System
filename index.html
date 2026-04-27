@@ -540,8 +540,7 @@
   </div>
 </div>
 
-<script>
-  // ==========================================
+// ==========================================
   // PWA & WEB PUSH LOGIC
   // ==========================================
   let deferredInstallPrompt = null;
@@ -621,14 +620,27 @@
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
   let currentStep = 1; 
   let isUpdatingDestination = false; 
-  let pollInterval = null; 
   let searchTimer = 120; 
   let searchInterval = null; 
-  let currentPollRate = 5000; 
   let searchDebounceTimer = null;
   let leafletMap = null; 
   let patientMarker = null; 
   let driverMarker = null;
+
+  // 🛡️ NEW BULLETPROOF POLLING ENGINE
+  let pollTimeout = null;
+  let isPolling = false;
+
+  function startPolling() {
+      isPolling = true;
+      if (pollTimeout) clearTimeout(pollTimeout);
+      checkStatus(); // This will auto-loop infinitely safely
+  }
+
+  function stopPolling() {
+      isPolling = false;
+      if (pollTimeout) clearTimeout(pollTimeout);
+  }
 
   const ambulanceDatabase = [
     { type: "PTV", name: "🚐 Patient Transport", rate: 15, bestFor: ["General Sickness"] },
@@ -644,7 +656,6 @@
       ambulanceType: null, distance: 0, rate: 0, bookingId: null, userPhone: null 
   };
 
-  // 🌍 LOCALIZATION / TRANSLATIONS
   const langDict = {
       en: { booking: "Emergency Booking", gps: "Please provide details. We will automatically detect your location.", find_hosp: "Find Hospitals ➔", what_emerg: "What is the Emergency?", choose_dest: "Choose Destination", select_amb: "Select Ambulance", broadcasting: "Broadcasting...", driver_otw: "✅ Driver is on the way!", back: "← Back", ayushman: "✅ Show Free / Ayushman Only", custom_hosp: "➕ Type Custom Name Manually", change_dest: "🔄 Change Dest.", cancel_req: "❌ Cancel Request", trip_done: "✅ Trip Completed", home: "Return to Home", all_busy: "All nearby ambulances are busy." },
       hi: { booking: "आपातकालीन बुकिंग", gps: "कृपया विवरण दें। हम स्वचालित रूप से आपके स्थान का पता लगाएंगे।", find_hosp: "अस्पताल खोजें ➔", what_emerg: "आपात स्थिति क्या है?", choose_dest: "गंतव्य चुनें", select_amb: "एम्बुलेंस चुनें", broadcasting: "प्रसारण हो रहा है...", driver_otw: "✅ ड्राइवर आ रहा है!", back: "← वापस", ayushman: "✅ केवल मुफ्त / आयुष्मान दिखाएं", custom_hosp: "➕ कस्टम नाम मैन्युअल रूप से टाइप करें", change_dest: "🔄 गंतव्य बदलें", cancel_req: "❌ अनुरोध रद्द करें", trip_done: "✅ यात्रा पूरी हुई", home: "होम पर लौटें", all_busy: "आसपास की सभी एम्बुलेंस व्यस्त हैं।" },
@@ -663,8 +674,7 @@
     if (savedState) { 
         state = JSON.parse(savedState); 
         if (state.bookingId) { 
-            pollInterval = setInterval(checkStatus, currentPollRate); 
-            checkStatus(); 
+            startPolling(); // Starts the bulletproof loop
             return; 
         } 
     }
@@ -697,18 +707,14 @@
     }
   };  
 
-  // 🛡️ TAB SWITCH FIX: Instantly updates radar screen when you switch back to Patient App
- // 🛡️ AGGRESSIVE TAB RECOVERY: Forces phone to wake up the network and restart polling
+  // 🛡️ TAB SWITCH FIX: Instantly restarts polling when switching back to Patient App
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
           if (state.bookingId && (currentStep === 5 || currentStep === 6)) { 
-              if(pollInterval) clearInterval(pollInterval);
-              pollInterval = setInterval(checkStatus, 3000); // Force active 3s polling
-              setTimeout(checkStatus, 500); // Wait half a second for 4G/WiFi to wake up, then check
+              startPolling();
           }
       }
   });
- 
 
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
   
@@ -751,7 +757,6 @@
     let valid = true;
     
     if (!name || name.length < 2) { showFieldError('userName', 'Please enter a valid name.'); valid = false; }
-    // Strict 10-digit Indian Number validation (starts with 6,7,8, or 9)
     if (!/^[6-9]\d{9}$/.test(phone)) { showFieldError('userPhone', 'Enter a valid 10-digit Indian number.'); valid = false; }
     if (!valid) return;
     
@@ -765,7 +770,8 @@
           state.userId = data.user_id; state.userPhone = phone; saveState(); goStep(2); 
       } else { alert(data.error || "Database Error"); }
     } catch(err) { alert("🚨 SERVER ERROR"); }
-}
+  }
+
   function selectEmergency(type) { 
       state.emergency = type; 
       saveState(); 
@@ -892,7 +898,6 @@
       let isRec = amb.bestFor.includes(state.emergency); 
       let badge = isRec ? `<span class="badge green">⭐ Recommended</span>` : ""; 
       let bStyle = isRec ? `border-left: 5px solid var(--success);` : ``; 
-      // STRICT ROUNDING: Math.ceil forces 3.2 to 4
       let roundedDistance = Math.ceil(parseFloat(state.distance));
       let estCost = state.distance > 0 ? `~₹${roundedDistance * amb.rate}` : `₹${amb.rate}/km`;
       
@@ -903,7 +908,7 @@
       item.innerHTML = `<div class="title">${amb.name} ${badge}</div><div style="display:flex; justify-content:space-between; align-items:center;"><div class="meta">₹${amb.rate}/km</div><span class="cost-badge">${estCost}</span></div>`;
       ambContainer.appendChild(item);
     });
-}
+  }
 
   async function selectAmbulance(type, rate) {
     state.ambulanceType = type; 
@@ -929,15 +934,16 @@
       });
       const data = await res.json(); 
       state.bookingId = data.booking_id; 
-      saveState();
       
+      // Update UI with Booking ID for sanity checking
+      try { document.getElementById('displayBookingId').innerText = data.booking_id; } catch(e){}
+      
+      saveState();
       subscribePushForBooking(data.booking_id);
       
-      if(pollInterval) clearInterval(pollInterval); 
       if(searchInterval) clearInterval(searchInterval);
       
-      pollInterval = setInterval(checkStatus, currentPollRate); 
-      checkStatus();
+      startPolling(); // Starts the bulletproof loop safely
       
       searchTimer = 120; 
       document.getElementById('timerText').innerText = searchTimer;
@@ -958,8 +964,6 @@
   function initPatientMap() {
       if (leafletMap) return; 
       leafletMap = L.map('map').setView([state.userLat, state.userLng], 14); 
-      
-      // 🛡️ CARTODB MAPS - NO BAN!
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(leafletMap);
       patientMarker = L.marker([state.userLat, state.userLng]).addTo(leafletMap).bindPopup("<b>Your Location</b>").openPopup();
   }
@@ -974,8 +978,7 @@
       }
   }
 
-  // 🛡️ ULTIMATE BUG FIX: Bulletproof transitions and error handling
- // 🌟 PRESENTATION FALLBACK: Forces the UI to work perfectly during a live demo
+  // 🌟 PRESENTATION FALLBACK: Forces the UI to work perfectly during a live demo
   function forceTransition() {
       if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
       goStep(6);
@@ -989,9 +992,10 @@
       } catch(e) {}
   }
 
-  // 🛡️ ULTIMATE BUG FIX: Bulletproof transitions and error handling
+  // 🛡️ RECURSIVE TIMEOUT FIX: Bulletproof polling that browsers CANNOT freeze permanently
   async function checkStatus() {
-    if (!state.bookingId) return;
+    if (!state.bookingId || !isPolling) return;
+    
     try {
       // Bypasses all mobile network cache
       const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
@@ -1045,35 +1049,34 @@
                 document.getElementById('etaTime').innerText = "Locating...";
             }
         } catch(mapErr) { console.warn("Map hidden error ignored"); }
-
-        // 4. DYNAMIC POLLING
-        try {
-            const distToCheck = currentStatus === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
-            if (distToCheck > 5) { 
-                if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } 
-            } else { 
-                if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } 
-            }
-        } catch(e) {}
       }
       
       if (currentStatus === 'COMPLETED') { 
-          if(pollInterval) clearInterval(pollInterval); 
+          stopPolling(); 
           if(searchInterval) clearInterval(searchInterval); 
           goStep(7); 
           document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
           document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
           document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
           localStorage.removeItem('patient_session'); 
+          return; // Stop function completely
       }
       
       if (currentStatus === 'CANCELLED') { 
-          if(pollInterval) clearInterval(pollInterval); 
+          stopPolling(); 
           if(searchInterval) clearInterval(searchInterval); 
           alert("This booking was cancelled by the driver or system."); 
           clearSession(); 
+          return; // Stop function completely
       }
-    } catch(err) { console.error("Poll Error:", err); }
+    } catch(err) { 
+        console.error("Poll Error:", err); 
+    }
+
+    // 🛡️ RECURSIVE LOOP: Schedules the next check perfectly safely
+    if (isPolling) {
+        pollTimeout = setTimeout(checkStatus, 3000);
+    }
   }
   
   function changeDestination() { 
@@ -1106,7 +1109,6 @@
       }
       
       try {
-          // Added cache-busting here as well just to be safe
           const res = await fetch(`${BASE_URL}/api/user/history?phone=${phone}&t=${Date.now()}`); 
           const data = await res.json();
           if (!data.history || data.history.length === 0) { 
@@ -1150,7 +1152,8 @@
   }
 
   async function confirmCancel() {
-      clearInterval(pollInterval); clearInterval(searchInterval);
+      stopPolling();
+      if(searchInterval) clearInterval(searchInterval);
       if (state.bookingId) { await fetch(`${BASE_URL}/api/bookings/cancel`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: state.bookingId }) }); }
       clearSession();
   }
