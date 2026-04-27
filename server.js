@@ -301,12 +301,31 @@ app.post("/api/driver/update-status", (req, res) => {
 
 app.post("/api/driver/complete", (req, res) => {
     const { booking_id, actual_distance } = req.body;
-    const final_cost = actual_distance ? Math.ceil(actual_distance * 25) : 0; 
     
-    db.query(`UPDATE bookings SET status = 'COMPLETED', hospital_distance_km = ?, final_cost = ? WHERE booking_id = ?`, [actual_distance, final_cost, booking_id], (err, result) => {
-        if (err) return res.json({ success: false, message: "Database Error: " + err.message });
-        db.query(`UPDATE bookings SET completed_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
-        res.json({ success: true, final_cost: final_cost });
+    // Fetch original distance and correct ambulance rate from database
+    db.query(`SELECT hospital_distance_km, price_per_km FROM bookings WHERE booking_id = ?`, [booking_id], (err, rows) => {
+        if (err || !rows || rows.length === 0) return res.json({ success: false, message: "Booking not found." });
+        
+        const booked_dist = parseFloat(rows[0].hospital_distance_km) || 0;
+        const rate = parseFloat(rows[0].price_per_km) || 0;
+        const driven_dist = parseFloat(actual_distance) || 0;
+        
+        // 1. Strict Rounding Up (e.g., 2.9 -> 3, 3.2 -> 4)
+        const roundedBooked = Math.ceil(booked_dist);
+        const roundedDriven = Math.ceil(driven_dist);
+        
+        // 2. Logic: If driven exceeds booked due to traffic, use driven. Otherwise, use booked.
+        const billed_distance = Math.max(roundedBooked, roundedDriven);
+        
+        // 3. Exact Cost Calculation
+        const final_cost = billed_distance * rate;
+        
+        db.query(`UPDATE bookings SET status = 'COMPLETED', hospital_distance_km = ?, final_cost = ? WHERE booking_id = ?`, 
+        [billed_distance, final_cost, booking_id], (err2) => {
+            if (err2) return res.json({ success: false, message: "Database Error: " + err2.message });
+            db.query(`UPDATE bookings SET completed_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
+            res.json({ success: true, final_cost: final_cost, billed_distance: billed_distance });
+        });
     });
 });
 
