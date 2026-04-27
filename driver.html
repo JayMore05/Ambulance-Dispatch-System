@@ -419,8 +419,9 @@
   let missionInterval = null; 
   let odometerInterval = null; 
   let totalDrivenKm = 0; 
+  let currentBookedDistance = 0; // Added for billing logic
   let lastLat = null; 
-  let lastLng = null; 
+  let lastLng = null;
   let currentMissionHospital = null; 
   let wakeLock = null; 
   let dMap = null; 
@@ -795,6 +796,7 @@
   function setupActiveMissionUI(m) {
     driver.activeBookingId = m.booking_id; 
     window.currentPatientPhone = m.user_phone; 
+    currentBookedDistance = parseFloat(m.hospital_distance_km) || 0; // Save initial distance
     
     if (currentMissionHospital && currentMissionHospital !== m.hospital_name) { 
         document.body.style.backgroundColor = "#ef5350"; 
@@ -813,7 +815,6 @@
     let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
     document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
     
-    // 🛡️ STRICT PHASE LOCK
     if(m.status === 'IN_TRANSIT') { 
         document.getElementById('phase1Box').style.display = 'none'; 
         document.getElementById('phase2Box').style.display = 'block'; 
@@ -843,11 +844,12 @@
               method: "POST", headers: {"Content-Type":"application/json"}, 
               body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest, new_distance: newDist }) 
           }); 
+          currentBookedDistance = parseFloat(newDist) || 0; // Update local odometer base
+          document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km (Billed)";
           document.getElementById('destModal').style.display='none'; 
           checkActiveMission(); 
       }
   }
-
   function promptModal(id, name, phone, cond, hosp, uLat, uLng, hLat, hLng) { 
       pendingAcceptData = { booking_id: id, user_name: name, user_phone: phone, emergency_category: cond, hospital_name: hosp, user_latitude: uLat, user_longitude: uLng, hosp_lat: hLat, hosp_lng: hLng }; 
       document.getElementById('modalPatient').textContent = name; 
@@ -883,7 +885,6 @@
       if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
       
       document.getElementById('phase1Box').style.display = 'none'; 
-      
       if (odometerInterval) clearInterval(odometerInterval);
 
       await fetch(`${BASE_URL}/api/driver/pickup`, { 
@@ -897,11 +898,19 @@
       lastLng = driver.lng; 
       totalDrivenKm = 0; 
       
+      // Instantly show the minimum rounded booked distance
+      document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km (Minimum Billed)";
+      
       odometerInterval = setInterval(() => { 
           const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng); 
           if (d > 0.01) { 
-              totalDrivenKm += d; lastLat = driver.lat; lastLng = driver.lng; 
-              document.getElementById('liveOdo').innerText = totalDrivenKm.toFixed(2); 
+              totalDrivenKm += d; 
+              lastLat = driver.lat; 
+              lastLng = driver.lng; 
+              
+              // Only increases if driver exceeds the booked km
+              let billed = Math.max(Math.ceil(currentBookedDistance), Math.ceil(totalDrivenKm));
+              document.getElementById('liveOdo').innerText = billed + " km (Billed)"; 
           } 
       }, 3000); 
   }
@@ -909,28 +918,21 @@
   
 
 async function completeTrip() { 
-    clearInterval(odometerInterval); clearInterval(missionInterval); 
-    odometerInterval = null; missionInterval = null;
+      clearInterval(odometerInterval); clearInterval(missionInterval); 
+      odometerInterval = null; missionInterval = null;
 
-    // Fetch the original distance booked
-    let originalDistance = parseFloat(document.getElementById('estDist') ? document.getElementById('estDist').innerText : "0");
-    
-    // Logic: If traffic/detour makes odometer distance HIGHER than original, use odometer. 
-    // Otherwise, keep the original estimated distance. Then apply Math.ceil (Round up).
-    let finalBilledDistance = Math.max(originalDistance, totalDrivenKm);
-    let roundedBilledDistance = Math.ceil(finalBilledDistance);
-
-    const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
-        method: "POST", headers: {"Content-Type":"application/json"}, 
-        // Pass the rounded distance to the server to calculate final price
-        body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: roundedBilledDistance }) 
-    }); 
-    const data = await res.json();
-    
-    document.getElementById('receiptDist').innerText = roundedBilledDistance + " km"; 
-    document.getElementById('receiptCost').innerText = data.final_cost || 0; 
-    goStep(6); 
-}
+      const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
+          method: "POST", headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) 
+      }); 
+      const data = await res.json();
+      
+      // Use the verified billed distance returned by the server
+      document.getElementById('receiptDist').innerText = (data.billed_distance || 0) + " km"; 
+      document.getElementById('receiptCost').innerText = data.final_cost || 0; 
+      goStep(6); 
+  }
+  
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
       goStep(2); 
