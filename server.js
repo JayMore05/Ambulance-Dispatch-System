@@ -117,9 +117,10 @@ app.post("/api/save-user", (req, res) => {
     });
 });
 
+// 🛡️ FIXED: NOW EXACTLY STAMPS 'booked_at' WITH REAL TIME
 app.post("/api/bookings", (req, res) => {
     const { user_id, hospital_id, custom_destination, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
-    db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+    db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km, booked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, 
     [user_id, hospital_id || null, custom_destination || null, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ booking_id: result.insertId });
@@ -235,8 +236,8 @@ app.get("/api/driver/active-mission", (req, res) => {
     });
 });
 
+// 🛡️ FIXED: NOW CALCULATES ACTUAL MINUTES ELAPSED SINCE BOOKING
 app.get("/api/driver/radar", (req, res) => {
-    // FIXED: Order by booking_id DESC to avoid any 'booked_at' missing column crashes
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booking_id DESC`, (err, results) => {
         if (err) return res.status(500).json({ error: "Radar failed." });
         
@@ -245,10 +246,22 @@ app.get("/api/driver/radar", (req, res) => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
             return dist <= 15 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
         }).map(b => {
-            const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            const rawTime = b.booked_at || b.created_at || new Date();
-            const formatT = new Date(rawTime).toLocaleTimeString();
-            return { ...b, priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), real_eta: Math.max(1, Math.round((dist / 40) * 60)), formatted_time: formatT };
+            // Retrieve exact database time
+            const rawTime = b.booked_at || b.created_at;
+            const bookedDate = rawTime ? new Date(rawTime) : new Date();
+            
+            // Format time correctly
+            const formatT = bookedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            // Calculate how many minutes ago the booking was made
+            const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
+
+            return { 
+                ...b, 
+                priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), 
+                elapsed_mins: elapsedMins, 
+                formatted_time: formatT 
+            };
         });
         res.json({ bookings: nearby });
     });
@@ -260,15 +273,12 @@ app.get("/api/driver/radar", (req, res) => {
 app.post("/api/driver/accept", (req, res) => {
     const { driver_id, booking_id } = req.body;
     
-    // Core logic updates (Guaranteed to work)
     const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
     db.query(query, [driver_id, booking_id], (err, result) => {
         if (err) return res.json({ success: false, message: "Database Error: " + err.message });
         if (result.affectedRows === 0) return res.json({ success: false, message: "Too late! Another driver accepted this emergency." });
         
-        // Silent Timestamp (Ignores errors if column doesn't exist)
         db.query(`UPDATE bookings SET accepted_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
-        
         res.json({ success: true, message: "Booking assigned to you!" });
     });
 });
@@ -277,10 +287,7 @@ app.post("/api/driver/pickup", (req, res) => {
     const { booking_id } = req.body;
     db.query(`UPDATE bookings SET status = 'IN_TRANSIT' WHERE booking_id = ?`, [booking_id], (err, result) => {
         if (err) return res.json({ success: false, message: "Database Error: " + err.message });
-        
-        // Silent Timestamp
         db.query(`UPDATE bookings SET picked_up_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
-        
         res.json({ success: true, message: "Patient Picked Up!" });
     });
 });
@@ -298,10 +305,7 @@ app.post("/api/driver/complete", (req, res) => {
     
     db.query(`UPDATE bookings SET status = 'COMPLETED', hospital_distance_km = ?, final_cost = ? WHERE booking_id = ?`, [actual_distance, final_cost, booking_id], (err, result) => {
         if (err) return res.json({ success: false, message: "Database Error: " + err.message });
-        
-        // Silent Timestamp
         db.query(`UPDATE bookings SET completed_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
-        
         res.json({ success: true, final_cost: final_cost });
     });
 });
