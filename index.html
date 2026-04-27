@@ -446,16 +446,18 @@
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
-  <div id="step5" class="card hidden" style="text-align:center;">
+ <div id="step5" class="card hidden" style="text-align:center;">
     <div class="radar-box">
       <div class="pulse">🚑</div>
       <h1 data-i18n="broadcasting">Broadcasting...</h1>
       <h2 style="color:var(--primary); font-size:45px; margin: 10px 0;"><span id="timerText">120</span>s</h2>
-      <p>Searching 15km radius for the fastest driver.</p>
+      <p>Searching 8km radius for the fastest driver.</p>
+      
+      <button class="btn ghost" style="margin-top:15px; padding: 10px; font-size:14px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;" onclick="checkStatus()">🔄 Refresh Status</button>
+      
     </div>
     <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="confirmCancel()" data-i18n="cancel_req">❌ Cancel Request</button>
   </div>
-
   <div id="step6" class="card hidden">
     <h1 style="color: var(--success);" data-i18n="driver_otw">✅ Driver is on the way!</h1>
     
@@ -696,11 +698,17 @@
   };  
 
   // 🛡️ TAB SWITCH FIX: Instantly updates radar screen when you switch back to Patient App
+ // 🛡️ AGGRESSIVE TAB RECOVERY: Forces phone to wake up the network and restart polling
   document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && state.bookingId && (currentStep === 5 || currentStep === 6)) { 
-          checkStatus(); 
+      if (document.visibilityState === "visible") {
+          if (state.bookingId && (currentStep === 5 || currentStep === 6)) { 
+              if(pollInterval) clearInterval(pollInterval);
+              pollInterval = setInterval(checkStatus, 3000); // Force active 3s polling
+              setTimeout(checkStatus, 500); // Wait half a second for 4G/WiFi to wake up, then check
+          }
       }
   });
+ 
 
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
   
@@ -966,31 +974,29 @@
       }
   }
 
-  // 🛡️ ULTIMATE BUG FIX: Added Cache-Busting parameters to the GET Request
- // 🛡️ ULTIMATE BUG FIX: Safe Transitions & Try/Catch to prevent Map crashes
+  // 🛡️ ULTIMATE BUG FIX: Bulletproof transitions and error handling
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
-      // Math.random() completely destroys aggressive mobile network caching
+      // Bypasses all mobile network cache
       const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
       const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json();
       
-      if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
+      const currentStatus = data.status ? data.status.trim().toUpperCase() : '';
+      
+      if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
         
-        // 1. CLEAR TIMERS & FORCE SCREEN TRANSITION IMMEDIATELY
+        // 1. FORCE UI TRANSITION IMMEDIATELY
         if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
+        if (currentStep === 5) { goStep(6); }
         
-        if(currentStep !== 6) { 
-            goStep(6); 
-        }
-        
-        // 2. SAFELY UPDATE TEXT 
+        // 2. TEXT UPDATES 
         try {
             document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
         } catch(e) {}
         
-        // 3. SAFELY HANDLE MAP & TRACKING (Will not crash app if Driver GPS is missing)
+        // 3. MAP & DISTANCE LOGIC
         try {
             initPatientMap();
             setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500); 
@@ -1004,30 +1010,28 @@
                 if (!isNaN(dLat) && !isNaN(dLng) && !isNaN(pLat) && !isNaN(pLng)) {
                     const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
                     
-                    if (data.status === 'ASSIGNED') {
+                    if (currentStatus === 'ASSIGNED') {
                         document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
                         document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
                         document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
-                    } else if (data.status === 'IN_TRANSIT') {
+                    } else if (currentStatus === 'IN_TRANSIT') {
                         document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
                         document.getElementById('etaTime').innerText = "Heading to Hospital";
                         document.querySelector('[data-i18n="driver_otw"]').innerText = "🚑 Going to Hospital...";
                     }
                     
                     updateDriverOnMap(dLat, dLng); 
-                    if (data.status === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
+                    if (currentStatus === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
                 }
             } else {
                 document.getElementById('etaDist').innerText = "--"; 
                 document.getElementById('etaTime').innerText = "Locating...";
             }
-        } catch(mapErr) {
-            console.warn("Map Tracking Error ignored to keep UI functional");
-        }
+        } catch(mapErr) { console.warn("Map hidden error ignored"); }
 
-        // 4. SAFELY UPDATE POLLING RATE
+        // 4. DYNAMIC POLLING
         try {
-            const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
+            const distToCheck = currentStatus === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
             if (distToCheck > 5) { 
                 if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } 
             } else { 
@@ -1036,7 +1040,7 @@
         } catch(e) {}
       }
       
-      if (data.status === 'COMPLETED') { 
+      if (currentStatus === 'COMPLETED') { 
           if(pollInterval) clearInterval(pollInterval); 
           if(searchInterval) clearInterval(searchInterval); 
           goStep(7); 
@@ -1046,7 +1050,7 @@
           localStorage.removeItem('patient_session'); 
       }
       
-      if (data.status === 'CANCELLED') { 
+      if (currentStatus === 'CANCELLED') { 
           if(pollInterval) clearInterval(pollInterval); 
           if(searchInterval) clearInterval(searchInterval); 
           alert("This booking was cancelled by the driver or system."); 
@@ -1054,6 +1058,7 @@
       }
     } catch(err) { console.error("Poll Error:", err); }
   }
+  
   function changeDestination() { 
       isUpdatingDestination = true; 
       document.getElementById('step3Title').innerText = "Update Destination"; 
