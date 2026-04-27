@@ -26,6 +26,7 @@
         --text: #1e293b;
         --muted: #64748b; 
         --highlight: #fee2e2;
+        --warning: #ffb300;
     }
     
     * { 
@@ -264,7 +265,6 @@
         z-index: 1; 
         animation: pulse-anim 1.5s infinite; 
     }
-    
     @keyframes pulse-anim { 
         0% { transform: scale(0.9); opacity: 1; } 
         100% { transform: scale(2.2); opacity: 0; } 
@@ -288,7 +288,6 @@
         box-shadow: 0 0 0 4px rgba(229,57,53,0.3); 
         animation: driverPulse 1.5s infinite; 
     }
-    
     @keyframes driverPulse { 
         0% { box-shadow: 0 0 0 4px rgba(229,57,53,0.3); } 
         100% { box-shadow: 0 0 0 10px rgba(229,57,53,0); } 
@@ -1080,7 +1079,9 @@
           }
           
           content.innerHTML = data.history.map(b => {
-              const dObj = b.created_at ? new Date(b.created_at) : new Date();
+              // Read from booked_at safely, fallback to created_at
+              const rawTime = b.booked_at || b.created_at || Date.now();
+              const dObj = new Date(rawTime);
               const dateStr = dObj.toLocaleDateString(); 
               const timeStr = dObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
               const bgC = b.status==='COMPLETED'?'#dcfce7':b.status==='CANCELLED'?'#fee2e2':'#fef3c7';
