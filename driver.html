@@ -95,6 +95,7 @@
 
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
     .modal { background: var(--card); border: 1px solid var(--primary); padding: 24px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(229, 57, 53, 0.3); }
+    .hidden { display: none !important; }
 
     #uploadProgress { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
     #uploadBar { width: 0%; height: 100%; background: var(--info); transition: 0.3s; }
@@ -434,6 +435,7 @@
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
   };
 
+  // ⚡ ULTRA FAST DRIVER GPS
   window.onload = () => {
     if (driver.id) { 
         if (driver.status === 'PENDING') { 
@@ -446,23 +448,16 @@
         }
     }
     
-    let lastCityFetch = 0; 
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
-            async pos => { 
+            pos => { 
                 driver.lat = pos.coords.latitude; 
                 driver.lng = pos.coords.longitude; 
                 if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
-                
-                if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
-                    lastCityFetch = Date.now();
-                    const city = await fetchCityName(driver.lat, driver.lng);
-                    const tText = document.getElementById('toggleText');
-                    if(tText.innerText.includes("ONLINE")) tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
-                }
             }, 
-            err => console.log("GPS denied"), 
-            { enableHighAccuracy: false, maximumAge: 10000 }
+            err => console.log("GPS denied or slow"), 
+            // 🚀 Fast polling, accepts cached cell-tower data
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: Infinity }
         );
     }
   };
@@ -861,10 +856,11 @@
             body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
         }); 
         const data = await res.json();
+        
         if (res.ok && data.success) { 
             clearInterval(radarInterval); checkActiveMission(); 
         } else { 
-            alert("❌ Missed it! Taken by another driver."); fetchRadar(); 
+            alert("❌ " + (data.message || "Taken by another driver.")); fetchRadar(); 
         }
     } catch(err) {}
   }
