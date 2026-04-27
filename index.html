@@ -964,60 +964,93 @@
   }
 
   // 🛡️ ULTIMATE BUG FIX: Added Cache-Busting parameters to the GET Request
+ // 🛡️ ULTIMATE BUG FIX: Safe Transitions & Try/Catch to prevent Map crashes
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
-      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`;
-      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } }); 
+      // Math.random() completely destroys aggressive mobile network caching
+      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
+      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json();
       
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
-        clearInterval(searchInterval);
+        
+        // 1. CLEAR TIMERS & FORCE SCREEN TRANSITION IMMEDIATELY
+        if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
         
         if(currentStep !== 6) { 
             goStep(6); 
+        }
+        
+        // 2. SAFELY UPDATE TEXT 
+        try {
+            document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
+        } catch(e) {}
+        
+        // 3. SAFELY HANDLE MAP & TRACKING (Will not crash app if Driver GPS is missing)
+        try {
             initPatientMap();
             setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500); 
-        }
-        
-        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
-        
-        // Handle Driver Tracking
-        if (data.driver_lat && data.driver_lng) { 
-            const driverToPatientDist = getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
-            
-            if (data.status === 'ASSIGNED') {
-                // Driver is coming to patient
-                document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
-                document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
-                document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
-            } else if (data.status === 'IN_TRANSIT') {
-                // Driver picked up patient, going to hospital
-                document.getElementById('etaDist').innerText = data.distance || "0.0"; 
-                document.getElementById('etaTime').innerText = "Heading to Hospital";
-                document.querySelector('[data-i18n="driver_otw"]').innerText = "🚑 Going to Hospital...";
+
+            if (data.driver_lat && data.driver_lng && data.driver_lat !== "null") { 
+                const dLat = parseFloat(data.driver_lat);
+                const dLng = parseFloat(data.driver_lng);
+                const pLat = parseFloat(state.userLat);
+                const pLng = parseFloat(state.userLng);
+
+                if (!isNaN(dLat) && !isNaN(dLng) && !isNaN(pLat) && !isNaN(pLng)) {
+                    const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
+                    
+                    if (data.status === 'ASSIGNED') {
+                        document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
+                        document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
+                        document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
+                    } else if (data.status === 'IN_TRANSIT') {
+                        document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
+                        document.getElementById('etaTime').innerText = "Heading to Hospital";
+                        document.querySelector('[data-i18n="driver_otw"]').innerText = "🚑 Going to Hospital...";
+                    }
+                    
+                    updateDriverOnMap(dLat, dLng); 
+                    if (data.status === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
+                }
+            } else {
+                document.getElementById('etaDist').innerText = "--"; 
+                document.getElementById('etaTime').innerText = "Locating...";
             }
-            updateDriverOnMap(data.driver_lat, data.driver_lng); 
+        } catch(mapErr) {
+            console.warn("Map Tracking Error ignored to keep UI functional");
         }
 
-        const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
-        if (distToCheck > 5) { 
-            if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } 
-        } else { 
-            if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } 
-        }
+        // 4. SAFELY UPDATE POLLING RATE
+        try {
+            const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
+            if (distToCheck > 5) { 
+                if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } 
+            } else { 
+                if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } 
+            }
+        } catch(e) {}
       }
       
       if (data.status === 'COMPLETED') { 
-          clearInterval(pollInterval); clearInterval(searchInterval); 
+          if(pollInterval) clearInterval(pollInterval); 
+          if(searchInterval) clearInterval(searchInterval); 
           goStep(7); 
           document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
           document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
           document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
           localStorage.removeItem('patient_session'); 
       }
+      
+      if (data.status === 'CANCELLED') { 
+          if(pollInterval) clearInterval(pollInterval); 
+          if(searchInterval) clearInterval(searchInterval); 
+          alert("This booking was cancelled by the driver or system."); 
+          clearSession(); 
+      }
     } catch(err) { console.error("Poll Error:", err); }
-}
+  }
   function changeDestination() { 
       isUpdatingDestination = true; 
       document.getElementById('step3Title').innerText = "Update Destination"; 
