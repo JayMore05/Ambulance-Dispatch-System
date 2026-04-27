@@ -95,7 +95,6 @@
 
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
     .modal { background: var(--card); border: 1px solid var(--primary); padding: 24px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(229, 57, 53, 0.3); }
-    .hidden { display: none !important; }
 
     #uploadProgress { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
     #uploadBar { width: 0%; height: 100%; background: var(--info); transition: 0.3s; }
@@ -448,16 +447,23 @@
         }
     }
     
+    let lastCityFetch = 0; 
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
-            pos => { 
+            async pos => { 
                 driver.lat = pos.coords.latitude; 
                 driver.lng = pos.coords.longitude; 
                 if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
+                
+                if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
+                    lastCityFetch = Date.now();
+                    const city = await fetchCityName(driver.lat, driver.lng);
+                    const tText = document.getElementById('toggleText');
+                    if(tText.innerText.includes("ONLINE")) tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
+                }
             }, 
             err => console.log("GPS denied or slow"), 
-            // 🚀 Fast polling, accepts cached cell-tower data
-            { enableHighAccuracy: false, timeout: 5000, maximumAge: Infinity }
+            { enableHighAccuracy: false, maximumAge: 10000 }
         );
     }
   };
@@ -711,6 +717,7 @@
     });
   }
 
+  // 🛡️ FRONTEND UPDATE ONLY: Formatting time and calculating elapsed minutes
   async function fetchRadar() {
     if(!driver.isOnline || driver.activeBookingId) return;
     try {
@@ -735,12 +742,18 @@
           const card = document.createElement('div'); 
           card.className = `request-card ${b.priorityStar ? 'priority' : ''}`;
           const starHTML = b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : '';
+
+          // Calculate exact time and elapsed minutes
+          const rawTime = b.booked_at || b.created_at || Date.now();
+          const bookingTime = new Date(rawTime);
+          const timeStr = bookingTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+          const elapsedMins = Math.max(0, Math.floor((Date.now() - bookingTime.getTime()) / 60000));
           
-          card.innerHTML = `${starHTML}<div class="req-header"><div class="req-title"></div><div style="text-align: right;"><div style="font-size: 11px; color: var(--muted);">⏰ </div><div class="req-dist">📍 ~<span></span> mins</div></div></div><div class="req-detail"><strong>Patient:</strong> <span class="pname"></span></div><div class="req-detail"><strong>Dropoff:</strong> <span class="phosp"></span></div><button class="btn primary" style="margin-top:12px;">ACCEPT EMERGENCY</button>`;
+          card.innerHTML = `${starHTML}<div class="req-header"><div class="req-title"></div><div style="text-align: right;"><div style="font-size: 13px; font-weight: bold; color: var(--text);" class="r-time"></div><div style="font-size: 13px; color: var(--warning); margin-top: 4px;" class="r-elapsed"></div></div></div><div class="req-detail"><strong>Patient:</strong> <span class="pname"></span></div><div class="req-detail"><strong>Dropoff:</strong> <span class="phosp"></span></div><button class="btn primary" style="margin-top:12px;">ACCEPT EMERGENCY</button>`;
           
           card.querySelector('.req-title').textContent = b.emergency_category; 
-          card.querySelectorAll('.req-header div div')[0].textContent = "⏰ " + b.formatted_time; 
-          card.querySelector('.req-dist span').textContent = b.real_eta; 
+          card.querySelector('.r-time').textContent = "⏰ " + timeStr; 
+          card.querySelector('.r-elapsed').textContent = "⏳ ~" + elapsedMins + " mins ago"; 
           card.querySelector('.pname').textContent = b.user_name; 
           card.querySelector('.phosp').textContent = b.hospital_name;
           card.querySelector('button').onclick = () => promptModal(b.booking_id, safeName, b.user_phone, safeCond, safeHosp, b.user_latitude, b.user_longitude, b.hosp_lat || 0, b.hosp_lng || 0);
@@ -952,7 +965,7 @@
         item.querySelector('.req-title').textContent = h.emergency_category; 
         item.querySelector('.hosp-name').textContent = h.hospital_name;
         
-        details.innerHTML = `<div class="req-detail"><strong>Patient:</strong> <span></span></div><div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${new Date(h.booked_at).toLocaleTimeString()}</div><div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.completed_at ? new Date(h.completed_at).toLocaleTimeString() : '--'}</div><div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.final_cost}</div>`;
+        details.innerHTML = `<div class="req-detail"><strong>Patient:</strong> <span></span></div><div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${new Date(h.booked_at || h.created_at).toLocaleTimeString()}</div><div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.completed_at ? new Date(h.completed_at).toLocaleTimeString() : '--'}</div><div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.final_cost}</div>`;
         details.querySelector('span').textContent = h.user_name; 
         
         item.appendChild(details); 
