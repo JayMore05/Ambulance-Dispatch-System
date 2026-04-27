@@ -237,6 +237,7 @@ app.get("/api/driver/active-mission", (req, res) => {
 });
 
 // 🛡️ FIXED: NOW CALCULATES ACTUAL MINUTES ELAPSED SINCE BOOKING
+// 🛡️ FIXED: Hides old "Ghost Bookings" older than 10 minutes so driver doesn't click wrong ride
 app.get("/api/driver/radar", (req, res) => {
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booking_id DESC`, (err, results) => {
         if (err) return res.status(500).json({ error: "Radar failed." });
@@ -244,29 +245,34 @@ app.get("/api/driver/radar", (req, res) => {
         const driverType = req.query.driverType; 
         const nearby = (results || []).filter(b => {
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            return dist <= 8 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
-        }).map(b => {
-            // Retrieve exact database time
+            
+            // Calculate how many minutes ago it was booked
             const rawTime = b.booked_at || b.created_at;
             const bookedDate = rawTime ? new Date(rawTime) : new Date();
-            
-            // Format time correctly
-            const formatT = bookedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            
-            // Calculate how many minutes ago the booking was made
             const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
+
+            // 🚫 MAGIC FIX: If the booking is older than 10 minutes, hide it!
+            if (elapsedMins > 10) return false;
+
+            return dist <= 8 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
+        }).map(b => {
+            const rawTime = b.booked_at || b.created_at;
+            const bookedDate = rawTime ? new Date(rawTime) : new Date();
+            const formatT = bookedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
+            const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
 
             return { 
                 ...b, 
                 priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), 
                 elapsed_mins: elapsedMins, 
-                formatted_time: formatT 
+                formatted_time: formatT,
+                real_eta: Math.max(1, Math.round((dist / 40) * 60))
             };
         });
         res.json({ bookings: nearby });
     });
 });
-
 // ==========================================================
 // 🛡️ MISSION LIFECYCLE APIS (SILENT TIMESTAMP FIX)
 // ==========================================================
