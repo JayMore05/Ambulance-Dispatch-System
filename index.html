@@ -366,9 +366,11 @@
     <input id="userName" placeholder="Enter full name" oninput="clearFieldError('userName')">
     <div class="field-error" id="err-userName">Please enter a valid name.</div>
     
-    <label>Phone Number</label>
-    <input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="clearFieldError('userPhone')">
-    <div class="field-error" id="err-userPhone">Please enter a valid 10-digit number.</div>
+   <label>Phone Number</label>
+<input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFieldError('userPhone')">
+<div class="field-error" id="err-userPhone">Enter a valid 10-digit Indian number.</div>
+
+<p>Searching 8km radius for the fastest driver.</p>
     
     <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
     
@@ -738,27 +740,21 @@
     let valid = true;
     
     if (!name || name.length < 2) { showFieldError('userName', 'Please enter a valid name.'); valid = false; }
-    if (!/^[0-9]{10}$/.test(phone)) { showFieldError('userPhone', 'Please enter a valid 10-digit number.'); valid = false; }
+    // Strict 10-digit Indian Number validation (starts with 6,7,8, or 9)
+    if (!/^[6-9]\d{9}$/.test(phone)) { showFieldError('userPhone', 'Enter a valid 10-digit Indian number.'); valid = false; }
     if (!valid) return;
     
     try {
       const res = await fetch(BASE_URL + "/api/save-user", { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
+          method: "POST", headers: {"Content-Type":"application/json"}, 
           body: JSON.stringify({ name, phone, latitude: state.userLat, longitude: state.userLng }) 
       });
       const data = await res.json();
       if (res.ok && data.success) { 
-          state.userId = data.user_id; 
-          state.userPhone = phone; 
-          saveState(); 
-          goStep(2); 
-      } else { 
-          alert(data.error || "Database Error"); 
-      }
+          state.userId = data.user_id; state.userPhone = phone; saveState(); goStep(2); 
+      } else { alert(data.error || "Database Error"); }
     } catch(err) { alert("🚨 SERVER ERROR"); }
-  }
-
+}
   function selectEmergency(type) { 
       state.emergency = type; 
       saveState(); 
@@ -879,30 +875,24 @@
     if (showEstimate && state.distance > 0) { 
         document.getElementById('estDist').innerText = parseFloat(state.distance).toFixed(1); 
         document.getElementById('costEstimate').style.display = 'block'; 
-    } else { 
-        document.getElementById('costEstimate').style.display = 'none'; 
-    }
+    } else { document.getElementById('costEstimate').style.display = 'none'; }
     
     ambulanceDatabase.forEach(amb => {
       let isRec = amb.bestFor.includes(state.emergency); 
       let badge = isRec ? `<span class="badge green">⭐ Recommended</span>` : ""; 
       let bStyle = isRec ? `border-left: 5px solid var(--success);` : ``; 
-      let estCost = state.distance > 0 ? `~₹${Math.ceil(parseFloat(state.distance)) * amb.rate}` : `₹${amb.rate}/km`;
+      // STRICT ROUNDING: Math.ceil forces 3.2 to 4
+      let roundedDistance = Math.ceil(parseFloat(state.distance));
+      let estCost = state.distance > 0 ? `~₹${roundedDistance * amb.rate}` : `₹${amb.rate}/km`;
       
       const item = document.createElement('button'); 
-      item.className = 'list-item'; 
-      item.style.cssText = bStyle; 
+      item.className = 'list-item'; item.style.cssText = bStyle; 
       item.onclick = () => selectAmbulance(amb.type, amb.rate);
       
-      item.innerHTML = `
-          <div class="title">${amb.name} ${badge}</div>
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div class="meta">₹${amb.rate}/km</div>
-              <span class="cost-badge">${estCost}</span>
-          </div>`;
+      item.innerHTML = `<div class="title">${amb.name} ${badge}</div><div style="display:flex; justify-content:space-between; align-items:center;"><div class="meta">₹${amb.rate}/km</div><span class="cost-badge">${estCost}</span></div>`;
       ambContainer.appendChild(item);
     });
-  }
+}
 
   async function selectAmbulance(type, rate) {
     state.ambulanceType = type; 
@@ -977,9 +967,8 @@
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
-      // The `t=${Date.now()}` prevents mobile browsers from caching the 'REQUESTED' status forever!
       const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`;
-      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
+      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } }); 
       const data = await res.json();
       
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
@@ -993,20 +982,22 @@
         
         document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
         
+        // Handle Driver Tracking
         if (data.driver_lat && data.driver_lng) { 
-            const driverDist = getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
+            const driverToPatientDist = getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng);
+            
             if (data.status === 'ASSIGNED') {
-                document.getElementById('etaDist').innerText = driverDist.toFixed(2);
-                document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverDist / 40) * 60)) + " mins";
-            } else {
+                // Driver is coming to patient
+                document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
+                document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
+                document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
+            } else if (data.status === 'IN_TRANSIT') {
+                // Driver picked up patient, going to hospital
                 document.getElementById('etaDist').innerText = data.distance || "0.0"; 
-                document.getElementById('etaTime').innerText = "IN TRANSIT";
+                document.getElementById('etaTime').innerText = "Heading to Hospital";
+                document.querySelector('[data-i18n="driver_otw"]').innerText = "🚑 Going to Hospital...";
             }
             updateDriverOnMap(data.driver_lat, data.driver_lng); 
-            if (data.status === 'ASSIGNED') { drawOSRMRoute(data.driver_lat, data.driver_lng, state.userLat, state.userLng); } 
-        } else {
-            document.getElementById('etaDist').innerText = "--"; 
-            document.getElementById('etaTime').innerText = "Locating...";
         }
 
         const distToCheck = data.status === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
@@ -1025,14 +1016,8 @@
           document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
           localStorage.removeItem('patient_session'); 
       }
-      if (data.status === 'CANCELLED') { 
-          clearInterval(pollInterval); clearInterval(searchInterval); 
-          alert("This booking was cancelled by the driver or system."); 
-          clearSession(); 
-      }
     } catch(err) { console.error("Poll Error:", err); }
-  }
-
+}
   function changeDestination() { 
       isUpdatingDestination = true; 
       document.getElementById('step3Title').innerText = "Update Destination"; 
