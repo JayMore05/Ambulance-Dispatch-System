@@ -1,30 +1,36 @@
-const mysql = require('mysql2');
+const mysql = require('mysql');
 require('dotenv').config();
 
-// 🛡️ Create a "Pool" instead of a single connection. 
-// This automatically keeps the connection alive and reconnects if Clever Cloud drops it!
-const db = mysql.createPool({
+// Create a connection pool instead of a single connection
+const pool = mysql.createPool({
+    connectionLimit: 4, // IMPORTANT: Set this to 4 (one less than your max of 5 to be safe)
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD || process.env.DB_PASS,
+    password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,     // ✅ THIS PREVENTS THE "CLOSED STATE" ERROR
-    keepAliveInitialDelay: 0
+    waitForConnections: true, // If all connections are busy, wait in a queue
+    queueLimit: 0 // No limit to the queue
 });
 
-// Test the connection when the server starts
-db.getConnection((err, connection) => {
+// Test the pool connection when the server starts
+pool.getConnection((err, connection) => {
     if (err) {
-        console.error('❌ Database Connection Failed:', err.message);
-    } else {
-        console.log('✅ Successfully connected to Clever Cloud MySQL (Pool Active)!');
-        connection.release(); // Release it back to the pool so others can use it
+        if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+            console.error('Database connection was closed.');
+        }
+        if (err.code === 'ER_CON_COUNT_ERROR') {
+            console.error('Database has too many connections.');
+        }
+        if (err.code === 'ECONNREFUSED') {
+            console.error('Database connection was refused.');
+        }
     }
+    
+    if (connection) {
+        console.log('✅ Connected to MySQL Database Pool successfully.');
+        connection.release(); // IMMEDIATELY release the connection back to the pool
+    }
+    return;
 });
 
-// Export the pool so server.js can use it seamlessly
-module.exports = db;
+module.exports = pool;
