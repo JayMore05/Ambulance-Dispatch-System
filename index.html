@@ -461,7 +461,12 @@
     <h1 style="color: var(--success);" data-i18n="driver_otw">✅ Driver is on the way!</h1>
     
     <div id="map"></div> 
-    
+    <div style="display:flex; gap:10px; margin-top:10px;">
+      <a href="tel:112" class="btn primary" style="text-decoration:none; background:var(--success); width:50%;">📞 Call 112</a>
+      <button class="btn ghost" style="width:50%;" onclick="changeDestination()" data-i18n="change_dest">🔄 Change Dest.</button>
+    </div>
+
+    <button class="btn ghost" style="width:100%; border-color:#991b1b; color:#991b1b; margin-top:10px; font-weight:800;" onclick="alertAdminPatient()">⚠️ Help / Ambulance Not Moving</button>
     <div style="background:#f8fafc; padding:20px; border-radius:16px; border: 1px solid var(--border); margin-bottom:16px; text-align: center;">
       <p style="margin:0; font-weight: bold; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-size: 12px;">Estimated Arrival</p>
       <h2 style="margin:5px 0 8px; font-size:32px; color: var(--text);">⏱️ <span id="etaTime">--</span></h2>
@@ -1144,7 +1149,10 @@
       let phone = state.userPhone; if (phone && phone.length === 10) phone = '91' + phone;
       window.open('https://wa.me/?text=' + encodeURIComponent(`URGENT: I have booked an ambulance via FastRescue for a ${state.emergency}. Driver is arriving soon. Dropoff Location: ${dest}. Please reach there immediately.`));
   }
-
+// 🌟 NEW: Patient Escalation Simulation
+  function alertAdminPatient() {
+      alert("🚨 SOS RECEIVED BY DISPATCH: An Admin is reviewing your driver's live GPS coordinates right now. They will call you on your registered number in 30 seconds to assist you.");
+  }
   async function confirmCancel() {
       stopPolling();
       if(searchInterval) clearInterval(searchInterval);
