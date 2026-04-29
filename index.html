@@ -703,7 +703,7 @@
         state.userLng = 72.8777; 
     };
 
-    if (navigator.geolocation) {
+   if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => { 
                 state.userLat = pos.coords.latitude; 
@@ -712,14 +712,15 @@
                 statusEl.style.color = "var(--success)"; 
             },
             (err) => { 
+                console.warn("GPS Error:", err);
                 useFallback();
             },
-            { enableHighAccuracy: false, timeout: 2000, maximumAge: Infinity }
+            // 🛡️ FIX: Increased timeout to 10 seconds for cold mobile GPS chips!
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     } else { 
         useFallback();
-    }
-  };  
+    }  
 
   // 🛡️ AUTOMATIC TAB RECOVERY: Instantly fetches live data when you switch back to Patient App
   document.addEventListener("visibilitychange", () => {
@@ -788,6 +789,77 @@
     } catch(err) { alert("🚨 SERVER ERROR"); }
   }
 
+  // ==========================================
+  // 🎙️ VOICE SOS LOGIC (Live Transcript + Multi-Language)
+  // ==========================================
+  function startVoiceSOS() {
+      const transcriptDiv = document.getElementById('voiceTranscript');
+      const micBtn = document.getElementById('micBtn');
+
+      // Check if browser supports Voice API
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+          alert("Sorry, your browser does not support Voice SOS.");
+          return;
+      }
+
+      const recognition = new SpeechRecognition();
+
+      // Read the language selected in the top bar!
+      const selectedLang = document.querySelector('.lang-selector').value;
+      if (selectedLang === 'hi') recognition.lang = 'hi-IN'; // Hindi
+      else if (selectedLang === 'mr') recognition.lang = 'mr-IN'; // Marathi
+      else recognition.lang = 'en-IN'; // English
+
+      recognition.continuous = false; 
+      recognition.interimResults = true; // 🌟 THIS is what shows text WHILE speaking
+
+      recognition.onstart = function() {
+          micBtn.style.background = "rgba(229, 57, 53, 0.5)"; 
+          transcriptDiv.innerText = "Listening... Speak now!";
+      };
+
+      recognition.onresult = function(event) {
+          let currentText = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+              currentText += event.results[i][0].transcript;
+          }
+          // 🌟 Show the live text on the screen!
+          transcriptDiv.innerText = `"${currentText}"`;
+
+          // When they finish speaking, process the words
+          if (event.results[0].isFinal) {
+              processVoiceCommand(currentText.toLowerCase());
+          }
+      };
+
+      recognition.onerror = function() {
+          transcriptDiv.innerText = "Could not hear you. Please tap and try again.";
+          micBtn.style.background = "rgba(229, 57, 53, 0.1)";
+      };
+
+      recognition.onend = function() {
+          micBtn.style.background = "rgba(229, 57, 53, 0.1)"; 
+      };
+
+      recognition.start();
+  }
+
+  // 🧠 THE AI BRAIN: Matches spoken words to the emergency type
+  function processVoiceCommand(text) {
+      if (text.includes("heart") || text.includes("हार्ट") || text.includes("हृदय")) {
+          selectEmergency("Heart Attack");
+      } else if (text.includes("accident") || text.includes("एक्सीडेंट") || text.includes("अपघात")) {
+          selectEmergency("Road Accident");
+      } else if (text.includes("bleed") || text.includes("खून") || text.includes("रक्त")) {
+          selectEmergency("Bleeding");
+      } else {
+          // Fallback if it doesn't recognize the exact word
+          document.getElementById('voiceTranscript').innerText = "Emergency recognized. Proceeding...";
+          setTimeout(() => selectEmergency("General Sickness"), 1500);
+      }
+  }
+    
   function selectEmergency(type) { 
       state.emergency = type; 
       saveState(); 
