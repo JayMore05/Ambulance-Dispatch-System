@@ -238,19 +238,25 @@
       <a id="navToPatient" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🗺️ Google Maps Nav</a>
       <button class="btn whatsapp" onclick="sendWhatsAppToPatient()">💬 Send Multilingual ETA (WhatsApp)</button>
       <button class="btn info" onclick="pickup()">📍 Patient Picked Up</button>
+      
+      <button class="btn danger" onclick="alertAdminDriver()" style="margin-top:10px; background:#7f1d1d;">⚠️ Report Issue to Admin</button>
     </div>
 
-    <div id="phase2Box" style="display: none;">
+   <div id="phase2Box" style="display: none;">
       <div style="background:#333; padding:15px; border-radius:8px; text-align:center; margin-bottom:15px;">
         <p style="margin:0; font-size:12px; color:var(--muted)">LIVE ODOMETER (Actual Distance)</p>
         <h2 style="margin:5px 0 0 0; color:var(--success);"><span id="liveOdo">0.00</span> km</h2>
       </div>
       <p style="color:var(--success); font-weight:bold; text-align:center;">Phase 2: Drive to Hospital</p>
+      
+      <a href="tel:102" class="btn danger" style="text-decoration:none; margin-bottom:10px; box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);">
+          🚨 Alert Hospital Casualty Ward
+      </a>
+
       <a id="navToHospital" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🏥 Google Maps Nav</a>
       <button class="btn ghost" style="margin-bottom:10px;" onclick="document.getElementById('destModal').style.display='flex'">🔄 Change Destination</button>
       <button class="btn success" onclick="completeTrip()">✅ Arrived at Dropoff</button>
     </div>
-  </div>
 
   <div id="step6" class="card" style="display: none; text-align:center;">
     <h1 style="color:var(--success)">Trip Finished</h1>
@@ -435,6 +441,14 @@
       const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2); 
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
   };
+
+  // 🌟 NEW: Driver Escalation Simulation
+  function alertAdminDriver() {
+      const issue = prompt("⚠️ ADMIN ESCALATION MATRIX\n\nWhat is the operational issue?\n1. Vehicle Breakdown (Need Replacement)\n2. Stuck in Severe Traffic\n3. Patient Condition Worsening\n\nType 1, 2, or 3:");
+      if(issue) {
+          alert("🚨 CRITICAL ALERT SENT: The Central Dispatch Admin has received your GPS coordinates and is calling your radio now. Please stand by.");
+      }
+  }
 
   // ⚡ ULTRA FAST DRIVER GPS
   window.onload = () => {
