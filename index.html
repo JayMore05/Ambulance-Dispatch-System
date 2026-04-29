@@ -455,6 +455,7 @@
     </div>
     <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="confirmCancel()" data-i18n="cancel_req">❌ Cancel Request</button>
   </div>
+  
     <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="confirmCancel()" data-i18n="cancel_req">❌ Cancel Request</button>
   </div>
   <div id="step6" class="card hidden">
@@ -999,6 +1000,7 @@
   }
 
   // 🛡️ RECURSIVE TIMEOUT FIX: Bulletproof polling that browsers CANNOT freeze permanently
+  // 🛡️ RECURSIVE TIMEOUT FIX: Bulletproof polling that browsers CANNOT freeze permanently
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
@@ -1055,7 +1057,7 @@
       }
       
       if (currentStatus === 'COMPLETED') { 
-          if(pollInterval) clearInterval(pollInterval); 
+          stopPolling(); 
           if(searchInterval) clearInterval(searchInterval); 
           goStep(7); 
           document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
@@ -1065,13 +1067,13 @@
       }
       
       if (currentStatus === 'CANCELLED') { 
-          if(pollInterval) clearInterval(pollInterval); 
+          stopPolling(); 
           if(searchInterval) clearInterval(searchInterval); 
           alert("This booking was cancelled by the driver or system."); 
           clearSession(); 
       }
     } catch(err) { console.error("Poll Error:", err); }
-  }
+
     // 🛡️ RECURSIVE LOOP: Schedules the next check perfectly safely
     if (isPolling) {
         pollTimeout = setTimeout(checkStatus, 3000);
