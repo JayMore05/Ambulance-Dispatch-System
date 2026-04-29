@@ -258,16 +258,31 @@
       <button class="btn success" onclick="completeTrip()">✅ Arrived at Dropoff</button>
     </div>
 
-  <div id="step6" class="card" style="display: none; text-align:center;">
-    <h1 style="color:var(--success)">Trip Finished</h1>
-    <div style="background:#2c2c2c; padding:20px; border-radius:12px; margin:20px 0;">
-      <p style="color:var(--muted); margin:0;">Actual Distance Driven</p>
-      <h2><span id="receiptDist"></span> km</h2>
-      <hr style="border-color:#444;">
-      <p style="color:var(--muted); margin:0; margin-top:10px;">Amount to Collect</p>
-      <h1 style="color:var(--success); font-size:40px; margin:5px 0;">₹<span id="receiptCost"></span></h1>
+ <div id="step6" class="card" style="display: none; background: #fff; color: #333; text-align: left;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom: 10px;">
+        <div style="background: #4caf50; color: white; width: 40px; height: 40px; display:flex; align-items:center; justify-content:center; border-radius: 8px; font-size: 24px;">✅</div>
+        <h1 style="color: #2e7d32; margin: 0; font-size: 28px;">Trip Completed</h1>
     </div>
-    <button class="btn primary" onclick="closeReceipt()">Finish & Return to Radar</button>
+    <p style="color: #555; font-weight: bold; margin-bottom: 20px;">Thank you for using FastRescue.</p>
+    
+    <div style="border: 1px solid #e0e0e0; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+        <p style="margin:0; font-size:13px; color:#777;">Dropoff Hospital</p>
+        <h3 style="margin:5px 0 0 0; color: #111;" id="receiptHospName">--</h3>
+    </div>
+
+    <div style="background: #fff5f5; border: 1px solid #ffebee; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
+        <span style="color: #777;">Distance Travelled:</span>
+        <strong id="receiptDist" style="color: #111;">--</strong>
+      </div>
+      <hr style="border-top: 1px dashed #ffcdd2; margin: 10px 0;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size: 18px; font-weight:bold; color: #111;">Total Cost:</span>
+        <strong style="font-size: 28px; color: #d32f2f;">₹<span id="receiptCost"></span></strong>
+      </div>
+    </div>
+    
+    <button class="btn ghost" style="color: #111; border-color: #ccc;" onclick="closeReceipt()">Return Home</button>
   </div>
 
   <div id="step4" class="card" style="display: none;">
@@ -1023,7 +1038,29 @@ async function completeTrip() {
           alert("Profile Updated Successfully!"); 
       } 
   }
+// 🌟 ESCALATION MATRIX & AUTO RE-ROUTE
+  async function alertAdminDriver() {
+      const issue = prompt("⚠️ ADMIN ESCALATION MATRIX\n\nWhat is the operational issue?\n1. Vehicle Breakdown\n2. Stuck in Severe Traffic\n3. Patient Condition Worsening\n\nType 1, 2, or 3:");
+      
+      if(issue === "1" || issue === "2") {
+          alert("🚨 TRIP ESCALATED: You are removed from this mission. The system is automatically re-routing the nearest backup ambulance to the patient.");
+          
+          // Call the backend to un-assign this driver
+          await fetch(`${BASE_URL}/api/bookings/escalate`, {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({ booking_id: driver.activeBookingId })
+          });
+          
+          // Kick the driver back to the radar screen
+          clearInterval(missionInterval);
+          closeReceipt(); 
+          
+      } else if (issue === "3") {
+          alert("🚨 MEDICAL ALERT SENT: Admin has notified the destination hospital to prepare an emergency team upon your arrival.");
+      }
+  }
 
+ 
   function logout() { 
       if(!confirm("Are you sure? All session data will be cleared.")) return; 
       if (radarInterval) clearInterval(radarInterval); 
