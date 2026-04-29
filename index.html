@@ -793,11 +793,13 @@
 // ==========================================
   // 🎙️ VOICE SOS LOGIC (Live Transcript + Multi-Language)
   // ==========================================
+  // 🎙️ VOICE SOS LOGIC (With Mobile Silence Tracker)
+  let voiceTimeout = null;
+
   function startVoiceSOS() {
       const transcriptDiv = document.getElementById('voiceTranscript');
       const micBtn = document.getElementById('micBtn');
 
-      // Check if browser supports Voice API
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
           alert("Sorry, your browser does not support Voice SOS.");
@@ -805,15 +807,13 @@
       }
 
       const recognition = new SpeechRecognition();
-
-      // Read the language selected in the top bar!
       const selectedLang = document.querySelector('.lang-selector').value;
-      if (selectedLang === 'hi') recognition.lang = 'hi-IN'; // Hindi
-      else if (selectedLang === 'mr') recognition.lang = 'mr-IN'; // Marathi
-      else recognition.lang = 'en-IN'; // English
+      if (selectedLang === 'hi') recognition.lang = 'hi-IN'; 
+      else if (selectedLang === 'mr') recognition.lang = 'mr-IN'; 
+      else recognition.lang = 'en-IN'; 
 
       recognition.continuous = false; 
-      recognition.interimResults = true; // 🌟 THIS is what shows text WHILE speaking
+      recognition.interimResults = true; 
 
       recognition.onstart = function() {
           micBtn.style.background = "rgba(229, 57, 53, 0.5)"; 
@@ -825,34 +825,32 @@
           for (let i = event.resultIndex; i < event.results.length; i++) {
               currentText += event.results[i][0].transcript;
           }
-          // 🌟 Show the live text on the screen!
           transcriptDiv.innerText = `"${currentText}"`;
 
-          // When they finish speaking, process the words
+          // 🌟 MOBILE FIX: If user stops speaking for 2 seconds, auto-process it!
+          if (voiceTimeout) clearTimeout(voiceTimeout);
+          voiceTimeout = setTimeout(() => {
+              recognition.stop();
+              processVoiceCommand(currentText.toLowerCase());
+          }, 2000);
+
+          // Standard final check
           if (event.results[0].isFinal) {
+              clearTimeout(voiceTimeout);
               processVoiceCommand(currentText.toLowerCase());
           }
       };
 
-      // 🛡️ FIX: Catches exact errors so you know if permissions are blocked!
       recognition.onerror = function(event) {
-          transcriptDiv.innerText = "Mic Error: " + event.error + ". Please check permissions.";
+          transcriptDiv.innerText = "Mic Error: " + event.error;
           micBtn.style.background = "rgba(229, 57, 53, 0.1)";
-          if(event.error === 'not-allowed') {
-              alert("Please allow microphone permissions in your browser settings!");
-          }
       };
 
       recognition.onend = function() {
           micBtn.style.background = "rgba(229, 57, 53, 0.1)"; 
       };
 
-      // 🛡️ FIX: Prevents app crash if mic is already listening
-      try {
-          recognition.start();
-      } catch(e) {
-          alert("Mic is already listening or blocked by browser.");
-      }
+      try { recognition.start(); } catch(e) {}
   }
 
   // 🧠 THE AI BRAIN: Matches spoken words to the emergency type
@@ -864,11 +862,12 @@
       } else if (text.includes("bleed") || text.includes("खून") || text.includes("रक्त")) {
           selectEmergency("Bleeding");
       } else {
-          // Fallback if it doesn't recognize the exact word
           document.getElementById('voiceTranscript').innerText = "Emergency recognized. Proceeding...";
-          setTimeout(() => selectEmergency("General Sickness"), 1500);
+          setTimeout(() => { selectEmergency("General Sickness"); }, 1500);
       }
   }
+    
+  // 🚨 CLEAN EMERGENCY SELECTOR (No hidden characters)
   function selectEmergency(type) { 
       state.emergency = type; 
       saveState(); 
@@ -1018,15 +1017,10 @@
           method: "POST", 
           headers: {"Content-Type":"application/json"}, 
           body: JSON.stringify({ 
-              user_id: state.userId, 
-              hospital_id: state.hospitalId, 
-              custom_destination: state.customName, 
-              emergency_type: state.emergency, 
-              ambulance_type: state.ambulanceType, 
-              user_lat: state.userLat, 
-              user_lng: state.userLng, 
-              distance_km: state.distance, 
-              rate_per_km: state.rate 
+              user_id: state.userId, hospital_id: state.hospitalId, 
+              custom_destination: state.customName, emergency_type: state.emergency, 
+              ambulance_type: state.ambulanceType, user_lat: state.userLat, 
+              user_lng: state.userLng, distance_km: state.distance, rate_per_km: state.rate 
           }) 
       });
       const data = await res.json(); 
@@ -1035,12 +1029,8 @@
       
       subscribePushForBooking(data.booking_id);
       
-      // Start the infinite polling loop
-      if(pollInterval) clearInterval(pollInterval); 
-      if(searchInterval) clearInterval(searchInterval);
-      
-      pollInterval = setInterval(checkStatus, 3000); 
-      checkStatus();
+      // ✅ Use your new unbreakable polling
+      startPolling();
       
       searchTimer = 120; 
       document.getElementById('timerText').innerText = searchTimer;
@@ -1054,7 +1044,6 @@
       }, 1000);
     } catch(err) { alert("Network Failed."); goStep(4); }
   }
-
   // ==========================================
   // MAPS & TRACKING
   // ==========================================
