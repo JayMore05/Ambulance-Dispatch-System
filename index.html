@@ -357,7 +357,6 @@
 </div>
 
 <div class="container">
-  
   <div id="step1" class="card">
     <div class="page-header"><h1 data-i18n="booking">Emergency Booking</h1></div>
     <p data-i18n="gps">Please provide details. We will automatically detect your location.</p>
@@ -367,13 +366,24 @@
     <div class="field-error" id="err-userName">Please enter a valid name.</div>
     
    <label>Phone Number</label>
-<input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFieldError('userPhone')">
-<div class="field-error" id="err-userPhone">Enter a valid 10-digit Indian number.</div>
+   <input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFieldError('userPhone')">
+   <div class="field-error" id="err-userPhone">Enter a valid 10-digit Indian number.</div>
 
-<p>Searching 8km radius for the fastest driver.</p>
+    <p>Searching 8km radius for the fastest driver.</p>
     
     <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
-    
+
+    <div style="background: var(--highlight); border: 2px dashed #fca5a5; padding: 20px; border-radius: 16px; text-align: center; margin-top: 15px; margin-bottom: 15px;">
+      <p style="color: #991b1b; font-weight: 800; margin-bottom: 10px;">🚨 Quick Voice SOS</p>
+      
+      <button id="micBtn" class="pulse" style="width: 70px; height: 70px; margin: 0 auto 10px; cursor: pointer; border: none; background: rgba(229, 57, 53, 0.1);" onclick="startVoiceSOS()">
+        <span style="font-size: 30px;">🎤</span>
+      </button>
+      
+      <p style="font-size: 13px; color: var(--primary); font-weight: 600;">Tap and speak your emergency<br>(English, Hindi, or Marathi)</p>
+      
+      <div id="voiceTranscript" style="margin-top: 15px; font-size: 16px; font-weight: 800; color: #7f1d1d; min-height: 24px;"></div>
+    </div>
     <button class="btn primary" style="margin-top:16px;" onclick="saveUser()" data-i18n="find_hosp">Find Hospitals ➔</button>
   </div>
 
