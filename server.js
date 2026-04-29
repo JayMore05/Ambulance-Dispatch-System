@@ -131,6 +131,16 @@ app.post("/api/bookings/cancel", (req, res) => {
     db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [req.body.booking_id], (err) => res.json({ success: !err }));
 });
 
+// 🌟 NEW: ESCALATION & RE-ROUTING API
+app.post("/api/bookings/escalate", (req, res) => {
+    const { booking_id } = req.body;
+    // This is the magic: It un-assigns the driver and changes status back to REQUESTED.
+    // The patient's screen stays exactly the same, but the trip pops up on other drivers' radars!
+    db.query("UPDATE bookings SET driver_id = NULL, status = 'REQUESTED' WHERE booking_id = ?", [booking_id], (err) => {
+        res.json({ success: !err });
+    });
+});
+
 app.post("/api/bookings/update-destination", (req, res) => {
     const { booking_id, new_destination, new_distance } = req.body;
     let query = "UPDATE bookings SET hospital_id = NULL, custom_destination = ?";
