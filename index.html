@@ -869,6 +869,12 @@
           setTimeout(() => selectEmergency("General Sickness"), 1500);
       }
   }
+  function selectEmergency(type) { 
+      state.emergency = type; 
+      saveState(); 
+      goStep(3); 
+      fetchHospitals(); 
+  }
     
   function sanitize(str) { 
       const d = document.createElement('div'); 
