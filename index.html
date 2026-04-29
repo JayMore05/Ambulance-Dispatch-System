@@ -682,28 +682,25 @@
       }); 
   }
 
-  // ⚡ ULTRA FAST GPS ON LOAD
-  window.onload = () => {
+window.onload = () => {
     const savedState = localStorage.getItem('patient_session');
     if (savedState) { 
         state = JSON.parse(savedState); 
         if (state.bookingId) { 
-            startPolling(); // Starts the bulletproof loop
+            startPolling(); 
             return; 
         } 
     }
     
     const statusEl = document.getElementById('locStatus');
-    
     const useFallback = () => {
-        console.warn("GPS timeout. Using estimated location.");
-        statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
+        statusEl.innerText = "⚠️ Using network-based location. You can proceed!";
         statusEl.style.color = "#e53935"; 
         state.userLat = 19.0760; 
         state.userLng = 72.8777; 
     };
 
-   if (navigator.geolocation) {
+    if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => { 
                 state.userLat = pos.coords.latitude; 
@@ -711,12 +708,9 @@
                 statusEl.innerText = "✅ GPS Locked Instantly"; 
                 statusEl.style.color = "var(--success)"; 
             },
-            (err) => { 
-                console.warn("GPS Error:", err);
-                useFallback();
-            },
-            // 🛡️ FIX: Increased timeout to 10 seconds for cold mobile GPS chips!
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            (err) => { useFallback(); },
+            // 🛡️ PC FIX: Lowering accuracy requirement for PC browsers to avoid hangs
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
         );
     } else { 
         useFallback();
@@ -1077,67 +1071,53 @@
           document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
       } catch(e) {}
   }
-
-  // 🛡️ RECURSIVE TIMEOUT FIX: Bulletproof polling that browsers CANNOT freeze permanently
-  // 🛡️ RECURSIVE TIMEOUT FIX: Bulletproof polling that browsers CANNOT freeze permanently
+// 🛡️ REPAIR: State-First Status Checker
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
-      // Math.random() bypasses all mobile network cache permanently
       const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
       const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json();
-      
       const currentStatus = data.status ? data.status.trim().toUpperCase() : '';
       
+      // ✅ FIX: Force transition if status is active, regardless of currentStep
       if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
-        
-        // 1. STOP THE RADAR SEARCH TIMER
         if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
         
-        // 2. AUTOMATICALLY JUMP TO MAP SCREEN
-        if (currentStep === 5) { goStep(6); }
-        
-        // 3. TEXT UPDATES 
-        try { document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; } catch(e) {}
-        
-        // 4. MAP & DISTANCE LOGIC
+        // Only jump if we aren't already on the tracking or payment screens
+        if (currentStep !== 6 && currentStep !== 7) { 
+            goStep(6); 
+        }
+
         try {
             initPatientMap();
-            setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500); 
+            document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
 
-            if (data.driver_lat && data.driver_lng && data.driver_lat !== "null") { 
+            if (data.driver_lat && data.driver_lng) { 
                 const dLat = parseFloat(data.driver_lat);
                 const dLng = parseFloat(data.driver_lng);
                 const pLat = parseFloat(state.userLat);
                 const pLng = parseFloat(state.userLng);
 
-                if (!isNaN(dLat) && !isNaN(dLng) && !isNaN(pLat) && !isNaN(pLng)) {
-                    const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
-                    
-                    if (currentStatus === 'ASSIGNED') {
-                        document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
-                        document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
-                        document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
-                    } else if (currentStatus === 'IN_TRANSIT') {
-                        document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
-                        document.getElementById('etaTime').innerText = "Heading to Hospital";
-                        document.querySelector('[data-i18n="driver_otw"]').innerText = "🚑 Going to Hospital...";
-                    }
-                    
-                    updateDriverOnMap(dLat, dLng); 
-                    if (currentStatus === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
+                const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
+                
+                // Update UI based on phase
+                if (currentStatus === 'ASSIGNED') {
+                    document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
+                    document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
+                } else {
+                    document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
+                    document.getElementById('etaTime').innerText = "Heading to Hospital";
                 }
-            } else {
-                document.getElementById('etaDist').innerText = "--"; 
-                document.getElementById('etaTime').innerText = "Locating...";
+                
+                updateDriverOnMap(dLat, dLng); 
+                if (currentStatus === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
             }
-        } catch(mapErr) {}
+        } catch(mapErr) { console.error("Map Update Error", mapErr); }
       }
       
       if (currentStatus === 'COMPLETED') { 
           stopPolling(); 
-          if(searchInterval) clearInterval(searchInterval); 
           goStep(7); 
           document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
           document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
@@ -1147,13 +1127,12 @@
       
       if (currentStatus === 'CANCELLED') { 
           stopPolling(); 
-          if(searchInterval) clearInterval(searchInterval); 
-          alert("This booking was cancelled by the driver or system."); 
+          alert("This booking was cancelled."); 
           clearSession(); 
       }
     } catch(err) { console.error("Poll Error:", err); }
 
-    // 🛡️ RECURSIVE LOOP: Schedules the next check perfectly safely
+    // Schedules the next check safely
     if (isPolling) {
         pollTimeout = setTimeout(checkStatus, 3000);
     }
