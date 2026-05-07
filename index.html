@@ -1000,7 +1000,7 @@ window.onload = () => {
     });
   }
 
-  async function selectAmbulance(type, rate) {
+ async function selectAmbulance(type, rate) {
     state.ambulanceType = type; 
     state.rate = rate; 
     saveState(); 
@@ -1023,11 +1023,12 @@ window.onload = () => {
       
       subscribePushForBooking(data.booking_id);
       
-      // ✅ Use your new unbreakable polling
+      // 🌟 BUG FIX: Removed undefined pollInterval. Used proper startPolling()
       startPolling();
       
       searchTimer = 120; 
       document.getElementById('timerText').innerText = searchTimer;
+      if (searchInterval) clearInterval(searchInterval);
       searchInterval = setInterval(() => { 
           searchTimer--; 
           document.getElementById('timerText').innerText = searchTimer; 
@@ -1072,68 +1073,85 @@ window.onload = () => {
       } catch(e) {}
   }
 // 🛡️ REPAIR: State-First Status Checker
-  async function checkStatus() {
+async function checkStatus() {
     if (!state.bookingId) return;
+
     try {
-      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
+      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`;
       const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json();
+      
       const currentStatus = data.status ? data.status.trim().toUpperCase() : '';
       
-      // ✅ FIX: Force transition if status is active, regardless of currentStep
       if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
-        if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
         
-        // Only jump if we aren't already on the tracking or payment screens
-        if (currentStep !== 6 && currentStep !== 7) { 
-            goStep(6); 
+        // Clear the 120-second radar timer so it stops counting
+        if (typeof searchInterval !== 'undefined' && searchInterval) { 
+            clearInterval(searchInterval); 
+            searchInterval = null; 
         }
+        
+        // 🌟 FIX: Force it to Step 6 (Map)
+        if (currentStep !== 6 && currentStep !== 7) { goStep(6); }
 
+        // 🌟 FIX: Wrapped UI updates in a try/catch so missing HTML doesn't break the polling loop
         try {
             initPatientMap();
-            document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
+            if (document.getElementById('trackHospital')) {
+                document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
+            }
 
-            if (data.driver_lat && data.driver_lng) { 
+            if (data.driver_lat && data.driver_lng && data.driver_lat !== "null") { 
                 const dLat = parseFloat(data.driver_lat);
                 const dLng = parseFloat(data.driver_lng);
                 const pLat = parseFloat(state.userLat);
                 const pLng = parseFloat(state.userLng);
 
-                const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
-                
-                // Update UI based on phase
-                if (currentStatus === 'ASSIGNED') {
-                    document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
-                    document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
-                } else {
-                    document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
-                    document.getElementById('etaTime').innerText = "Heading to Hospital";
+                if (!isNaN(dLat) && !isNaN(dLng) && !isNaN(pLat) && !isNaN(pLng)) {
+                    const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
+                    
+                    if (currentStatus === 'ASSIGNED') {
+                        if (document.getElementById('etaDist')) document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
+                        if (document.getElementById('etaTime')) document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
+                    } else {
+                        if (document.getElementById('etaDist')) document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
+                        if (document.getElementById('etaTime')) document.getElementById('etaTime').innerText = "Heading to Dropoff";
+                    }
+                    
+                    updateDriverOnMap(dLat, dLng); 
+                    if (currentStatus === 'ASSIGNED' && typeof drawOSRMRoute === 'function') { 
+                        drawOSRMRoute(dLat, dLng, pLat, pLng); 
+                    } 
                 }
-                
-                updateDriverOnMap(dLat, dLng); 
-                if (currentStatus === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
             }
-        } catch(mapErr) { console.error("Map Update Error", mapErr); }
+        } catch(uiError) { console.error("UI Update Error:", uiError); }
       }
       
       if (currentStatus === 'COMPLETED') { 
           stopPolling(); 
-          goStep(7); 
-          document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
-          document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
-          document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
+          if(typeof searchInterval !== 'undefined' && searchInterval) clearInterval(searchInterval); 
+          goStep(7); // 🌟 Force it to Step 7 (Payment)
+          
+          if(document.getElementById('receiptHospital')) document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
+          if(document.getElementById('receiptDist')) document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
+          if(document.getElementById('receiptCost')) document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
+          
           localStorage.removeItem('patient_session'); 
+          return; // Stop the loop
       }
       
       if (currentStatus === 'CANCELLED') { 
           stopPolling(); 
-          alert("This booking was cancelled."); 
+          if(typeof searchInterval !== 'undefined' && searchInterval) clearInterval(searchInterval); 
+          alert("This booking was cancelled by the driver or system."); 
           clearSession(); 
+          return; // Stop the loop
       }
     } catch(err) { console.error("Poll Error:", err); }
 
-    // Schedules the next check safely
+    // 🌟 FIX: Ensures the loop continues safely
     if (isPolling) {
+        if (typeof pollTimeout !== 'undefined' && pollTimeout) clearTimeout(pollTimeout);
         pollTimeout = setTimeout(checkStatus, 3000);
     }
   }
