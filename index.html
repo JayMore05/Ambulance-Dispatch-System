@@ -994,40 +994,59 @@ async function selectAmbulance(type, rate) {
       try {
         const data = JSON.parse(text);
         if(data.error) { alert("Database Error: " + data.error); goStep(4); return; }
+        
         state.bookingId = data.booking_id;
         
-        // Starts your transition polling
+        // 🌟 Start polling safely
         if (typeof pollInterval !== 'undefined' && pollInterval) clearInterval(pollInterval);
         pollInterval = setInterval(checkStatus, 3000);
-      } catch(parseError) { alert("Server Error details: " + text.substring(0, 150)); goStep(4); }
-    } catch(err) { alert("Network Failed. Is your server running?"); goStep(4); }
+        
+      } catch(parseError) { alert("Server Crashed! Error details: " + text.substring(0, 150)); goStep(4); }
+    } catch(err) { alert("Network Failed. Is your 'node server.js' running?"); goStep(4); }
   }
 
   async function checkStatus() {
+    if (!state.bookingId) return;
     try {
-      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}`);
+      // 🌟 Added ?t=Date.now() to prevent browser from freezing on cached data
+      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`);
       const data = await res.json();
       
       if (data.status === 'COMPLETED') {
         if (typeof pollInterval !== 'undefined') clearInterval(pollInterval);
         goStep(7);
-        // Safely map your backend data to the receipt
-        document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--";
-        document.getElementById('receiptDist').innerText = (data.distance || "0") + " km";
-        document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0");
+        
+        const rHosp = document.getElementById('receiptHospital');
+        if (rHosp) rHosp.innerText = data.hospital_name || state.hospitalName || "--";
+        
+        const rDist = document.getElementById('receiptDist');
+        if (rDist) rDist.innerText = (data.distance || "0") + " km";
+        
+        const rCost = document.getElementById('receiptCost');
+        if (rCost) rCost.innerText = "₹" + (data.final_cost || "0");
         return;
       }
 
       if (data.status === 'ASSIGNED' || data.status === 'IN_TRANSIT') {
         if(currentStep !== 6) goStep(6);
-        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "--";
-        document.getElementById('etaTime').innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : (data.eta + " mins");
-        document.getElementById('etaDist').innerText = data.distance || "0";
+        
+        const tHosp = document.getElementById('trackHospital');
+        if (tHosp) tHosp.innerText = data.hospital_name || state.hospitalName || "--";
+        
+        const eTime = document.getElementById('etaTime');
+        if (eTime) eTime.innerText = data.status === 'IN_TRANSIT' ? "IN TRANSIT" : (data.eta + " mins");
+        
+        const eDist = document.getElementById('etaDist');
+        if (eDist) eDist.innerText = data.distance || "0";
       }
-    } catch(err) { console.log("Status Check Error"); }
-  }
-  // ==========================================
-  // MAPS & TRACKING
+
+      if (data.status === 'CANCELLED') {
+        if (typeof pollInterval !== 'undefined') clearInterval(pollInterval);
+        alert("Booking was cancelled.");
+        window.location.reload();
+      }
+    } catch(err) { console.error("Status Check Error", err); }
+  }  
   // ==========================================
   function initPatientMap() {
       if (leafletMap) return; 
