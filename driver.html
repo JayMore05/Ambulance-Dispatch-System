@@ -893,7 +893,7 @@
       pendingAcceptData = null; 
   }
   
-  async function confirmAccept() {
+ async function confirmAccept() {
     if(!pendingAcceptData) return; 
     document.getElementById('dispatchModal').style.display='none';
     try { 
@@ -907,25 +907,23 @@
         }); 
         const data = await res.json();
         
-        if (res.ok && data.success) { 
-            // 1. Stop looking for new emergencies
+        if (data.success) { 
             if (radarInterval) clearInterval(radarInterval); 
-            
-            // 2. Save the active booking locally
             driver.activeBookingId = pendingAcceptData.booking_id;
             localStorage.setItem('driver_session', JSON.stringify(driver));
             
-            // 3. FORCE an immediate mission check to trigger the UI transition
+            // PERMANENT FIX: Tells the driver app to immediately pull the new state
+            // and stay on the mission screen.
             await checkActiveMission(); 
         } else { 
-            alert("❌ " + (data.message || "Taken by another driver.")); 
+            alert("❌ Trip already taken by another driver."); 
             fetchRadar(); 
         }
     } catch(err) {
-        console.error("Acceptance Error:", err);
-        alert("Connection lost. Please try again.");
+        alert("Connection Error. Please try again.");
     }
   }
+  
   async function pickup() { 
       if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
       
