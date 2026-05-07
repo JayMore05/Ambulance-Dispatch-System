@@ -1078,66 +1078,96 @@ function goStep(n) {
       } catch(e) {}
   }
 // 🛡️ REPAIR: State-First Status Checker
+// 🛡️ REPAIR: State-First Status Checker (Patient App)
 async function checkStatus() {
   if (!state.bookingId) return;
   try {
-    const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`);
+    const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
+    const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
     const data = await res.json();
+    const currentStatus = data.status ? data.status.trim().toUpperCase() : '';
     
-    // If the database returns empty data while waiting, default to 'SEARCHING' instead of crashing
-    const status = data.status ? data.status.toUpperCase() : 'SEARCHING';
-
-    if (status === 'COMPLETED') { 
+    // 🟢 1. IF TRIP IS COMPLETED -> SHOW RECEIPT INSTANTLY
+    if (currentStatus === 'COMPLETED') { 
         stopPolling(); 
-        document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--";
-        document.getElementById('receiptCost').innerText = data.final_cost || "0";
-        openSheet('receipt');
-        localStorage.removeItem('patient_session');
-        return; 
+        goStep(7); // Jump to Receipt Screen (Step 7)
+        document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
+        document.getElementById('receiptDist').innerText = (data.distance || data.billed_distance || "0") + " km"; 
+        document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || data.amount || "0"); 
+        localStorage.removeItem('patient_session'); 
+        return; // Stop execution
     }
     
-    if (status === 'CANCELLED') { 
+    // 🔵 2. IF DRIVER ASSIGNED OR IN TRANSIT -> SHOW TRACKING (Step 6)
+    if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
+      if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
+      
+      // Only jump if we aren't already on the tracking or payment screens
+      if (currentStep !== 6 && currentStep !== 7) { 
+          goStep(6); 
+      }
+
+      try {
+          initPatientMap();
+          setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 300); // 🚨 Fixes the Map Crash
+
+          document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
+
+          if (data.driver_lat && data.driver_lng) { 
+              const dLat = parseFloat(data.driver_lat);
+              const dLng = parseFloat(data.driver_lng);
+              const pLat = parseFloat(state.userLat);
+              const pLng = parseFloat(state.userLng);
+
+              const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
+              
+              if (currentStatus === 'ASSIGNED') {
+                  document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
+                  document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
+                  drawOSRMRoute(dLat, dLng, pLat, pLng); 
+              } else if (currentStatus === 'IN_TRANSIT') {
+                  document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
+                  document.getElementById('etaTime').innerText = "Heading to Hospital";
+                  if(osrmRoute && leafletMap) leafletMap.removeLayer(osrmRoute);
+              }
+              
+              updateDriverOnMap(dLat, dLng); 
+          }
+      } catch(mapErr) { console.error("Map Update Error", mapErr); }
+    }
+    
+    // 🔴 3. IF CANCELLED
+    if (currentStatus === 'CANCELLED') { 
         stopPolling(); 
-        alert("Booking cancelled by driver or system."); 
+        alert("This booking was cancelled."); 
         clearSession(); 
-        return; 
+        return;
     }
+  } catch(err) { console.error("Poll Error:", err); }
 
-    if (status === 'ASSIGNED' || status === 'IN_TRANSIT') {
-        if(searchInterval) { clearInterval(searchInterval); searchInterval = null; }
-        
-        document.getElementById('dashHospital').innerText = data.hospital_name || state.hospitalName || "Hospital";
-        document.getElementById('dashDist').innerText = data.distance || "0.0";
-        document.getElementById('dashStatusText').innerText = status === 'IN_TRANSIT' ? "🚑 In Transit to Hospital" : "Ambulance Arriving";
-        
-        openSheet('assigned');
-    } else {
-        // If status is empty, null, PENDING, or SEARCHING, stay on the searching overlay
-        openSheet('searching');
-    }
-
-  } catch(err) { console.error("Poll Error ignored."); }
-
-  if (isPolling) { pollTimeout = setTimeout(checkStatus, 3000); }
-}  
-  function changeDestination() { 
-      isUpdatingDestination = true; 
-      document.getElementById('step3Title').innerText = "Update Destination"; 
-      document.getElementById('ayushmanFilterBox').style.display = "none"; 
-      goStep(3); fetchHospitals(); 
+  // Schedule next check
+  if (isPolling) {
+      pollTimeout = setTimeout(checkStatus, 3000);
   }
-  
-  let selectedRating = 0; 
-  function setRating(n) { 
-      selectedRating = n; 
-      document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
-      setTimeout(() => { 
-          document.getElementById('ratingThanks').style.display = 'block'; 
-          document.getElementById('starRating').style.opacity = '0.5'; 
-          document.getElementById('starRating').style.pointerEvents = 'none'; 
-      }, 300); 
-  }
+}
 
+function changeDestination() { 
+    isUpdatingDestination = true; 
+    document.getElementById('step3Title').innerText = "Update Destination"; 
+    document.getElementById('ayushmanFilterBox').style.display = "none"; 
+    goStep(3); fetchHospitals(); 
+}
+
+let selectedRating = 0; 
+function setRating(n) { 
+    selectedRating = n; 
+    document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
+    setTimeout(() => { 
+        document.getElementById('ratingThanks').style.display = 'block'; 
+        document.getElementById('starRating').style.opacity = '0.5'; 
+        document.getElementById('starRating').style.pointerEvents = 'none'; 
+    }, 300); 
+}
   async function showHistory() {
       document.getElementById('historyModal').classList.remove('hidden'); 
       const content = document.getElementById('historyModalContent'); 
