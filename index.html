@@ -305,26 +305,31 @@ function changeLang(lang) {
 function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
 
 // 🛡️ CRASH-PROOF STEP NAVIGATION
-function goStep(n) { 
-    currentStep = n; 
-    const ids = ['step1', 'step2', 'step3', 'step4', 'dashboardStep', 'step7'];
-    
-    ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            // Check if ID matches 'step1', 'dashboardStep', or exactly n
-            if (id === 'step' + n || id === n + 'Step' || id === n) {
-                el.classList.remove('hidden');
-                el.style.display = 'block';
-            } else {
-                el.classList.add('hidden');
-                el.style.display = 'none';
-            }
-        }
-    });
-    window.scrollTo(0, 0); 
-}
+// 🛡️ CRASH-PROOF & CASE-INSENSITIVE STEP NAVIGATION
+  function goStep(n) { 
+      currentStep = n; 
+      const ids = ['step1', 'step2', 'step3', 'step4', 'dashboardStep', 'step7', 'step8'];
+      
+      ids.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+              // Convert everything to lowercase so 'Dashboard' safely matches 'dashboardStep'
+              const checkId = id.toLowerCase();
+              const target1 = ('step' + n).toLowerCase();
+              const target2 = (n + 'Step').toLowerCase();
+              const target3 = String(n).toLowerCase();
 
+              if (checkId === target1 || checkId === target2 || checkId === target3) {
+                  el.classList.remove('hidden');
+                  el.style.display = 'block';
+              } else {
+                  el.classList.add('hidden');
+                  el.style.display = 'none';
+              }
+          }
+      });
+      window.scrollTo(0, 0); 
+  }
 function goBack() { 
     if(currentStep === 2) goStep(1); 
     else if(currentStep === 3) goStep(2); 
@@ -444,60 +449,44 @@ async function selectAmbulance(type, rate) {
 function startPolling() { isPolling = true; checkStatus(); }
 function stopPolling() { isPolling = false; if (pollTimeout) clearTimeout(pollTimeout); }
 
-async function checkStatus() {
-  if (!state.bookingId) return;
-  try {
-    // ?t=Date.now() prevents cache from hanging the screen
-    const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`);
-    const data = await res.json();
-    const status = data.status ? data.status.toUpperCase() : '';
+// 🛡️ RE-REWRITTEN STATUS ENGINE (Eliminates Blank Screens)
+  async function checkStatus() {
+    if (!state.bookingId) return;
+    try {
+      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`);
+      const data = await res.json();
+      
+      // 🚨 SAFETY NET: If the booking doesn't exist in the database anymore, clear the corrupted cache!
+      if (data.error || !data.status) {
+          stopPolling();
+          localStorage.removeItem('patient_session');
+          window.location.reload();
+          return;
+      }
 
-    if (status === 'COMPLETED') { 
-        stopPolling(); renderReceipt(data); return; 
+      const status = data.status.toUpperCase();
+
+      if (status === 'COMPLETED') {
+        stopPolling();
+        renderReceipt(data);
+        return;
+      }
+
+      if (status === 'CANCELLED') {
+        stopPolling();
+        alert("Booking cancelled.");
+        clearSession();
+        return;
+      }
+
+      renderDashboard(status, data);
+
+    } catch(err) { console.error("Poll Link Error - Retrying..."); }
+
+    if (isPolling) {
+        pollTimeout = setTimeout(checkStatus, 3000);
     }
-    if (status === 'CANCELLED') { 
-        stopPolling(); alert("Booking cancelled by driver or system."); clearSession(); return; 
-    }
-
-    renderDashboard(status, data);
-
-  } catch(err) { console.error("Poll Error ignored."); }
-
-  if (isPolling) { pollTimeout = setTimeout(checkStatus, 3000); }
-}
-
-function renderDashboard(status, data) {
-    const searching = document.getElementById('searchingState');
-    const assigned = document.getElementById('assignedState');
-    const dashStep = document.getElementById('dashboardStep');
-
-    // PERMANENT FIX: Force the Dashboard to be visible
-    if (dashStep.style.display === 'none' || dashStep.classList.contains('hidden')) {
-        goStep('Dashboard');
-    }
-
-    if (status === 'ASSIGNED' || status === 'IN_TRANSIT') {
-        // Driver found! Stop the 120s clock immediately
-        if(searchInterval) { clearInterval(searchInterval); searchInterval = null; }
-        
-        // Hide pulse, show driver info inside the SAME screen (No Blank Jumps)
-        searching.style.display = 'none';
-        assigned.style.display = 'block';
-
-        const hEl = document.getElementById('dashHospital');
-        const dEl = document.getElementById('dashDist');
-        const sEl = document.getElementById('dashStatusText');
-
-        if(hEl) hEl.innerText = data.hospital_name || state.hospitalName || "Hospital";
-        if(dEl) dEl.innerText = data.distance || "0.0";
-        if(sEl) sEl.innerText = status === 'IN_TRANSIT' ? "🚑 In Transit to Hospital" : "Ambulance Arriving";
-    } else {
-        // Fallback/Default: Show the Searching Pulse
-        searching.style.display = 'block';
-        assigned.style.display = 'none';
-    }
-}
-
+  }
 function renderReceipt(data) {
     goStep(7); 
     document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--";
