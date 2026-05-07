@@ -1078,7 +1078,8 @@ function goStep(n) {
       } catch(e) {}
   }
 // 🛡️ REPAIR: State-First Status Checker
-// 🛡️ REPAIR: State-First Status Checker (Patient App)
+
+// 🛡️ REPAIR: Direct-to-Receipt Status Checker (Patient App)
 async function checkStatus() {
   if (!state.bookingId) return;
   try {
@@ -1087,59 +1088,43 @@ async function checkStatus() {
     const data = await res.json();
     const currentStatus = data.status ? data.status.trim().toUpperCase() : '';
     
-    // 🟢 1. IF TRIP IS COMPLETED -> SHOW RECEIPT INSTANTLY
+    // 🟢 1. IF TRIP IS COMPLETED -> JUMP DIRECTLY TO RECEIPT (Step 7)
     if (currentStatus === 'COMPLETED') { 
         stopPolling(); 
-        goStep(7); // Jump to Receipt Screen (Step 7)
+        goStep(7); 
         document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
         document.getElementById('receiptDist').innerText = (data.distance || data.billed_distance || "0") + " km"; 
         document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || data.amount || "0"); 
         localStorage.removeItem('patient_session'); 
-        return; // Stop execution
+        return; // Stop execution completely
     }
     
-    // 🔵 2. IF DRIVER ASSIGNED OR IN TRANSIT -> SHOW TRACKING (Step 6)
+    // 🔵 2. IF DRIVER ASSIGNED -> STAY ON PULSE SCREEN BUT CHANGE TEXT
     if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
       if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
       
-      // Only jump if we aren't already on the tracking or payment screens
-      if (currentStep !== 6 && currentStep !== 7) { 
-          goStep(6); 
-      }
+      // Make sure we are on Step 5
+      if (currentStep !== 5) { goStep(5); }
 
-      try {
-          initPatientMap();
-          setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 300); // 🚨 Fixes the Map Crash
-
-          document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
-
-          if (data.driver_lat && data.driver_lng) { 
-              const dLat = parseFloat(data.driver_lat);
-              const dLng = parseFloat(data.driver_lng);
-              const pLat = parseFloat(state.userLat);
-              const pLng = parseFloat(state.userLng);
-
-              const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
-              
-              if (currentStatus === 'ASSIGNED') {
-                  document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
-                  document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
-                  drawOSRMRoute(dLat, dLng, pLat, pLng); 
-              } else if (currentStatus === 'IN_TRANSIT') {
-                  document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
-                  document.getElementById('etaTime').innerText = "Heading to Hospital";
-                  if(osrmRoute && leafletMap) leafletMap.removeLayer(osrmRoute);
-              }
-              
-              updateDriverOnMap(dLat, dLng); 
-          }
-      } catch(mapErr) { console.error("Map Update Error", mapErr); }
+      // Simply update the text on the Broadcasting screen to show it's assigned
+      const title = document.querySelector('#step5 h1');
+      if (title) title.innerText = "✅ Driver Assigned!";
+      
+      const subtext = document.querySelector('#step5 p');
+      if (subtext) subtext.innerText = "The ambulance is on the way to your location. Please stay calm.";
+      
+      const timerText = document.querySelector('#step5 h2');
+      if (timerText) timerText.innerText = "🚑"; // Replace the 120s timer with an ambulance icon
+      
+      // Optionally hide the cancel button once the driver is on the way
+      const cancelBtn = document.querySelector('#step5 .btn.ghost');
+      if (cancelBtn) cancelBtn.style.display = 'none';
     }
     
     // 🔴 3. IF CANCELLED
     if (currentStatus === 'CANCELLED') { 
         stopPolling(); 
-        alert("This booking was cancelled."); 
+        alert("This booking was cancelled by the dispatch center."); 
         clearSession(); 
         return;
     }
@@ -1150,24 +1135,24 @@ async function checkStatus() {
       pollTimeout = setTimeout(checkStatus, 3000);
   }
 }
-
-function changeDestination() { 
-    isUpdatingDestination = true; 
-    document.getElementById('step3Title').innerText = "Update Destination"; 
-    document.getElementById('ayushmanFilterBox').style.display = "none"; 
-    goStep(3); fetchHospitals(); 
-}
-
-let selectedRating = 0; 
-function setRating(n) { 
-    selectedRating = n; 
-    document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
-    setTimeout(() => { 
-        document.getElementById('ratingThanks').style.display = 'block'; 
-        document.getElementById('starRating').style.opacity = '0.5'; 
-        document.getElementById('starRating').style.pointerEvents = 'none'; 
-    }, 300); 
-}
+  function changeDestination() { 
+      isUpdatingDestination = true; 
+      document.getElementById('step3Title').innerText = "Update Destination"; 
+      document.getElementById('ayushmanFilterBox').style.display = "none"; 
+      goStep(3); fetchHospitals(); 
+  }
+  
+  let selectedRating = 0; 
+  function setRating(n) { 
+      selectedRating = n; 
+      document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
+      setTimeout(() => { 
+          document.getElementById('ratingThanks').style.display = 'block'; 
+          document.getElementById('starRating').style.opacity = '0.5'; 
+          document.getElementById('starRating').style.pointerEvents = 'none'; 
+      }, 300); 
+  }
+ 
   async function showHistory() {
       document.getElementById('historyModal').classList.remove('hidden'); 
       const content = document.getElementById('historyModalContent'); 
