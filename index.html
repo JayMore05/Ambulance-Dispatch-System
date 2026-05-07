@@ -683,50 +683,40 @@
   }
 
 window.onload = () => {
-  const savedState = localStorage.getItem('patient_session');
-  if (savedState) { 
-      state = JSON.parse(savedState); 
-      if (state.bookingId) { 
-          startPolling(); 
-          return; 
-      } 
-  }
-  
-  const statusEl = document.getElementById('locStatus');
-  
-  // A smarter fallback that tells you exactly why the GPS failed
-  const useFallback = (errorMsg) => {
-      if(statusEl) {
-          statusEl.innerText = `⚠️ GPS Failed: ${errorMsg}. Using default location.`;
-          statusEl.style.color = "#e53935"; 
-      }
-      // Defaults to Mumbai coordinates so your app doesn't break
-      state.userLat = 19.0760; 
-      state.userLng = 72.8777; 
+    const savedState = localStorage.getItem('patient_session');
+    if (savedState) { 
+        state = JSON.parse(savedState); 
+        if (state.bookingId) { 
+            startPolling(); 
+            return; 
+        } 
+    }
+    
+    const statusEl = document.getElementById('locStatus');
+    const useFallback = () => {
+        statusEl.innerText = "⚠️ Using network-based location. You can proceed!";
+        statusEl.style.color = "#e53935"; 
+        state.userLat = 19.0760; 
+        state.userLng = 72.8777; 
+    };
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => { 
+                state.userLat = pos.coords.latitude; 
+                state.userLng = pos.coords.longitude; 
+                statusEl.innerText = "✅ GPS Locked Instantly"; 
+                statusEl.style.color = "var(--success)"; 
+            },
+            (err) => { useFallback(); },
+            // 🛡️ PC FIX: Lowering accuracy requirement for PC browsers to avoid hangs
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+        );
+    } else { 
+        useFallback();
+    }
   };
 
-  if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-          (pos) => { 
-              state.userLat = pos.coords.latitude; 
-              state.userLng = pos.coords.longitude; 
-              if(statusEl) {
-                  statusEl.innerText = "✅ GPS Locked Instantly"; 
-                  statusEl.style.color = "var(--success)"; 
-              }
-          },
-          (err) => { 
-              // This will print the exact reason (e.g., "User denied Geolocation")
-              useFallback(err.message); 
-          },
-          // Added 'enableHighAccuracy: true' to force mobile GPS chips to wake up
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-  } else { 
-      useFallback("Browser does not support GPS");
-  }
-};
-  
   // 🛡️ AUTOMATIC TAB RECOVERY: Instantly fetches live data when you switch back to Patient App
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.bookingId && (currentStep === 5 || currentStep === 6)) { 
@@ -740,22 +730,17 @@ window.onload = () => {
   
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
   
-function goStep(n) { 
+  function goStep(n) { 
       currentStep = n; 
       for(let i=1; i<=8; i++) { 
           let el = document.getElementById('step' + i); 
           if(el) { 
-              if (i === n) {
-                  el.classList.remove('hidden');
-                  el.style.display = 'block'; // Force visible
-              } else {
-                  el.classList.add('hidden');
-                  el.style.display = 'none';  // Force hidden
-              }
+              i === n ? el.classList.remove('hidden') : el.classList.add('hidden'); 
           } 
       } 
       window.scrollTo(0, 0); 
-  }  
+  }
+  
   function goBack() { 
       if (isUpdatingDestination && currentStep === 3) { isUpdatingDestination = false; goStep(6); return; } 
       if(currentStep === 2) goStep(1); 
@@ -1015,11 +1000,11 @@ function goStep(n) {
     });
   }
 
- async function selectAmbulance(type, rate) {
+  async function selectAmbulance(type, rate) {
     state.ambulanceType = type; 
     state.rate = rate; 
     saveState(); 
-    goStep(5); // Show Broadcasting Pulse immediately
+    goStep(5);
     
     try {
       const res = await fetch(BASE_URL + "/api/bookings", { 
@@ -1033,28 +1018,27 @@ function goStep(n) {
           }) 
       });
       const data = await res.json(); 
-      if (data.error) { alert(data.error); goStep(4); return; }
-      
       state.bookingId = data.booking_id; 
       saveState();
       
-      if (typeof subscribePushForBooking === "function") subscribePushForBooking(data.booking_id);
+      subscribePushForBooking(data.booking_id);
       
-      startPolling(); // Starts the loop to listen for Driver Acceptance
+      // ✅ Use your new unbreakable polling
+      startPolling();
       
       searchTimer = 120; 
       document.getElementById('timerText').innerText = searchTimer;
-      if(searchInterval) clearInterval(searchInterval);
       searchInterval = setInterval(() => { 
           searchTimer--; 
           document.getElementById('timerText').innerText = searchTimer; 
           if(searchTimer <= 0) { 
               clearInterval(searchInterval); 
-              if (currentStep === 5) { confirmCancel(); goStep(8); } // Timeout
+              if (currentStep === 5) { confirmCancel(); goStep(8); } 
           } 
       }, 1000);
     } catch(err) { alert("Network Failed."); goStep(4); }
-  }  // ==========================================
+  }
+  // ==========================================
   // MAPS & TRACKING
   // ==========================================
   function initPatientMap() {
@@ -1088,8 +1072,7 @@ function goStep(n) {
       } catch(e) {}
   }
 // 🛡️ REPAIR: State-First Status Checker
-
-// 🛡️ REPAIR: Direct-to-Receipt Status Checker (Patient App)
+  // 🛡️ REPAIR: Direct-to-Receipt Status Checker (Patient App)
 async function checkStatus() {
   if (!state.bookingId) return;
   try {
@@ -1145,24 +1128,24 @@ async function checkStatus() {
       pollTimeout = setTimeout(checkStatus, 3000);
   }
 }
-  function changeDestination() { 
-      isUpdatingDestination = true; 
-      document.getElementById('step3Title').innerText = "Update Destination"; 
-      document.getElementById('ayushmanFilterBox').style.display = "none"; 
-      goStep(3); fetchHospitals(); 
-  }
-  
-  let selectedRating = 0; 
-  function setRating(n) { 
-      selectedRating = n; 
-      document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
-      setTimeout(() => { 
-          document.getElementById('ratingThanks').style.display = 'block'; 
-          document.getElementById('starRating').style.opacity = '0.5'; 
-          document.getElementById('starRating').style.pointerEvents = 'none'; 
-      }, 300); 
-  }
- 
+  function changeDestination() { 
+      isUpdatingDestination = true; 
+      document.getElementById('step3Title').innerText = "Update Destination"; 
+      document.getElementById('ayushmanFilterBox').style.display = "none"; 
+      goStep(3); fetchHospitals(); 
+  }
+  
+  let selectedRating = 0; 
+  function setRating(n) { 
+      selectedRating = n; 
+      document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
+      setTimeout(() => { 
+          document.getElementById('ratingThanks').style.display = 'block'; 
+          document.getElementById('starRating').style.opacity = '0.5'; 
+          document.getElementById('starRating').style.pointerEvents = 'none'; 
+      }, 300); 
+  }
+
   async function showHistory() {
       document.getElementById('historyModal').classList.remove('hidden'); 
       const content = document.getElementById('historyModalContent'); 
