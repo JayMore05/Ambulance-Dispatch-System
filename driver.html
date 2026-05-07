@@ -999,7 +999,8 @@ async function completeTrip() {
           console.error(err);
           alert("Error connecting to server. Please try again.");
       }
-  }  
+  }
+  
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
       goStep(2); 
