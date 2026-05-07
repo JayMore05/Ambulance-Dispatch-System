@@ -357,6 +357,7 @@
 </div>
 
 <div class="container">
+  
   <div id="step1" class="card">
     <div class="page-header"><h1 data-i18n="booking">Emergency Booking</h1></div>
     <p data-i18n="gps">Please provide details. We will automatically detect your location.</p>
@@ -366,24 +367,13 @@
     <div class="field-error" id="err-userName">Please enter a valid name.</div>
     
    <label>Phone Number</label>
-   <input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFieldError('userPhone')">
-   <div class="field-error" id="err-userPhone">Enter a valid 10-digit Indian number.</div>
+<input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFieldError('userPhone')">
+<div class="field-error" id="err-userPhone">Enter a valid 10-digit Indian number.</div>
 
-    <p>Searching 8km radius for the fastest driver.</p>
+<p>Searching 8km radius for the fastest driver.</p>
     
     <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
-
-    <div style="background: var(--highlight); border: 2px dashed #fca5a5; padding: 20px; border-radius: 16px; text-align: center; margin-top: 15px; margin-bottom: 15px;">
-      <p style="color: #991b1b; font-weight: 800; margin-bottom: 10px;">🚨 Quick Voice SOS</p>
-      
-      <button id="micBtn" class="pulse" style="width: 70px; height: 70px; margin: 0 auto 10px; cursor: pointer; border: none; background: rgba(229, 57, 53, 0.1);" onclick="startVoiceSOS()">
-        <span style="font-size: 30px;">🎤</span>
-      </button>
-      
-      <p style="font-size: 13px; color: var(--primary); font-weight: 600;">Tap and speak your emergency<br>(English, Hindi, or Marathi)</p>
-      
-      <div id="voiceTranscript" style="margin-top: 15px; font-size: 16px; font-weight: 800; color: #7f1d1d; min-height: 24px;"></div>
-    </div>
+    
     <button class="btn primary" style="margin-top:16px;" onclick="saveUser()" data-i18n="find_hosp">Find Hospitals ➔</button>
   </div>
 
@@ -456,27 +446,23 @@
     <button class="btn ghost" style="margin-top:16px;" onclick="goBack()" data-i18n="back">← Back</button>
   </div>
 
-<div id="step5" class="card hidden" style="text-align:center;">
+ <div id="step5" class="card hidden" style="text-align:center;">
     <div class="radar-box">
       <div class="pulse">🚑</div>
       <h1 data-i18n="broadcasting">Broadcasting...</h1>
       <h2 style="color:var(--primary); font-size:45px; margin: 10px 0;"><span id="timerText">120</span>s</h2>
       <p>Searching 8km radius for the fastest driver.</p>
+      
+      <button class="btn ghost" style="margin-top:15px; padding: 10px; font-size:14px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;" onclick="checkStatus()">🔄 Refresh Status</button>
+      
     </div>
-    
-  
     <button class="btn ghost" style="color:var(--primary); border-color:var(--primary);" onclick="confirmCancel()" data-i18n="cancel_req">❌ Cancel Request</button>
   </div>
   <div id="step6" class="card hidden">
     <h1 style="color: var(--success);" data-i18n="driver_otw">✅ Driver is on the way!</h1>
     
     <div id="map"></div> 
-    <div style="display:flex; gap:10px; margin-top:10px;">
-      <a href="tel:112" class="btn primary" style="text-decoration:none; background:var(--success); width:50%;">📞 Call 112</a>
-      <button class="btn ghost" style="width:50%;" onclick="changeDestination()" data-i18n="change_dest">🔄 Change Dest.</button>
-    </div>
-
-    <button class="btn ghost" style="width:100%; border-color:#991b1b; color:#991b1b; margin-top:10px; font-weight:800;" onclick="alertAdminPatient()">⚠️ Help / Ambulance Not Moving</button>
+    
     <div style="background:#f8fafc; padding:20px; border-radius:16px; border: 1px solid var(--border); margin-bottom:16px; text-align: center;">
       <p style="margin:0; font-weight: bold; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-size: 12px;">Estimated Arrival</p>
       <h2 style="margin:5px 0 8px; font-size:32px; color: var(--text);">⏱️ <span id="etaTime">--</span></h2>
@@ -553,8 +539,9 @@
     </div>
   </div>
 </div>
+
 <script>
-// ==========================================
+  // ==========================================
   // PWA & WEB PUSH LOGIC
   // ==========================================
   let deferredInstallPrompt = null;
@@ -634,27 +621,14 @@
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
   let currentStep = 1; 
   let isUpdatingDestination = false; 
+  let pollInterval = null; 
   let searchTimer = 120; 
   let searchInterval = null; 
+  let currentPollRate = 5000; 
   let searchDebounceTimer = null;
   let leafletMap = null; 
   let patientMarker = null; 
   let driverMarker = null;
-
-  // 🛡️ NEW BULLETPROOF POLLING ENGINE
-  let pollTimeout = null;
-  let isPolling = false;
-
-  function startPolling() {
-      isPolling = true;
-      if (pollTimeout) clearTimeout(pollTimeout);
-      checkStatus(); // This will auto-loop infinitely safely
-  }
-
-  function stopPolling() {
-      isPolling = false;
-      if (pollTimeout) clearTimeout(pollTimeout);
-  }
 
   const ambulanceDatabase = [
     { type: "PTV", name: "🚐 Patient Transport", rate: 15, bestFor: ["General Sickness"] },
@@ -670,6 +644,7 @@
       ambulanceType: null, distance: 0, rate: 0, bookingId: null, userPhone: null 
   };
 
+  // 🌍 LOCALIZATION / TRANSLATIONS
   const langDict = {
       en: { booking: "Emergency Booking", gps: "Please provide details. We will automatically detect your location.", find_hosp: "Find Hospitals ➔", what_emerg: "What is the Emergency?", choose_dest: "Choose Destination", select_amb: "Select Ambulance", broadcasting: "Broadcasting...", driver_otw: "✅ Driver is on the way!", back: "← Back", ayushman: "✅ Show Free / Ayushman Only", custom_hosp: "➕ Type Custom Name Manually", change_dest: "🔄 Change Dest.", cancel_req: "❌ Cancel Request", trip_done: "✅ Trip Completed", home: "Return to Home", all_busy: "All nearby ambulances are busy." },
       hi: { booking: "आपातकालीन बुकिंग", gps: "कृपया विवरण दें। हम स्वचालित रूप से आपके स्थान का पता लगाएंगे।", find_hosp: "अस्पताल खोजें ➔", what_emerg: "आपात स्थिति क्या है?", choose_dest: "गंतव्य चुनें", select_amb: "एम्बुलेंस चुनें", broadcasting: "प्रसारण हो रहा है...", driver_otw: "✅ ड्राइवर आ रहा है!", back: "← वापस", ayushman: "✅ केवल मुफ्त / आयुष्मान दिखाएं", custom_hosp: "➕ कस्टम नाम मैन्युअल रूप से टाइप करें", change_dest: "🔄 गंतव्य बदलें", cancel_req: "❌ अनुरोध रद्द करें", trip_done: "✅ यात्रा पूरी हुई", home: "होम पर लौटें", all_busy: "आसपास की सभी एम्बुलेंस व्यस्त हैं।" },
@@ -682,19 +657,23 @@
       }); 
   }
 
-window.onload = () => {
+  // ⚡ ULTRA FAST GPS ON LOAD
+  window.onload = () => {
     const savedState = localStorage.getItem('patient_session');
     if (savedState) { 
         state = JSON.parse(savedState); 
         if (state.bookingId) { 
-            startPolling(); 
+            pollInterval = setInterval(checkStatus, currentPollRate); 
+            checkStatus(); 
             return; 
         } 
     }
     
     const statusEl = document.getElementById('locStatus');
+    
     const useFallback = () => {
-        statusEl.innerText = "⚠️ Using network-based location. You can proceed!";
+        console.warn("GPS timeout. Using estimated location.");
+        statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
         statusEl.style.color = "#e53935"; 
         state.userLat = 19.0760; 
         state.userLng = 72.8777; 
@@ -708,26 +687,29 @@ window.onload = () => {
                 statusEl.innerText = "✅ GPS Locked Instantly"; 
                 statusEl.style.color = "var(--success)"; 
             },
-            (err) => { useFallback(); },
-            // 🛡️ PC FIX: Lowering accuracy requirement for PC browsers to avoid hangs
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+            (err) => { 
+                useFallback();
+            },
+            { enableHighAccuracy: false, timeout: 2000, maximumAge: Infinity }
         );
     } else { 
         useFallback();
     }
-  };
+  };  
 
-  // 🛡️ AUTOMATIC TAB RECOVERY: Instantly fetches live data when you switch back to Patient App
+  // 🛡️ TAB SWITCH FIX: Instantly updates radar screen when you switch back to Patient App
+ // 🛡️ AGGRESSIVE TAB RECOVERY: Forces phone to wake up the network and restart polling
   document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && state.bookingId && (currentStep === 5 || currentStep === 6)) { 
-          // Instantly forces a status check the millisecond the tab is visible again
-          checkStatus(); 
-          // Ensure the background polling loop stays alive
-          if(pollInterval) clearInterval(pollInterval);
-          pollInterval = setInterval(checkStatus, 3000); 
+      if (document.visibilityState === "visible") {
+          if (state.bookingId && (currentStep === 5 || currentStep === 6)) { 
+              if(pollInterval) clearInterval(pollInterval);
+              pollInterval = setInterval(checkStatus, 3000); // Force active 3s polling
+              setTimeout(checkStatus, 500); // Wait half a second for 4G/WiFi to wake up, then check
+          }
       }
   });
-  
+ 
+
   function saveState() { localStorage.setItem('patient_session', JSON.stringify(state)); }
   
   function goStep(n) { 
@@ -769,6 +751,7 @@ window.onload = () => {
     let valid = true;
     
     if (!name || name.length < 2) { showFieldError('userName', 'Please enter a valid name.'); valid = false; }
+    // Strict 10-digit Indian Number validation (starts with 6,7,8, or 9)
     if (!/^[6-9]\d{9}$/.test(phone)) { showFieldError('userPhone', 'Enter a valid 10-digit Indian number.'); valid = false; }
     if (!valid) return;
     
@@ -782,93 +765,14 @@ window.onload = () => {
           state.userId = data.user_id; state.userPhone = phone; saveState(); goStep(2); 
       } else { alert(data.error || "Database Error"); }
     } catch(err) { alert("🚨 SERVER ERROR"); }
-  }
-
-// ==========================================
-  // 🎙️ VOICE SOS LOGIC (Live Transcript + Multi-Language)
-  // ==========================================
-  // 🎙️ VOICE SOS LOGIC (With Mobile Silence Tracker)
-  let voiceTimeout = null;
-
-  function startVoiceSOS() {
-      const transcriptDiv = document.getElementById('voiceTranscript');
-      const micBtn = document.getElementById('micBtn');
-
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-          alert("Sorry, your browser does not support Voice SOS.");
-          return;
-      }
-
-      const recognition = new SpeechRecognition();
-      const selectedLang = document.querySelector('.lang-selector').value;
-      if (selectedLang === 'hi') recognition.lang = 'hi-IN'; 
-      else if (selectedLang === 'mr') recognition.lang = 'mr-IN'; 
-      else recognition.lang = 'en-IN'; 
-
-      recognition.continuous = false; 
-      recognition.interimResults = true; 
-
-      recognition.onstart = function() {
-          micBtn.style.background = "rgba(229, 57, 53, 0.5)"; 
-          transcriptDiv.innerText = "Listening... Speak now!";
-      };
-
-      recognition.onresult = function(event) {
-          let currentText = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-              currentText += event.results[i][0].transcript;
-          }
-          transcriptDiv.innerText = `"${currentText}"`;
-
-          // 🌟 MOBILE FIX: If user stops speaking for 2 seconds, auto-process it!
-          if (voiceTimeout) clearTimeout(voiceTimeout);
-          voiceTimeout = setTimeout(() => {
-              recognition.stop();
-              processVoiceCommand(currentText.toLowerCase());
-          }, 2000);
-
-          // Standard final check
-          if (event.results[0].isFinal) {
-              clearTimeout(voiceTimeout);
-              processVoiceCommand(currentText.toLowerCase());
-          }
-      };
-
-      recognition.onerror = function(event) {
-          transcriptDiv.innerText = "Mic Error: " + event.error;
-          micBtn.style.background = "rgba(229, 57, 53, 0.1)";
-      };
-
-      recognition.onend = function() {
-          micBtn.style.background = "rgba(229, 57, 53, 0.1)"; 
-      };
-
-      try { recognition.start(); } catch(e) {}
-  }
-
-  // 🧠 THE AI BRAIN: Matches spoken words to the emergency type
-  function processVoiceCommand(text) {
-      if (text.includes("heart") || text.includes("हार्ट") || text.includes("हृदय")) {
-          selectEmergency("Heart Attack");
-      } else if (text.includes("accident") || text.includes("एक्सीडेंट") || text.includes("अपघात")) {
-          selectEmergency("Road Accident");
-      } else if (text.includes("bleed") || text.includes("खून") || text.includes("रक्त")) {
-          selectEmergency("Bleeding");
-      } else {
-          document.getElementById('voiceTranscript').innerText = "Emergency recognized. Proceeding...";
-          setTimeout(() => { selectEmergency("General Sickness"); }, 1500);
-      }
-  }
-    
-  // 🚨 CLEAN EMERGENCY SELECTOR (No hidden characters)
+}
   function selectEmergency(type) { 
       state.emergency = type; 
       saveState(); 
       goStep(3); 
       fetchHospitals(); 
   }
-    
+  
   function sanitize(str) { 
       const d = document.createElement('div'); 
       d.textContent = str; 
@@ -988,6 +892,7 @@ window.onload = () => {
       let isRec = amb.bestFor.includes(state.emergency); 
       let badge = isRec ? `<span class="badge green">⭐ Recommended</span>` : ""; 
       let bStyle = isRec ? `border-left: 5px solid var(--success);` : ``; 
+      // STRICT ROUNDING: Math.ceil forces 3.2 to 4
       let roundedDistance = Math.ceil(parseFloat(state.distance));
       let estCost = state.distance > 0 ? `~₹${roundedDistance * amb.rate}` : `₹${amb.rate}/km`;
       
@@ -998,7 +903,7 @@ window.onload = () => {
       item.innerHTML = `<div class="title">${amb.name} ${badge}</div><div style="display:flex; justify-content:space-between; align-items:center;"><div class="meta">₹${amb.rate}/km</div><span class="cost-badge">${estCost}</span></div>`;
       ambContainer.appendChild(item);
     });
-  }
+}
 
   async function selectAmbulance(type, rate) {
     state.ambulanceType = type; 
@@ -1011,10 +916,15 @@ window.onload = () => {
           method: "POST", 
           headers: {"Content-Type":"application/json"}, 
           body: JSON.stringify({ 
-              user_id: state.userId, hospital_id: state.hospitalId, 
-              custom_destination: state.customName, emergency_type: state.emergency, 
-              ambulance_type: state.ambulanceType, user_lat: state.userLat, 
-              user_lng: state.userLng, distance_km: state.distance, rate_per_km: state.rate 
+              user_id: state.userId, 
+              hospital_id: state.hospitalId, 
+              custom_destination: state.customName, 
+              emergency_type: state.emergency, 
+              ambulance_type: state.ambulanceType, 
+              user_lat: state.userLat, 
+              user_lng: state.userLng, 
+              distance_km: state.distance, 
+              rate_per_km: state.rate 
           }) 
       });
       const data = await res.json(); 
@@ -1023,8 +933,11 @@ window.onload = () => {
       
       subscribePushForBooking(data.booking_id);
       
-      // ✅ Use your new unbreakable polling
-      startPolling();
+      if(pollInterval) clearInterval(pollInterval); 
+      if(searchInterval) clearInterval(searchInterval);
+      
+      pollInterval = setInterval(checkStatus, currentPollRate); 
+      checkStatus();
       
       searchTimer = 120; 
       document.getElementById('timerText').innerText = searchTimer;
@@ -1038,12 +951,15 @@ window.onload = () => {
       }, 1000);
     } catch(err) { alert("Network Failed."); goStep(4); }
   }
+
   // ==========================================
   // MAPS & TRACKING
   // ==========================================
   function initPatientMap() {
       if (leafletMap) return; 
       leafletMap = L.map('map').setView([state.userLat, state.userLng], 14); 
+      
+      // 🛡️ CARTODB MAPS - NO BAN!
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(leafletMap);
       patientMarker = L.marker([state.userLat, state.userLng]).addTo(leafletMap).bindPopup("<b>Your Location</b>").openPopup();
   }
@@ -1058,66 +974,75 @@ window.onload = () => {
       }
   }
 
-  // 🌟 PRESENTATION FALLBACK: Forces the UI to work perfectly during a live demo
-  function forceTransition() {
-      if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
-      goStep(6);
-      try {
-          initPatientMap();
-          setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500); 
-          document.getElementById('trackHospital').innerText = state.hospitalName || "Hospital"; 
-          document.getElementById('etaDist').innerText = "2.10"; 
-          document.getElementById('etaTime').innerText = "3 mins";
-          document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
-      } catch(e) {}
-  }
-// 🛡️ REPAIR: State-First Status Checker
+  // 🛡️ ULTIMATE BUG FIX: Bulletproof transitions and error handling
   async function checkStatus() {
     if (!state.bookingId) return;
     try {
+      // Bypasses all mobile network cache
       const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
       const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json();
+      
       const currentStatus = data.status ? data.status.trim().toUpperCase() : '';
       
-      // ✅ FIX: Force transition if status is active, regardless of currentStep
       if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
-        if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
         
-        // Only jump if we aren't already on the tracking or payment screens
-        if (currentStep !== 6 && currentStep !== 7) { 
-            goStep(6); 
-        }
-
+        // 1. FORCE UI TRANSITION IMMEDIATELY
+        if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
+        if (currentStep === 5) { goStep(6); }
+        
+        // 2. TEXT UPDATES 
+        try {
+            document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
+        } catch(e) {}
+        
+        // 3. MAP & DISTANCE LOGIC
         try {
             initPatientMap();
-            document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
+            setTimeout(() => { if(leafletMap) leafletMap.invalidateSize(); }, 500); 
 
-            if (data.driver_lat && data.driver_lng) { 
+            if (data.driver_lat && data.driver_lng && data.driver_lat !== "null") { 
                 const dLat = parseFloat(data.driver_lat);
                 const dLng = parseFloat(data.driver_lng);
                 const pLat = parseFloat(state.userLat);
                 const pLng = parseFloat(state.userLng);
 
-                const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
-                
-                // Update UI based on phase
-                if (currentStatus === 'ASSIGNED') {
-                    document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
-                    document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
-                } else {
-                    document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
-                    document.getElementById('etaTime').innerText = "Heading to Hospital";
+                if (!isNaN(dLat) && !isNaN(dLng) && !isNaN(pLat) && !isNaN(pLng)) {
+                    const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
+                    
+                    if (currentStatus === 'ASSIGNED') {
+                        document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
+                        document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
+                        document.querySelector('[data-i18n="driver_otw"]').innerText = "✅ Driver is on the way to you!";
+                    } else if (currentStatus === 'IN_TRANSIT') {
+                        document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
+                        document.getElementById('etaTime').innerText = "Heading to Hospital";
+                        document.querySelector('[data-i18n="driver_otw"]').innerText = "🚑 Going to Hospital...";
+                    }
+                    
+                    updateDriverOnMap(dLat, dLng); 
+                    if (currentStatus === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
                 }
-                
-                updateDriverOnMap(dLat, dLng); 
-                if (currentStatus === 'ASSIGNED') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
+            } else {
+                document.getElementById('etaDist').innerText = "--"; 
+                document.getElementById('etaTime').innerText = "Locating...";
             }
-        } catch(mapErr) { console.error("Map Update Error", mapErr); }
+        } catch(mapErr) { console.warn("Map hidden error ignored"); }
+
+        // 4. DYNAMIC POLLING
+        try {
+            const distToCheck = currentStatus === 'ASSIGNED' && data.driver_lat ? getKmDistance(data.driver_lat, data.driver_lng, state.userLat, state.userLng) : parseFloat(data.distance || 0);
+            if (distToCheck > 5) { 
+                if (currentPollRate !== 10000) { clearInterval(pollInterval); currentPollRate = 10000; pollInterval = setInterval(checkStatus, currentPollRate); } 
+            } else { 
+                if (currentPollRate !== 3000) { clearInterval(pollInterval); currentPollRate = 3000; pollInterval = setInterval(checkStatus, currentPollRate); } 
+            }
+        } catch(e) {}
       }
       
       if (currentStatus === 'COMPLETED') { 
-          stopPolling(); 
+          if(pollInterval) clearInterval(pollInterval); 
+          if(searchInterval) clearInterval(searchInterval); 
           goStep(7); 
           document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
           document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
@@ -1126,16 +1051,12 @@ window.onload = () => {
       }
       
       if (currentStatus === 'CANCELLED') { 
-          stopPolling(); 
-          alert("This booking was cancelled."); 
+          if(pollInterval) clearInterval(pollInterval); 
+          if(searchInterval) clearInterval(searchInterval); 
+          alert("This booking was cancelled by the driver or system."); 
           clearSession(); 
       }
     } catch(err) { console.error("Poll Error:", err); }
-
-    // Schedules the next check safely
-    if (isPolling) {
-        pollTimeout = setTimeout(checkStatus, 3000);
-    }
   }
   
   function changeDestination() { 
@@ -1168,6 +1089,7 @@ window.onload = () => {
       }
       
       try {
+          // Added cache-busting here as well just to be safe
           const res = await fetch(`${BASE_URL}/api/user/history?phone=${phone}&t=${Date.now()}`); 
           const data = await res.json();
           if (!data.history || data.history.length === 0) { 
@@ -1209,13 +1131,9 @@ window.onload = () => {
       let phone = state.userPhone; if (phone && phone.length === 10) phone = '91' + phone;
       window.open('https://wa.me/?text=' + encodeURIComponent(`URGENT: I have booked an ambulance via FastRescue for a ${state.emergency}. Driver is arriving soon. Dropoff Location: ${dest}. Please reach there immediately.`));
   }
-// 🌟 NEW: Patient Escalation Simulation
-  function alertAdminPatient() {
-      alert("🚨 SOS RECEIVED BY DISPATCH: An Admin is reviewing your driver's live GPS coordinates right now. They will call you on your registered number in 30 seconds to assist you.");
-  }
+
   async function confirmCancel() {
-      stopPolling();
-      if(searchInterval) clearInterval(searchInterval);
+      clearInterval(pollInterval); clearInterval(searchInterval);
       if (state.bookingId) { await fetch(`${BASE_URL}/api/bookings/cancel`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ booking_id: state.bookingId }) }); }
       clearSession();
   }
