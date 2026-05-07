@@ -683,40 +683,50 @@
   }
 
 window.onload = () => {
-    const savedState = localStorage.getItem('patient_session');
-    if (savedState) { 
-        state = JSON.parse(savedState); 
-        if (state.bookingId) { 
-            startPolling(); 
-            return; 
-        } 
-    }
-    
-    const statusEl = document.getElementById('locStatus');
-    const useFallback = () => {
-        statusEl.innerText = "⚠️ Using network-based location. You can proceed!";
-        statusEl.style.color = "#e53935"; 
-        state.userLat = 19.0760; 
-        state.userLng = 72.8777; 
-    };
-
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => { 
-                state.userLat = pos.coords.latitude; 
-                state.userLng = pos.coords.longitude; 
-                statusEl.innerText = "✅ GPS Locked Instantly"; 
-                statusEl.style.color = "var(--success)"; 
-            },
-            (err) => { useFallback(); },
-            // 🛡️ PC FIX: Lowering accuracy requirement for PC browsers to avoid hangs
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
-        );
-    } else { 
-        useFallback();
-    }
+  const savedState = localStorage.getItem('patient_session');
+  if (savedState) { 
+      state = JSON.parse(savedState); 
+      if (state.bookingId) { 
+          startPolling(); 
+          return; 
+      } 
+  }
+  
+  const statusEl = document.getElementById('locStatus');
+  
+  // A smarter fallback that tells you exactly why the GPS failed
+  const useFallback = (errorMsg) => {
+      if(statusEl) {
+          statusEl.innerText = `⚠️ GPS Failed: ${errorMsg}. Using default location.`;
+          statusEl.style.color = "#e53935"; 
+      }
+      // Defaults to Mumbai coordinates so your app doesn't break
+      state.userLat = 19.0760; 
+      state.userLng = 72.8777; 
   };
 
+  if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+          (pos) => { 
+              state.userLat = pos.coords.latitude; 
+              state.userLng = pos.coords.longitude; 
+              if(statusEl) {
+                  statusEl.innerText = "✅ GPS Locked Instantly"; 
+                  statusEl.style.color = "var(--success)"; 
+              }
+          },
+          (err) => { 
+              // This will print the exact reason (e.g., "User denied Geolocation")
+              useFallback(err.message); 
+          },
+          // Added 'enableHighAccuracy: true' to force mobile GPS chips to wake up
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+  } else { 
+      useFallback("Browser does not support GPS");
+  }
+};
+  
   // 🛡️ AUTOMATIC TAB RECOVERY: Instantly fetches live data when you switch back to Patient App
   document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.bookingId && (currentStep === 5 || currentStep === 6)) { 
