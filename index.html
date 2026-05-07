@@ -1000,7 +1000,7 @@ window.onload = () => {
     });
   }
 
- async function selectAmbulance(type, rate) {
+async function selectAmbulance(type, rate) {
     state.ambulanceType = type; 
     state.rate = rate; 
     saveState(); 
@@ -1011,10 +1011,15 @@ window.onload = () => {
           method: "POST", 
           headers: {"Content-Type":"application/json"}, 
           body: JSON.stringify({ 
-              user_id: state.userId, hospital_id: state.hospitalId, 
-              custom_destination: state.customName, emergency_type: state.emergency, 
-              ambulance_type: state.ambulanceType, user_lat: state.userLat, 
-              user_lng: state.userLng, distance_km: state.distance, rate_per_km: state.rate 
+              user_id: state.userId, 
+              hospital_id: state.hospitalId, 
+              custom_destination: state.customName, 
+              emergency_type: state.emergency, 
+              ambulance_type: state.ambulanceType, 
+              user_lat: state.userLat, 
+              user_lng: state.userLng, 
+              distance_km: state.distance, 
+              rate_per_km: state.rate 
           }) 
       });
       const data = await res.json(); 
@@ -1023,12 +1028,12 @@ window.onload = () => {
       
       subscribePushForBooking(data.booking_id);
       
-      // 🌟 BUG FIX: Removed undefined pollInterval. Used proper startPolling()
+      // ✅ FIX: Safely start polling. Removed the undefined 'pollInterval' that caused the crash.
       startPolling();
       
       searchTimer = 120; 
       document.getElementById('timerText').innerText = searchTimer;
-      if (searchInterval) clearInterval(searchInterval);
+      if (typeof searchInterval !== 'undefined' && searchInterval) clearInterval(searchInterval);
       searchInterval = setInterval(() => { 
           searchTimer--; 
           document.getElementById('timerText').innerText = searchTimer; 
@@ -1038,8 +1043,7 @@ window.onload = () => {
           } 
       }, 1000);
     } catch(err) { alert("Network Failed."); goStep(4); }
-  }
-  // ==========================================
+  }  // ==========================================
   // MAPS & TRACKING
   // ==========================================
   function initPatientMap() {
@@ -1075,9 +1079,8 @@ window.onload = () => {
 // 🛡️ REPAIR: State-First Status Checker
 async function checkStatus() {
     if (!state.bookingId) return;
-
     try {
-      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`;
+      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}_${Math.random()}`;
       const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
       const data = await res.json();
       
@@ -1085,21 +1088,18 @@ async function checkStatus() {
       
       if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
         
-        // Clear the 120-second radar timer so it stops counting
         if (typeof searchInterval !== 'undefined' && searchInterval) { 
             clearInterval(searchInterval); 
             searchInterval = null; 
         }
         
-        // 🌟 FIX: Force it to Step 6 (Map)
+        // ✅ FIX: Force jump to Map screen safely
         if (currentStep !== 6 && currentStep !== 7) { goStep(6); }
-
-        // 🌟 FIX: Wrapped UI updates in a try/catch so missing HTML doesn't break the polling loop
+        
         try {
             initPatientMap();
-            if (document.getElementById('trackHospital')) {
-                document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
-            }
+            const trackHosp = document.getElementById('trackHospital');
+            if (trackHosp) trackHosp.innerText = data.hospital_name || state.hospitalName || "Hospital"; 
 
             if (data.driver_lat && data.driver_lng && data.driver_lat !== "null") { 
                 const dLat = parseFloat(data.driver_lat);
@@ -1110,70 +1110,64 @@ async function checkStatus() {
                 if (!isNaN(dLat) && !isNaN(dLng) && !isNaN(pLat) && !isNaN(pLng)) {
                     const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
                     
+                    const etaDistEl = document.getElementById('etaDist');
+                    const etaTimeEl = document.getElementById('etaTime');
+                    
                     if (currentStatus === 'ASSIGNED') {
-                        if (document.getElementById('etaDist')) document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
-                        if (document.getElementById('etaTime')) document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
-                    } else {
-                        if (document.getElementById('etaDist')) document.getElementById('etaDist').innerText = parseFloat(data.distance || 0).toFixed(2); 
-                        if (document.getElementById('etaTime')) document.getElementById('etaTime').innerText = "Heading to Dropoff";
+                        if (etaDistEl) etaDistEl.innerText = driverToPatientDist.toFixed(2);
+                        if (etaTimeEl) etaTimeEl.innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
+                        const otw = document.querySelector('[data-i18n="driver_otw"]');
+                        if(otw) otw.innerText = "✅ Driver is on the way to you!";
+                    } else if (currentStatus === 'IN_TRANSIT') {
+                        if (etaDistEl) etaDistEl.innerText = parseFloat(data.distance || 0).toFixed(2); 
+                        if (etaTimeEl) etaTimeEl.innerText = "Heading to Hospital";
+                        const otw = document.querySelector('[data-i18n="driver_otw"]');
+                        if(otw) otw.innerText = "🚑 Going to Hospital...";
                     }
                     
                     updateDriverOnMap(dLat, dLng); 
-                    if (currentStatus === 'ASSIGNED' && typeof drawOSRMRoute === 'function') { 
-                        drawOSRMRoute(dLat, dLng, pLat, pLng); 
-                    } 
+                    if (currentStatus === 'ASSIGNED' && typeof drawOSRMRoute === 'function') { drawOSRMRoute(dLat, dLng, pLat, pLng); } 
                 }
+            } else {
+                const etaDistEl = document.getElementById('etaDist');
+                const etaTimeEl = document.getElementById('etaTime');
+                if (etaDistEl) etaDistEl.innerText = "--"; 
+                if (etaTimeEl) etaTimeEl.innerText = "Locating...";
             }
-        } catch(uiError) { console.error("UI Update Error:", uiError); }
+        } catch(mapErr) {}
       }
       
       if (currentStatus === 'COMPLETED') { 
           stopPolling(); 
           if(typeof searchInterval !== 'undefined' && searchInterval) clearInterval(searchInterval); 
-          goStep(7); // 🌟 Force it to Step 7 (Payment)
           
-          if(document.getElementById('receiptHospital')) document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
-          if(document.getElementById('receiptDist')) document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
-          if(document.getElementById('receiptCost')) document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
+          // ✅ FIX: Force jump to Receipt screen safely
+          goStep(7); 
+          
+          const rHosp = document.getElementById('receiptHospital');
+          const rDist = document.getElementById('receiptDist');
+          const rCost = document.getElementById('receiptCost');
+          
+          if (rHosp) rHosp.innerText = data.hospital_name || state.hospitalName || "--"; 
+          if (rDist) rDist.innerText = (data.distance || "0") + " km"; 
+          if (rCost) rCost.innerText = "₹" + (data.final_cost || "0"); 
           
           localStorage.removeItem('patient_session'); 
-          return; // Stop the loop
       }
       
       if (currentStatus === 'CANCELLED') { 
           stopPolling(); 
           if(typeof searchInterval !== 'undefined' && searchInterval) clearInterval(searchInterval); 
           alert("This booking was cancelled by the driver or system."); 
-          clearSession(); 
-          return; // Stop the loop
+          if (typeof clearSession === 'function') clearSession(); 
       }
     } catch(err) { console.error("Poll Error:", err); }
 
-    // 🌟 FIX: Ensures the loop continues safely
     if (isPolling) {
         if (typeof pollTimeout !== 'undefined' && pollTimeout) clearTimeout(pollTimeout);
         pollTimeout = setTimeout(checkStatus, 3000);
     }
   }
-  
-  function changeDestination() { 
-      isUpdatingDestination = true; 
-      document.getElementById('step3Title').innerText = "Update Destination"; 
-      document.getElementById('ayushmanFilterBox').style.display = "none"; 
-      goStep(3); fetchHospitals(); 
-  }
-  
-  let selectedRating = 0; 
-  function setRating(n) { 
-      selectedRating = n; 
-      document.querySelectorAll('.star').forEach((s, i) => { s.classList.toggle('active', i < n); }); 
-      setTimeout(() => { 
-          document.getElementById('ratingThanks').style.display = 'block'; 
-          document.getElementById('starRating').style.opacity = '0.5'; 
-          document.getElementById('starRating').style.pointerEvents = 'none'; 
-      }, 300); 
-  }
-
   async function showHistory() {
       document.getElementById('historyModal').classList.remove('hidden'); 
       const content = document.getElementById('historyModalContent'); 
