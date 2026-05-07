@@ -898,19 +898,34 @@
     document.getElementById('dispatchModal').style.display='none';
     try { 
         const res = await fetch(`${BASE_URL}/api/driver/accept`, { 
-            method: "POST", headers: {"Content-Type":"application/json"}, 
-            body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
+            method: "POST", 
+            headers: {"Content-Type":"application/json"}, 
+            body: JSON.stringify({ 
+                booking_id: pendingAcceptData.booking_id, 
+                driver_id: driver.id 
+            }) 
         }); 
         const data = await res.json();
         
         if (res.ok && data.success) { 
-            clearInterval(radarInterval); checkActiveMission(); 
+            // 1. Stop looking for new emergencies
+            if (radarInterval) clearInterval(radarInterval); 
+            
+            // 2. Save the active booking locally
+            driver.activeBookingId = pendingAcceptData.booking_id;
+            localStorage.setItem('driver_session', JSON.stringify(driver));
+            
+            // 3. FORCE an immediate mission check to trigger the UI transition
+            await checkActiveMission(); 
         } else { 
-            alert("❌ " + (data.message || "Taken by another driver.")); fetchRadar(); 
+            alert("❌ " + (data.message || "Taken by another driver.")); 
+            fetchRadar(); 
         }
-    } catch(err) {}
+    } catch(err) {
+        console.error("Acceptance Error:", err);
+        alert("Connection lost. Please try again.");
+    }
   }
-
   async function pickup() { 
       if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
       
