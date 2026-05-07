@@ -1079,81 +1079,47 @@ function goStep(n) {
   }
 // 🛡️ REPAIR: State-First Status Checker
 async function checkStatus() {
-    if (!state.bookingId) return;
-    try {
-      const url = `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`;
-      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } }); 
-      const data = await res.json();
-      
-      if (!data.status) return; 
-      const currentStatus = data.status.trim().toUpperCase();
-      
-      // 🟢 1. DRIVER ACCEPTED OR DRIVING -> Move to Step 6
-      if (currentStatus === 'ASSIGNED' || currentStatus === 'IN_TRANSIT') {
-        if (searchInterval) { clearInterval(searchInterval); searchInterval = null; }
-        
-        // Force UI to Tracking Screen FIRST
-        if (currentStep !== 6 && currentStep !== 7) { goStep(6); }
+  if (!state.bookingId) return;
+  try {
+    const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`);
+    const data = await res.json();
+    
+    // If the database returns empty data while waiting, default to 'SEARCHING' instead of crashing
+    const status = data.status ? data.status.toUpperCase() : 'SEARCHING';
 
-        document.getElementById('trackHospital').innerText = data.hospital_name || state.hospitalName || "Hospital"; 
-
-        // 🚨 CRITICAL FIX: Delay the map loading by 300ms so the browser has time to make Step 6 visible!
-        setTimeout(() => {
-            try {
-                initPatientMap(); // Draw the map safely
-                if (leafletMap) leafletMap.invalidateSize(); // Force map to fit the screen
-
-                if (data.driver_lat && data.driver_lng) { 
-                    const dLat = parseFloat(data.driver_lat);
-                    const dLng = parseFloat(data.driver_lng);
-                    const pLat = parseFloat(state.userLat);
-                    const pLng = parseFloat(state.userLng);
-
-                    if (currentStatus === 'ASSIGNED') {
-                        const driverToPatientDist = getKmDistance(dLat, dLng, pLat, pLng);
-                        document.getElementById('etaDist').innerText = driverToPatientDist.toFixed(2);
-                        document.getElementById('etaTime').innerText = Math.max(1, Math.round((driverToPatientDist / 40) * 60)) + " mins";
-                        drawOSRMRoute(dLat, dLng, pLat, pLng);
-                    } else if (currentStatus === 'IN_TRANSIT') {
-                        const liveDist = parseFloat(data.distance || 0).toFixed(2);
-                        const liveCost = Math.round(liveDist * state.rate);
-                        
-                        document.querySelector('[data-i18n="driver_otw"]').innerText = "🚑 Heading to Hospital";
-                        document.getElementById('etaDist').innerText = liveDist + " km travelled"; 
-                        document.getElementById('etaTime').innerText = "Live Cost: ₹" + liveCost;
-                        if(osrmRoute && leafletMap) leafletMap.removeLayer(osrmRoute); 
-                    }
-                    updateDriverOnMap(dLat, dLng); 
-                }
-            } catch(mapErr) { console.error("Map Update Error", mapErr); }
-        }, 300); // 300ms delay stops the crash
-      }
-      
-      // 🔵 2. TRIP COMPLETED -> Move to Step 7 (Receipt)
-      if (currentStatus === 'COMPLETED') { 
-          stopPolling(); 
-          goStep(7); 
-          document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--"; 
-          document.getElementById('receiptDist').innerText = (data.distance || "0") + " km"; 
-          document.getElementById('receiptCost').innerText = "₹" + (data.final_cost || "0"); 
-          localStorage.removeItem('patient_session'); 
-          return;
-      }
-      
-      // 🔴 3. TRIP CANCELLED -> Reset
-      if (currentStatus === 'CANCELLED') { 
-          stopPolling(); 
-          alert("This booking was cancelled."); 
-          clearSession(); 
-          return;
-      }
-    } catch(err) { console.error("Poll Error:", err); }
-
-    if (isPolling) {
-        pollTimeout = setTimeout(checkStatus, 3000);
+    if (status === 'COMPLETED') { 
+        stopPolling(); 
+        document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--";
+        document.getElementById('receiptCost').innerText = data.final_cost || "0";
+        openSheet('receipt');
+        localStorage.removeItem('patient_session');
+        return; 
     }
-  }
-  
+    
+    if (status === 'CANCELLED') { 
+        stopPolling(); 
+        alert("Booking cancelled by driver or system."); 
+        clearSession(); 
+        return; 
+    }
+
+    if (status === 'ASSIGNED' || status === 'IN_TRANSIT') {
+        if(searchInterval) { clearInterval(searchInterval); searchInterval = null; }
+        
+        document.getElementById('dashHospital').innerText = data.hospital_name || state.hospitalName || "Hospital";
+        document.getElementById('dashDist').innerText = data.distance || "0.0";
+        document.getElementById('dashStatusText').innerText = status === 'IN_TRANSIT' ? "🚑 In Transit to Hospital" : "Ambulance Arriving";
+        
+        openSheet('assigned');
+    } else {
+        // If status is empty, null, PENDING, or SEARCHING, stay on the searching overlay
+        openSheet('searching');
+    }
+
+  } catch(err) { console.error("Poll Error ignored."); }
+
+  if (isPolling) { pollTimeout = setTimeout(checkStatus, 3000); }
+}  
   function changeDestination() { 
       isUpdatingDestination = true; 
       document.getElementById('step3Title').innerText = "Update Destination"; 
