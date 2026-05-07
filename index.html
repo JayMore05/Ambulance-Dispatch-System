@@ -708,15 +708,22 @@ window.onload = () => {
   
   function goStep(n) { 
       currentStep = n; 
-      for(let i=1; i<=8; i++) { 
-          let el = document.getElementById('step' + i); 
-          if(el) { 
-              i === n ? el.classList.remove('hidden') : el.classList.add('hidden'); 
-          } 
-      } 
+      // List of every main card ID in your HTML
+      const ids = ['step1', 'step2', 'step3', 'step4', 'dashboardStep', 'step7', 'step8'];
+      
+      ids.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+              // This logic checks if n is 1 (matches 'step1') OR if n is 'Dashboard' (matches 'dashboardStep')
+              if (id === 'step' + n || id === n + 'Step' || id === n) {
+                  el.classList.remove('hidden');
+              } else {
+                  el.classList.add('hidden');
+              }
+          }
+      });
       window.scrollTo(0, 0); 
   }
-  
   function goBack() { 
       if (isUpdatingDestination && currentStep === 3) { isUpdatingDestination = false; goStep(6); return; } 
       if(currentStep === 2) goStep(1); 
@@ -1069,28 +1076,40 @@ async function checkStatus() {
     if (isPolling) {
         pollTimeout = setTimeout(checkStatus, 3000);
     }
-  }function renderDashboard(status, data) {
-    const searching = document.getElementById('searchingState');
-    const assigned = document.getElementById('assignedState');
-    const dashStep = document.getElementById('dashboardStep');
+  }
+  function renderDashboard(status, data) {
+      const searching = document.getElementById('searchingState');
+      const assigned = document.getElementById('assignedState');
+      const dashStep = document.getElementById('dashboardStep');
 
-    // Force Dashboard card to be visible if a driver is assigned
-    if (status === 'ASSIGNED' || status === 'IN_TRANSIT') {
-        if(searchInterval) { clearInterval(searchInterval); searchInterval = null; }
-        
-        // Remove 'hidden' from the main dashboard card
-        dashStep.classList.remove('hidden');
-        currentStep = 'Dashboard';
+      // 1. Force the main dashboard container to be visible
+      if (dashStep.classList.contains('hidden')) {
+          goStep('Dashboard');
+      }
 
-        searching.classList.add('hidden');
-        assigned.classList.remove('hidden');
+      // 2. Handle Searching State (REQUESTED)
+      if (status === 'REQUESTED' || status === 'PENDING' || !status) {
+          searching.classList.remove('hidden');
+          assigned.classList.add('hidden');
+      } 
+      // 3. Handle Active Mission State (ASSIGNED / IN_TRANSIT)
+      else if (status === 'ASSIGNED' || status === 'IN_TRANSIT') {
+          if(searchInterval) { clearInterval(searchInterval); searchInterval = null; }
+          
+          searching.classList.add('hidden');
+          assigned.classList.remove('hidden');
 
-        document.getElementById('dashHospital').innerText = data.hospital_name || state.hospitalName || "Hospital";
-        document.getElementById('dashDist').innerText = data.distance || "0.0";
-        document.getElementById('dashStatusText').innerText = status === 'IN_TRANSIT' ? "🚑 In Transit to Hospital" : "Ambulance Arriving";
-    }
-}
+          // Update text safely
+          const hEl = document.getElementById('dashHospital');
+          const dEl = document.getElementById('dashDist');
+          const sEl = document.getElementById('dashStatusText');
 
+          if(hEl) hEl.innerText = data.hospital_name || state.hospitalName || "Hospital";
+          if(dEl) dEl.innerText = data.distance || "0.0";
+          if(sEl) sEl.innerText = status === 'IN_TRANSIT' ? "🚑 In Transit to Hospital" : "Ambulance Arriving";
+      }
+  } 
+  
   function renderReceipt(data) {
       goStep(7); // Jump to final receipt card
       document.getElementById('receiptHospital').innerText = data.hospital_name || state.hospitalName || "--";
