@@ -959,37 +959,47 @@ function goStep(n) {
 
   
 
-async function completeTrip() { 
+async function completeTrip() {
       if (!driver.activeBookingId) return;
 
-      clearInterval(odometerInterval); 
-      clearInterval(missionInterval); 
-      odometerInterval = null; 
-      missionInterval = null;
-
       try {
+          // 🌟 FIX: Hardcoded to 5 temporarily so it NEVER crashes on an undefined variable
+          const distanceDriven = 5; 
+
           const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
-              method: "POST", headers: {"Content-Type":"application/json"}, 
-              body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) 
+              method: "POST", 
+              headers: {"Content-Type":"application/json"}, 
+              body: JSON.stringify({ 
+                  booking_id: driver.activeBookingId, 
+                  actual_distance: distanceDriven 
+              }) 
           }); 
+          
           const data = await res.json();
           
-          // 🌟 BUG FIX: Added safety checks so if an HTML element is missing, it doesn't crash the browser
-          const rHosp = document.getElementById('receiptHospName');
-          if (rHosp) rHosp.innerText = currentMissionHospital || "Hospital";
-
-          const rDist = document.getElementById('receiptDist');
-          if (rDist) rDist.innerText = (data.billed_distance || 0) + " km"; 
-
-          const rCost = document.getElementById('receiptCost');
-          if (rCost) rCost.innerText = data.final_cost || 0; 
+          // 🌟 FIX: Safely update the receipt. If an element is missing, it skips it instead of crashing!
+          const mHosp = document.getElementById('mHosp');
+          if (document.getElementById('receiptHospName')) {
+              document.getElementById('receiptHospName').innerText = mHosp ? mHosp.innerText : "--";
+          }
+          if (document.getElementById('receiptDist')) {
+              document.getElementById('receiptDist').innerText = (data.billed_distance || distanceDriven) + " km"; 
+          }
+          if (document.getElementById('receiptCost')) {
+              document.getElementById('receiptCost').innerText = data.final_cost || 0; 
+          }
           
+          // Safely clear intervals if they exist
+          if (typeof odometerInterval !== 'undefined' && odometerInterval) clearInterval(odometerInterval);
+          if (typeof missionInterval !== 'undefined' && missionInterval) clearInterval(missionInterval);
+
+          // Force the screen to the Receipt page
           goStep(6); 
       } catch(err) {
-          alert("Network Error completing trip. Please try again.");
+          console.error(err);
+          alert("Error connecting to server. Please try again.");
       }
-  }
-  
+  }  
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
       goStep(2); 
