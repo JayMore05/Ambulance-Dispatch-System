@@ -11,8 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="DriverOps">
   <link rel="apple-touch-icon" href="/icons/icon-driver-192.png">
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
 
   <style>
     :root {
@@ -223,7 +222,7 @@
         <a id="btnCallPatient" href="#" class="btn info" style="width:auto; padding:8px 16px; font-size:14px; text-decoration:none;">📞 Call</a>
     </div>
 
-    <div id="driverMap"></div>
+    
 
     <div class="request-card">
       <div class="req-detail"><strong>Patient:</strong> <span id="missionPatient"></span></div>
@@ -353,173 +352,755 @@
 </div>
 
 <audio id="alertBeep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
+
 <script>
-  window.onerror = function(msg) { console.error("App Error: " + msg); return false; };
+  // ==========================================
+  // ✅ PWA — Service Worker + Push + Install
+  // ==========================================
+  let driverInstallPrompt = null;
 
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async () => {
+      try { await navigator.serviceWorker.register('/sw.js'); } catch(e) {}
+    });
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); driverInstallPrompt = e;
+  });
+
+  async function subscribeDriverPush(driverId) {
+    if (!('PushManager' in window) || !navigator.serviceWorker) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const keyRes = await fetch(`${BASE_URL}/api/push/vapid-key`);
+      const { publicKey } = await keyRes.json();
+      const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+      const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = window.atob(base64);
+      const u8arr = new Uint8Array([...raw].map(c => c.charCodeAt(0)));
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8arr });
+      await fetch(`${BASE_URL}/api/push/subscribe-driver`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver_id: driverId, subscription: sub }) });
+    } catch(e) { console.log("Push failed"); }
+  }
+
+  // ==========================================
+  // 🛡️ GPS SENDER LOGIC
+  // ==========================================
+  let gpsSendInterval = null;
+
+  function startGPSSending() {
+    if (gpsSendInterval) return;
+    gpsSendInterval = setInterval(async () => {
+      if (!driver.id || !driver.activeBookingId) return;
+      try {
+        await fetch(`${BASE_URL}/api/driver/location`, { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify({ driver_id: driver.id, latitude: driver.lat, longitude: driver.lng }) 
+        });
+      } catch(e) {}
+    }, 5000);
+  }
+
+  function stopGPSSending() {
+    if (gpsSendInterval) clearInterval(gpsSendInterval); 
+    gpsSendInterval = null;
+  }
+
+  // 🛡️ FREEZE FIX (Visibility Change)
+  document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+          if(driver.activeBookingId) { checkActiveMission(); }
+          else if(driver.isOnline) { fetchRadar(); }
+      }
+  });
+
+  async function fetchCityName(lat, lng) {
+      try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+          const data = await res.json();
+          return data.address.city || data.address.town || data.address.village || data.address.suburb || "Local Area";
+      } catch (e) { return null; }
+  }
+
+  // ==========================================
+  // SETUP & VARIABLES
+  // ==========================================
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
-  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, activeBookingId: null, isOnline: false };
-  let radarInterval = null;
-  let missionInterval = null;
-  let currentMissionHospital = null;
-  let currentBookedDistance = 5;
+  const IMGBB_API_KEY = "ee53b2b3a5cea6bfd2bb4e601fd624f9"; 
+  
+  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null };
+  let radarInterval = null; 
+  let isRegisterMode = false; 
+  let lastEmergencyCount = 0; 
+  let pendingAcceptData = null; 
+  let uploadedURLs = {}; 
+  let missionInterval = null; 
+  let odometerInterval = null; 
+  let totalDrivenKm = 0; 
+  let currentBookedDistance = 0; // Added for billing logic
+  let lastLat = null; 
+  let lastLng = null;
+  let currentMissionHospital = null; 
+  let wakeLock = null; 
+  let dMap = null; 
+  let driverMarker = null; 
+  let patientMarker = null;
 
-  window.onload = () => {
-      if (driver.id) {
-          document.getElementById('navToggle').style.display = 'flex';
-          document.getElementById('bottomNav').style.display = 'flex';
-          driver.isOnline = true;
-          if (driver.activeBookingId) checkActiveMission();
-          else toggleStatus();
-      }
-      if (navigator.geolocation) {
-          navigator.geolocation.watchPosition(
-              pos => { driver.lat = pos.coords.latitude; driver.lng = pos.coords.longitude; },
-              err => {}, { enableHighAccuracy: false, maximumAge: 10000 }
-          );
-      }
+  const getKmDistance = (lat1, lon1, lat2, lon2) => { 
+      const R = 6371; 
+      const dLat = (lat2 - lat1) * Math.PI / 180; 
+      const dLon = (lon2 - lon1) * Math.PI / 180; 
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2); 
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
   };
 
-  function goStep(n) {
-      const steps = [1, 'Pending', 2, 3, 4, 5, 6];
-      steps.forEach(i => {
-          let el = document.getElementById('step' + i);
-          if (el) {
-              if (i === n) { el.classList.remove('hidden'); el.style.display = 'block'; } 
-              else { el.classList.add('hidden'); el.style.display = 'none'; }
-          }
-      });
-      window.scrollTo(0, 0);
-  }
-
-  function navTab(stepNum, btn) {
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
-      goStep(stepNum);
-      if (stepNum === 2) fetchRadar();
-  }
-
-  function login() {
-      const phone = document.getElementById('authPhone').value;
-      if (phone.length < 10) return alert("Enter valid phone.");
-      driver.id = 1; driver.phone = phone; driver.name = "Test Driver"; driver.type = "ALS";
-      localStorage.setItem('driver_session', JSON.stringify(driver));
-      document.getElementById('navToggle').style.display = 'flex';
-      document.getElementById('bottomNav').style.display = 'flex';
-      toggleStatus();
-  }
-
-  function toggleStatus() {
-      driver.isOnline = document.getElementById('statusCheckbox').checked;
-      document.getElementById('toggleText').innerText = driver.isOnline ? "ONLINE" : "OFFLINE";
-      if (driver.isOnline) {
-          goStep(2);
-          fetchRadar();
-          if (!radarInterval) radarInterval = setInterval(fetchRadar, 5000);
-      } else {
-          if (radarInterval) clearInterval(radarInterval);
-          document.getElementById('emergencyList').innerHTML = "";
+  // 🌟 NEW: Driver Escalation Simulation
+  function alertAdminDriver() {
+      const issue = prompt("⚠️ ADMIN ESCALATION MATRIX\n\nWhat is the operational issue?\n1. Vehicle Breakdown (Need Replacement)\n2. Stuck in Severe Traffic\n3. Patient Condition Worsening\n\nType 1, 2, or 3:");
+      if(issue) {
+          alert("🚨 CRITICAL ALERT SENT: The Central Dispatch Admin has received your GPS coordinates and is calling your radio now. Please stand by.");
       }
   }
 
-  async function fetchRadar() {
-      if (!driver.isOnline || driver.activeBookingId) return;
+  // ⚡ ULTRA FAST DRIVER GPS
+  window.onload = () => {
+    if (driver.id) { 
+        if (driver.status === 'PENDING') { 
+            goStep('Pending'); 
+        } else { 
+            document.getElementById('navToggle').style.display = 'flex'; 
+            document.getElementById('bottomNav').style.display = 'flex'; 
+            driver.isOnline = true; 
+            checkActiveMission(); 
+        }
+    }
+    
+    let lastCityFetch = 0; 
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+            async pos => { 
+                driver.lat = pos.coords.latitude; 
+                driver.lng = pos.coords.longitude; 
+                if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
+                
+                if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
+                    lastCityFetch = Date.now();
+                    const city = await fetchCityName(driver.lat, driver.lng);
+                    const tText = document.getElementById('toggleText');
+                    if(tText.innerText.includes("ONLINE")) tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
+                }
+            }, 
+            err => console.log("GPS denied or slow"), 
+            { enableHighAccuracy: false, maximumAge: 10000 }
+        );
+    }
+  };
+
+  async function requestWakeLock() { 
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} 
+  }
+
+  function goStep(n) { 
+      const steps = [1, 'Pending', 2, 3, 4, 5, 6];
+      steps.forEach(i => { 
+          let el = document.getElementById('step' + i); 
+          if (el) el.style.display = 'none'; 
+      }); 
+      document.getElementById('step' + n).style.display = 'block'; 
+      window.scrollTo(0, 0); 
+  }
+
+  function navTab(stepNum, btnElement) { 
+      document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); 
+      if(btnElement) btnElement.classList.add('active'); 
+      goStep(stepNum); 
+      if(stepNum === 2) fetchRadar(); 
+      if(stepNum === 4) loadHistory(); 
+      if(stepNum === 5) { 
+          document.getElementById('editName').value = driver.name || ''; 
+          document.getElementById('editPhone').value = driver.phone || ''; 
+          document.getElementById('editVehicle').value = driver.vehicle_num || ''; 
+          document.getElementById('editType').value = driver.type || 'ALS'; 
+      } 
+  }
+
+  function showFErr(id, msg) { 
+      document.getElementById(id).classList.add('error'); 
+      const el = document.getElementById('err-' + id); 
+      if (el) { el.innerText = msg; el.style.display = 'block'; } 
+  }
+  
+  function clearFErr(id) { 
+      document.getElementById(id).classList.remove('error'); 
+      const el = document.getElementById('err-' + id); 
+      if (el) el.style.display = 'none'; 
+  }
+  
+ function isValidPhone(p) { return /^[6-9]\d{9}$/.test(String(p).trim()); }
+
+  function switchAuthMode(mode) { 
+      isRegisterMode = (mode === 'register'); 
+      document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode); 
+      document.getElementById('tabRegister').classList.toggle('active', isRegisterMode); 
+      document.getElementById('loginOnlyFields').style.display = isRegisterMode ? 'none' : 'block';
+      document.getElementById('regPart1').style.display = isRegisterMode ? 'block' : 'none';
+      document.getElementById('regPart2').style.display = 'none'; 
+  }
+
+  function goToRegPart2() { 
+      const name = document.getElementById('regName').value.trim(); 
+      const phone = document.getElementById('regPhone').value.trim(); 
+      const veh = document.getElementById('regVehicle').value.trim(); 
+      let valid = true;
+      
+      if (!name || name.length < 2) { showFErr('regName', 'Enter a valid name.'); valid = false; }
+      if (!isValidPhone(phone)) { showFErr('regPhone', 'Enter a valid 10-digit number.'); valid = false; }
+      if (!veh) { alert("Please enter vehicle number."); valid = false; }
+      if (!valid) return;
+      
+      document.getElementById('regPart1').style.display = 'none'; 
+      document.getElementById('regPart2').style.display = 'block'; 
+  }
+
+  function goToRegPart1() { 
+      document.getElementById('regPart2').style.display = 'none'; 
+      document.getElementById('regPart1').style.display = 'block'; 
+  }
+  
+  function cancelLogin() { 
+      document.getElementById('otpForm').style.display = 'none'; 
+      document.getElementById('loginForm').style.display = 'block'; 
+  }
+
+  function getBase64(file) { 
+      return new Promise((resolve, reject) => { 
+          const reader = new FileReader(); 
+          reader.readAsDataURL(file); 
+          reader.onload = () => resolve(reader.result.split(',')[1]); 
+          reader.onerror = error => reject(error); 
+      }); 
+  }
+
+  async function uploadImageToImgBB(fileInputId) {
+      const fileField = document.getElementById(fileInputId); 
+      if (!fileField.files || fileField.files.length === 0) return null;
       try {
-          const res = await fetch(`${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&t=${Date.now()}`);
+          const base64Image = await getBase64(fileField.files[0]); 
+          const formData = new FormData(); 
+          formData.append("image", base64Image);
+          const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: formData });
+          const data = await res.json(); 
+          if(data.success) return data.data.url; 
+          return null;
+      } catch (err) { return null; }
+  }
+
+  async function submitKYC() {
+      const btn = document.getElementById('btnSubmitKYC'); 
+      const bar = document.getElementById('uploadBar');
+      
+      if (!document.getElementById('fileAadhar').files[0] && !driver.id) return alert("Aadhar Card is mandatory.");
+      
+      btn.disabled = true; 
+      btn.innerText = "Uploading Documents..."; 
+      document.getElementById('uploadProgress').style.display = "block"; 
+      document.getElementById('uploadText').style.display = "block";
+      
+      bar.style.width = "20%"; uploadedURLs.aadhar = await uploadImageToImgBB('fileAadhar');
+      bar.style.width = "50%"; uploadedURLs.rc = await uploadImageToImgBB('fileRC');
+      bar.style.width = "75%"; uploadedURLs.insurance = await uploadImageToImgBB('fileInsurance');
+      bar.style.width = "95%"; uploadedURLs.puc = await uploadImageToImgBB('filePUC'); 
+      bar.style.width = "100%";
+      
+      if(!uploadedURLs.aadhar && !driver.id) { 
+          btn.disabled = false; 
+          btn.innerText = "Upload & Get OTP"; 
+          return alert("Failed to upload. Try a smaller image."); 
+      }
+      await requestOTP(document.getElementById('regPhone').value);
+  }
+
+  async function requestOTP(phoneOverride) {
+    const phone = phoneOverride || document.getElementById('authPhone').value.trim(); 
+    if (!isValidPhone(phone)) { showFErr('authPhone', 'Enter a valid 10-digit number.'); return; }
+    try {
+      const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { 
+          method: "POST", 
+          headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ phone, isRegister: isRegisterMode }) 
+      });
+      const data = await res.json();
+      if (res.ok) { 
+          document.getElementById('loginForm').style.display = 'none'; 
+          document.getElementById('otpForm').style.display = 'block'; 
+          document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`; 
+      } else { 
+          alert("❌ " + data.error); 
+          document.getElementById('btnSubmitKYC').disabled = false; 
+          document.getElementById('btnSubmitKYC').innerText = "Upload & Get OTP"; 
+      }
+    } catch(err) { alert("Server error."); }
+  }
+
+  async function verifyOTP() {
+    const phone = isRegisterMode ? document.getElementById('regPhone').value : document.getElementById('authPhone').value; 
+    const otp = document.getElementById('driverOtp').value;
+    
+    const payload = { 
+        phone: phone, otp: otp, isRegister: isRegisterMode, 
+        name: document.getElementById('regName').value, 
+        vehicle_num: document.getElementById('regVehicle').value, 
+        ambulance_type: document.getElementById('regType').value, 
+        aadhar_url: uploadedURLs.aadhar || null, 
+        rc_url: uploadedURLs.rc || null, 
+        insurance_url: uploadedURLs.insurance || null, 
+        puc_url: uploadedURLs.puc || null, 
+        pcc_status: document.getElementById('regPCC').checked ? 'YES' : 'NO' 
+    };
+    
+    try {
+      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { 
+          method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) 
+      });
+      const data = await res.json();
+      
+      if (data.driver_id) {
+        if (data.verification_status === 'REJECTED') { 
+            document.getElementById('otpForm').style.display = 'none'; 
+            switchAuthMode('register'); 
+            document.getElementById('rejectionBox').style.display = 'block'; 
+            document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; 
+            return; 
+        }
+        
+        driver = { id: data.driver_id, type: data.ambulance_type, name: data.name, phone: phone, vehicle_num: data.ambulance_number, status: data.verification_status, isOnline: false };
+        localStorage.setItem('driver_session', JSON.stringify(driver));
+        
+        if (data.verification_status === 'PENDING') { 
+            goStep('Pending'); 
+        } else { 
+            driver.isOnline = true; 
+            document.getElementById('navToggle').style.display = 'flex'; 
+            document.getElementById('bottomNav').style.display = 'flex'; 
+            subscribeDriverPush(data.driver_id); 
+            checkActiveMission(); 
+            toggleStatus(); 
+        }
+      } else { alert("❌ " + data.error); }
+    } catch(err) { alert("Failed to verify."); }
+  }
+
+  async function checkApprovalStatus() {
+      if(!driver.id) return;
+      try {
+          const res = await fetch(`${BASE_URL}/api/driver/check-status?driver_id=${driver.id}`); 
           const data = await res.json();
-          const list = document.getElementById('emergencyList');
-          list.innerHTML = "";
-          if (data.bookings && data.bookings.length > 0) {
-              data.bookings.forEach(b => {
-                  const card = document.createElement('div'); card.className = 'request-card';
-                  card.innerHTML = `<h3 style="color:var(--primary); margin:0 0 10px;">${b.emergency_category}</h3><p>Patient: ${b.user_name}<br>Dropoff: ${b.hospital_name}</p><button class="btn success" onclick="acceptTrip(${b.booking_id})">ACCEPT TRIP</button>`;
-                  list.appendChild(card);
-              });
-          } else {
-              list.innerHTML = "<p style='color:var(--muted); text-align:center;'>No emergencies nearby.</p>";
+          
+          if (data.verification_status === 'APPROVED') { 
+              driver.status = 'APPROVED'; driver.isOnline = true; 
+              localStorage.setItem('driver_session', JSON.stringify(driver)); 
+              document.getElementById('navToggle').style.display = 'flex'; 
+              document.getElementById('bottomNav').style.display = 'flex'; 
+              checkActiveMission(); 
+              toggleStatus(); 
+          } else if (data.verification_status === 'REJECTED') { 
+              driver.status = 'REJECTED'; 
+              localStorage.setItem('driver_session', JSON.stringify(driver)); 
+              goStep(1); 
+              switchAuthMode('register'); 
+              document.getElementById('rejectionBox').style.display = 'block'; 
+              document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; 
+          } else { 
+              alert("Still under review. Please check again later."); 
           }
-      } catch (e) {}
+      } catch(e) { alert("Server error. Try again."); }
   }
 
-  async function acceptTrip(bId) {
-      try {
-          const res = await fetch(`${BASE_URL}/api/driver/accept`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ booking_id: bId, driver_id: driver.id }) });
-          const data = await res.json();
-          if (data.success) {
-              if (radarInterval) clearInterval(radarInterval);
-              driver.activeBookingId = bId;
-              localStorage.setItem('driver_session', JSON.stringify(driver));
-              checkActiveMission();
-          } else { alert("Trip taken by another driver."); fetchRadar(); }
-      } catch (e) { alert("Network Error"); }
+  async function toggleStatus() {
+    driver.isOnline = document.getElementById('statusCheckbox').checked; 
+    document.getElementById('toggleText').innerText = driver.isOnline ? "ONLINE" : "OFFLINE"; 
+    document.getElementById('toggleText').style.color = driver.isOnline ? "var(--success)" : "var(--muted)";
+    const audio = document.getElementById('alertBeep'); 
+    audio.muted = false; 
+    audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => {});
+    
+    if(driver.isOnline) { 
+        requestWakeLock(); 
+        document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
+        document.querySelector('.pulse').style.display = "flex"; 
+        const city = await fetchCityName(driver.lat, driver.lng);
+        document.getElementById('toggleText').innerText = city ? `ONLINE (${city})` : "ONLINE";
+        fetchRadar(); 
+        radarInterval = setInterval(fetchRadar, 5000); 
+    } else { 
+        if (wakeLock) wakeLock.release(); 
+        document.getElementById('radarTitle').innerText = "You are Offline"; 
+        document.querySelector('.pulse').style.display = "none"; 
+        document.getElementById('emergencyList').innerHTML = ""; 
+        clearInterval(radarInterval); 
+    }
+    fetch(`${BASE_URL}/api/driver/toggle-status`, { 
+        method: "POST", headers: {"Content-Type":"application/json"}, 
+        body: JSON.stringify({ driver_id: driver.id, status: driver.isOnline ? 'ONLINE' : 'OFFLINE' }) 
+    });
   }
 
+  // 🛡️ FRONTEND UPDATE ONLY: Formatting time and calculating elapsed minutes
+ async function fetchRadar() {
+    if(!driver.isOnline || driver.activeBookingId) return;
+    try {
+      // Magic Fix: &t=${Date.now()} prevents the phone from showing "Ghost" bookings
+      const url = `${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}&t=${Date.now()}_${Math.random()}`;
+      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
+      const data = await res.json(); 
+      const list = document.getElementById('emergencyList'); 
+      list.innerHTML = "";
+      
+      if(data.bookings && data.bookings.length > 0) {
+        if (data.bookings.length > lastEmergencyCount) { 
+            document.body.style.backgroundColor = "#fff59d"; 
+            setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); 
+            if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
+            document.getElementById('alertBeep').play().catch(e => {}); 
+        }
+        lastEmergencyCount = data.bookings.length;
+        
+        data.bookings.forEach(b => {
+          const safeName = b.user_name.replace(/'/g, "\\'"); 
+          const safeHosp = b.hospital_name.replace(/'/g, "\\'"); 
+          const safeCond = b.emergency_category.replace(/'/g, "\\'");
+          const card = document.createElement('div'); 
+          card.className = `request-card ${b.priorityStar ? 'priority' : ''}`;
+          const starHTML = b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : '';
+
+          const rawTime = b.booked_at || b.created_at || Date.now();
+          const bookingTime = new Date(rawTime);
+          const timeStr = bookingTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+          const elapsedMins = Math.max(0, Math.floor((Date.now() - bookingTime.getTime()) / 60000));
+          
+          card.innerHTML = `${starHTML}<div class="req-header"><div class="req-title"></div><div style="text-align: right;"><div style="font-size: 13px; font-weight: bold; color: var(--text);" class="r-time"></div><div style="font-size: 13px; color: var(--warning); margin-top: 4px;" class="r-elapsed"></div></div></div><div class="req-detail"><strong>Patient:</strong> <span class="pname"></span></div><div class="req-detail"><strong>Dropoff:</strong> <span class="phosp"></span></div><button class="btn primary" style="margin-top:12px;">ACCEPT EMERGENCY</button>`;
+          
+          card.querySelector('.req-title').textContent = b.emergency_category; 
+          card.querySelector('.r-time').textContent = "⏰ " + timeStr; 
+          card.querySelector('.r-elapsed').textContent = "⏳ ~" + elapsedMins + " mins ago"; 
+          card.querySelector('.pname').textContent = b.user_name; 
+          card.querySelector('.phosp').textContent = b.hospital_name;
+          card.querySelector('button').onclick = () => promptModal(b.booking_id, safeName, b.user_phone, safeCond, safeHosp, b.user_latitude, b.user_longitude, b.hosp_lat || 0, b.hosp_lng || 0);
+          
+          list.appendChild(card);
+        });
+      } else { 
+          list.innerHTML = `<p style="text-align:center; color:var(--muted); margin-top:20px;">No emergencies in range.</p>`; 
+          lastEmergencyCount = 0; 
+      }
+    } catch(err) { }
+  }
   async function checkActiveMission() {
+    try {
+        // Cache buster here too!
+        const url = `${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}_${Math.random()}`;
+        const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
+        const data = await res.json();
+        
+        if(data.hasMission) { 
+            clearInterval(radarInterval); 
+            setupActiveMissionUI(data.mission); 
+        } else { 
+            goStep(2); 
+            fetchRadar(); 
+            if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
+        }
+    } catch(err) {}
+  }
+  function initDriverMap(pLat, pLng) {
+      if (dMap) return;
+      dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
+      // 🛡️ CARTODB MAPS - NO BAN!
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(dMap);
+      driverMarker = L.marker([driver.lat, driver.lng]).addTo(dMap).bindPopup("<b>You (Ambulance)</b>").openPopup();
+      patientMarker = L.marker([pLat, pLng]).addTo(dMap).bindPopup("<b>Patient Location</b>").openPopup();
+      let group = new L.featureGroup([driverMarker, patientMarker]); 
+      dMap.fitBounds(group.getBounds().pad(0.5));
+  }
+
+  function setupActiveMissionUI(m) {
+    driver.activeBookingId = m.booking_id; 
+    window.currentPatientPhone = m.user_phone; 
+    currentBookedDistance = parseFloat(m.hospital_distance_km) || 0; 
+    currentMissionHospital = m.hospital_name;
+    
+    document.getElementById('missionPatient').innerText = m.user_name; 
+    document.getElementById('missionCondition').innerText = m.emergency_category; 
+    document.getElementById('missionHospital').innerText = m.hospital_name; 
+    
+    const callBtn = document.getElementById('btnCallPatient');
+    if(callBtn) callBtn.href = `tel:${m.user_phone}`;
+    
+    const navPat = document.getElementById('navToPatient');
+    if(navPat) navPat.href = `https://www.google.com/maps/dir/?api=1&destination=$$${m.user_latitude},${m.user_longitude}`;
+    
+    let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
+    const navHosp = document.getElementById('navToHospital');
+    if(navHosp) navHosp.href = `https://www.google.com/maps/dir/?api=1&destination=$$${hospDest}`;
+    
+    if(m.status === 'IN_TRANSIT') { 
+        document.getElementById('phase1Box').style.display = 'none'; 
+        document.getElementById('phase2Box').style.display = 'block'; 
+    } else { 
+        document.getElementById('phase1Box').style.display = 'block'; 
+        document.getElementById('phase2Box').style.display = 'none'; 
+    }
+    
+    goStep(3); 
+    startGPSSending(); 
+    // Map removed entirely from here
+    if(typeof missionInterval === 'undefined' || !missionInterval) { missionInterval = setInterval(checkActiveMission, 5000); }
+  }
+
+  function sendWhatsAppToPatient() {
+      let phone = window.currentPatientPhone; 
+      if (phone && phone.length === 10) phone = '91' + phone;
+      const msg = `🚑 *FastRescue Alert / अलर्ट / सूचना*\n\n[EN] I have accepted your emergency request and I am on the way.\n[HI] मैंने आपका आपातकालीन अनुरोध स्वीकार कर लिया है और मैं रास्ते में हूँ।\n[MR] मी तुमची आणीबाणीची विनंती स्वीकारली आहे आणि मी वाटेत आहे.\n\n👨‍⚕️ *Driver:* ${driver.name}\n🚐 *Ambulance:* ${driver.type}\n🔢 *Vehicle Number:* ${driver.vehicle_num}\n\nPlease keep your phone nearby and stay calm. Help is arriving!`;
+      window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg));
+  }
+
+  async function submitDriverDest() {
+      const newDest = document.getElementById('driverNewDest').value; 
+      const newDist = prompt("Enter approximate distance to new hospital (in km):", "5");
+      if(newDest && driver.activeBookingId) { 
+          await fetch(`${BASE_URL}/api/bookings/update-destination`, { 
+              method: "POST", headers: {"Content-Type":"application/json"}, 
+              body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest, new_distance: newDist }) 
+          }); 
+          currentBookedDistance = parseFloat(newDist) || 0; // Update local odometer base
+          document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km (Billed)";
+          document.getElementById('destModal').style.display='none'; 
+          checkActiveMission(); 
+      }
+  }
+  function promptModal(id, name, phone, cond, hosp, uLat, uLng, hLat, hLng) { 
+      pendingAcceptData = { booking_id: id, user_name: name, user_phone: phone, emergency_category: cond, hospital_name: hosp, user_latitude: uLat, user_longitude: uLng, hosp_lat: hLat, hosp_lng: hLng }; 
+      document.getElementById('modalPatient').textContent = name; 
+      document.getElementById('modalCondition').textContent = cond; 
+      document.getElementById('modalHospital').textContent = hosp; 
+      document.getElementById('dispatchModal').style.display='flex'; 
+  }
+  
+  function closeModal() { 
+      document.getElementById('dispatchModal').style.display='none'; 
+      pendingAcceptData = null; 
+  }
+  
+  async function confirmAccept() {
+    if(!pendingAcceptData) return; 
+    document.getElementById('dispatchModal').style.display='none';
+    try { 
+        const res = await fetch(`${BASE_URL}/api/driver/accept`, { 
+            method: "POST", headers: {"Content-Type":"application/json"}, 
+            body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
+        }); 
+        const data = await res.json();
+        
+        if (res.ok && data.success) { 
+            clearInterval(radarInterval); checkActiveMission(); 
+        } else { 
+            alert("❌ " + (data.message || "Taken by another driver.")); fetchRadar(); 
+        }
+    } catch(err) {}
+  }
+
+  async function pickup() { 
+      if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
+      
+      document.getElementById('phase1Box').style.display = 'none'; 
+      if (odometerInterval) clearInterval(odometerInterval);
+
+      await fetch(`${BASE_URL}/api/driver/pickup`, { 
+          method: "POST", headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ booking_id: driver.activeBookingId }) 
+      }); 
+      
+      checkActiveMission(); 
+      
+      lastLat = driver.lat; 
+      lastLng = driver.lng; 
+      totalDrivenKm = 0; 
+      
+      // Instantly show the minimum rounded booked distance
+      document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km (Minimum Billed)";
+      
+      odometerInterval = setInterval(() => { 
+          const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng); 
+          if (d > 0.01) { 
+              totalDrivenKm += d; 
+              lastLat = driver.lat; 
+              lastLng = driver.lng; 
+              
+              // Only increases if driver exceeds the booked km
+              let billed = Math.max(Math.ceil(currentBookedDistance), Math.ceil(totalDrivenKm));
+              document.getElementById('liveOdo').innerText = billed + " km (Billed)"; 
+          } 
+      }, 3000); 
+  }
+
+  
+
+async function completeTrip() { 
       if (!driver.activeBookingId) return;
+
       try {
-          const res = await fetch(`${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}`);
+          // Safe fallback distance to prevent blackout crashes
+          const distanceDriven = (typeof currentBookedDistance !== 'undefined' && currentBookedDistance > 0) ? currentBookedDistance : 5;
+
+          const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
+              method: "POST", headers: {"Content-Type":"application/json"}, 
+              body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: distanceDriven }) 
+          }); 
           const data = await res.json();
-          if (data.hasMission) {
-              const m = data.mission;
-              currentMissionHospital = m.hospital_name;
-              currentBookedDistance = parseFloat(m.hospital_distance_km) || 5;
-              
-              document.getElementById('missionPatient').innerText = m.user_name;
-              document.getElementById('missionCondition').innerText = m.emergency_category;
-              document.getElementById('missionHospital').innerText = m.hospital_name;
-              
-              if (m.status === 'IN_TRANSIT') {
-                  document.getElementById('phase1Box').style.display = 'none';
-                  document.getElementById('phase2Box').style.display = 'block';
-                  document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km";
-              } else {
-                  document.getElementById('phase1Box').style.display = 'block';
-                  document.getElementById('phase2Box').style.display = 'none';
-              }
-              goStep(3);
-              if (!missionInterval) missionInterval = setInterval(checkActiveMission, 5000);
-          } else {
-              driver.activeBookingId = null; localStorage.setItem('driver_session', JSON.stringify(driver)); goStep(2);
+          
+          // Stop intervals safely
+          if (typeof odometerInterval !== 'undefined') clearInterval(odometerInterval); 
+          if (typeof missionInterval !== 'undefined') clearInterval(missionInterval); 
+
+          // Update receipt safely
+          const mHosp = document.getElementById('missionHospital');
+          document.getElementById('receiptHospName').innerText = mHosp ? mHosp.innerText : "Hospital";
+          document.getElementById('receiptDist').innerText = (data.billed_distance || distanceDriven) + " km"; 
+          document.getElementById('receiptCost').innerText = data.final_cost || 0; 
+          
+          goStep(6); 
+      } catch(err) {
+          alert("Error connecting to server. Please try again.");
+          goStep(6); // Still force the receipt page to show even if network lags
+      }
+  }  
+  function closeReceipt() { 
+      driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
+      goStep(2); 
+      document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
+      document.querySelector('.pulse').style.display = "flex"; 
+      stopGPSSending(); 
+      fetchRadar(); 
+      if(radarInterval) { clearInterval(radarInterval); } 
+      radarInterval = setInterval(fetchRadar, 5000); 
+      document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); 
+      document.querySelectorAll('.nav-item')[0].classList.add('active'); 
+  }
+
+  async function loadHistory() {
+    const list = document.getElementById('historyList'); 
+    list.innerHTML = "Loading history..."; 
+    
+    const res = await fetch(`${BASE_URL}/api/driver/history?driver_id=${driver.id}`); 
+    const data = await res.json();
+    
+    if(!data.history || data.history.length === 0) { list.innerHTML = "<p>No completed missions.</p>"; return; }
+    
+    list.innerHTML = ""; 
+    const totalCash = data.history.reduce((sum, t) => sum + (t.final_cost || 0), 0); 
+    document.getElementById('statEarnings').innerText = "₹" + totalCash; 
+    document.getElementById('statTrips').innerText = data.history.length;
+    
+    data.history.forEach(h => { 
+        const item = document.createElement('div'); 
+        item.className = 'request-card'; 
+        item.style.cursor = 'pointer'; 
+        item.onclick = () => { 
+            let d = document.getElementById(`hist-${h.booking_id}`); 
+            d.style.display = d.style.display === 'none' ? 'block' : 'none'; 
+        };
+        
+        const details = document.createElement('div'); 
+        details.id = `hist-${h.booking_id}`; 
+        details.style.display = 'none'; 
+        details.style.cssText = 'display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);';
+        
+        item.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;"><div style="color:var(--success); font-weight:bold;">✅ COMPLETED</div><div style="font-size:12px; color:var(--muted);">▼ Details</div></div><div class="req-title" style="margin:5px 0;"></div><div class="req-detail">Dropoff: <span class="hosp-name"></span></div>`;
+        item.querySelector('.req-title').textContent = h.emergency_category; 
+        item.querySelector('.hosp-name').textContent = h.hospital_name;
+        
+        details.innerHTML = `<div class="req-detail"><strong>Patient:</strong> <span></span></div><div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${new Date(h.booked_at || h.created_at).toLocaleTimeString()}</div><div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.completed_at ? new Date(h.completed_at).toLocaleTimeString() : '--'}</div><div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.final_cost}</div>`;
+        details.querySelector('span').textContent = h.user_name; 
+        
+        item.appendChild(details); 
+        list.appendChild(item);
+    });
+  }
+
+  async function saveProfile() { 
+      const p = { 
+          driver_id: driver.id, 
+          name: document.getElementById('editName').value, 
+          phone: document.getElementById('editPhone').value, 
+          ambulance_number: document.getElementById('editVehicle').value, 
+          ambulance_type: document.getElementById('editType').value 
+      }; 
+      
+      const res = await fetch(`${BASE_URL}/api/driver/update-profile`, { 
+          method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(p) 
+      }); 
+      
+      if(res.ok) { 
+          driver = {...driver, name: p.name, phone: p.phone, vehicle_num: p.ambulance_number, type: p.ambulance_type}; 
+          localStorage.setItem('driver_session', JSON.stringify(driver)); 
+          alert("Profile Updated Successfully!"); 
+      } 
+  }
+// 🌟 ESCALATION MATRIX & AUTO RE-ROUTE
+  async function alertAdminDriver() {
+      const issue = prompt("⚠️ ADMIN ESCALATION MATRIX\n\nWhat is the operational issue?\n1. Vehicle Breakdown\n2. Stuck in Severe Traffic\n3. Patient Condition Worsening\n\nType 1, 2, or 3:");
+      
+      if(issue === "1" || issue === "2") {
+          alert("🚨 TRIP ESCALATED: You are removed from this mission. The system is automatically re-routing the nearest backup ambulance to the patient.");
+          
+          // Call the backend to un-assign this driver
+          await fetch(`${BASE_URL}/api/bookings/escalate`, {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({ booking_id: driver.activeBookingId })
+          });
+          
+          // Kick the driver back to the radar screen
+          clearInterval(missionInterval);
+          closeReceipt(); 
+          
+      } else if (issue === "3") {
+          alert("🚨 MEDICAL ALERT SENT: Admin has notified the destination hospital to prepare an emergency team upon your arrival.");
+      }
+  }
+
+ 
+  function logout() { 
+      if(!confirm("Are you sure? All session data will be cleared.")) return; 
+      if (radarInterval) clearInterval(radarInterval); 
+      if (wakeLock) wakeLock.release(); 
+      stopGPSSending();
+
+      localStorage.removeItem('driver_session'); 
+      driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null }; 
+      document.getElementById('navToggle').style.display = 'none'; 
+      document.getElementById('bottomNav').style.display = 'none'; 
+      cancelLogin(); 
+      goStep(1); 
+  }
+
+  async function requestAccountDeletion() {
+      if(!confirm("Are you sure you want to permanently delete your account? You will lose access to this profile.")) return;
+      try {
+          const res = await fetch(`${BASE_URL}/api/driver/request-delete`, { 
+              method: "POST", headers: {"Content-Type":"application/json"}, 
+              body: JSON.stringify({ driver_id: driver.id }) 
+          });
+          const data = await res.json();
+          if (data.error) { 
+              alert(data.error); 
+          } else { 
+              alert("Deletion requested. Your account will be deactivated once the Admin approves."); 
+              logout(); 
           }
-      } catch (e) {}
+      } catch(e) { alert("Server Error"); }
   }
-
-  async function pickup() {
-      await fetch(`${BASE_URL}/api/driver/pickup`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId }) });
-      document.getElementById('phase1Box').style.display = 'none';
-      document.getElementById('phase2Box').style.display = 'block';
-      document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km";
-  }
-
-  async function completeTrip() {
-      if (!driver.activeBookingId) return;
-      try {
-          const dist = Math.ceil(currentBookedDistance) || 5;
-          const res = await fetch(`${BASE_URL}/api/driver/complete`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: dist }) });
-          const data = await res.json();
-          
-          const rHosp = document.getElementById('receiptHospName');
-          const rDist = document.getElementById('receiptDist');
-          const rCost = document.getElementById('receiptCost');
-          
-          if(rHosp) rHosp.innerText = currentMissionHospital || "Hospital";
-          if(rDist) rDist.innerText = (data.billed_distance || dist) + " km";
-          if(rCost) rCost.innerText = data.final_cost || 0;
-          
-          if (missionInterval) clearInterval(missionInterval);
-          driver.activeBookingId = null;
-          localStorage.setItem('driver_session', JSON.stringify(driver));
-          
-          goStep(6);
-      } catch (e) { alert("Error completing trip."); goStep(6); }
-  }
-
-  function closeReceipt() {
-      goStep(2);
-      if (driver.isOnline && !radarInterval) radarInterval = setInterval(fetchRadar, 5000);
-  }
-
-  function alertAdminDriver() { alert("🚨 Admin notified of issue."); }
-  function logout() { localStorage.clear(); location.reload(); }
 </script>
 </body>
 </html>
