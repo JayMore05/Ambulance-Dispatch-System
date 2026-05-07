@@ -1069,30 +1069,27 @@ async function checkStatus() {
     if (isPolling) {
         pollTimeout = setTimeout(checkStatus, 3000);
     }
-  }
+  }function renderDashboard(status, data) {
+    const searching = document.getElementById('searchingState');
+    const assigned = document.getElementById('assignedState');
+    const dashStep = document.getElementById('dashboardStep');
 
-  function renderDashboard(status, data) {
-      const searching = document.getElementById('searchingState');
-      const assigned = document.getElementById('assignedState');
-      const dashStep = document.getElementById('dashboardStep');
+    // Force Dashboard card to be visible if a driver is assigned
+    if (status === 'ASSIGNED' || status === 'IN_TRANSIT') {
+        if(searchInterval) { clearInterval(searchInterval); searchInterval = null; }
+        
+        // Remove 'hidden' from the main dashboard card
+        dashStep.classList.remove('hidden');
+        currentStep = 'Dashboard';
 
-      // Ensure we are showing the Dashboard card
-      if (currentStep !== 'Dashboard') { goStep('Dashboard'); }
-      dashStep.classList.remove('hidden');
+        searching.classList.add('hidden');
+        assigned.classList.remove('hidden');
 
-      if (status === 'REQUESTED') {
-          searching.classList.remove('hidden');
-          assigned.classList.add('hidden');
-      } else if (status === 'ASSIGNED' || status === 'IN_TRANSIT') {
-          if(searchInterval) { clearInterval(searchInterval); searchInterval = null; }
-          searching.classList.add('hidden');
-          assigned.classList.remove('hidden');
-
-          document.getElementById('dashHospital').innerText = data.hospital_name || state.hospitalName || "Hospital";
-          document.getElementById('dashDist').innerText = data.distance || "0.0";
-          document.getElementById('dashStatusText').innerText = status === 'IN_TRANSIT' ? "🚑 In Transit to Hospital" : "Ambulance Arriving";
-      }
-  }
+        document.getElementById('dashHospital').innerText = data.hospital_name || state.hospitalName || "Hospital";
+        document.getElementById('dashDist').innerText = data.distance || "0.0";
+        document.getElementById('dashStatusText').innerText = status === 'IN_TRANSIT' ? "🚑 In Transit to Hospital" : "Ambulance Arriving";
+    }
+}
 
   function renderReceipt(data) {
       goStep(7); // Jump to final receipt card
