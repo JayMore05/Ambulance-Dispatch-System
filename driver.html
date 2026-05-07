@@ -951,31 +951,61 @@ async function completeTrip() {
       if (!driver.activeBookingId) return;
 
       try {
-          // Safe fallback distance to prevent blackout crashes
-          const distanceDriven = (typeof currentBookedDistance !== 'undefined' && currentBookedDistance > 0) ? currentBookedDistance : 5;
+          // 🌟 1. Calculate Safe Distance (Prevents Undefined Crashes)
+          let dist = 5;
+          if (typeof totalDrivenKm !== 'undefined' && totalDrivenKm > 0) {
+              dist = totalDrivenKm;
+          } else if (typeof currentBookedDistance !== 'undefined' && currentBookedDistance > 0) {
+              dist = currentBookedDistance;
+          }
 
+          // 🌟 2. Make API Call
           const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
-              method: "POST", headers: {"Content-Type":"application/json"}, 
-              body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: distanceDriven }) 
+              method: "POST", 
+              headers: {"Content-Type":"application/json"}, 
+              body: JSON.stringify({ 
+                  booking_id: driver.activeBookingId, 
+                  actual_distance: dist 
+              }) 
           }); 
+          
           const data = await res.json();
           
-          // Stop intervals safely
-          if (typeof odometerInterval !== 'undefined') clearInterval(odometerInterval); 
-          if (typeof missionInterval !== 'undefined') clearInterval(missionInterval); 
+          // 🌟 3. Stop intervals safely
+          if (typeof odometerInterval !== 'undefined' && odometerInterval) clearInterval(odometerInterval); 
+          if (typeof missionInterval !== 'undefined' && missionInterval) clearInterval(missionInterval); 
 
-          // Update receipt safely
-          const mHosp = document.getElementById('missionHospital');
-          document.getElementById('receiptHospName').innerText = mHosp ? mHosp.innerText : "Hospital";
-          document.getElementById('receiptDist').innerText = (data.billed_distance || distanceDriven) + " km"; 
-          document.getElementById('receiptCost').innerText = data.final_cost || 0; 
-          
+          // 🌟 4. FORCE UI TRANSITION FIRST (Prevents blackout)
           goStep(6); 
+          
+          // 🌟 5. Safely update Receipt HTML
+          const rHosp = document.getElementById('receiptHospName');
+          if (rHosp) {
+              rHosp.innerText = (typeof currentMissionHospital !== 'undefined' && currentMissionHospital) 
+                  ? currentMissionHospital 
+                  : "Hospital";
+          }
+          
+          const rDist = document.getElementById('receiptDist');
+          if (rDist) rDist.innerText = (data.billed_distance || Math.ceil(dist)) + " km"; 
+
+          const rCost = document.getElementById('receiptCost');
+          if (rCost) rCost.innerText = data.final_cost || 0; 
+          
+          // 🌟 6. Clear Driver Session
+          driver.activeBookingId = null;
+          localStorage.setItem('driver_session', JSON.stringify(driver));
+
       } catch(err) {
-          alert("Error connecting to server. Please try again.");
-          goStep(6); // Still force the receipt page to show even if network lags
+          console.error("Complete Trip Error", err);
+          alert("Network Error. Showing receipt locally.");
+          
+          // Even if network fails, force transition so screen doesn't go black
+          goStep(6); 
+          driver.activeBookingId = null;
+          localStorage.setItem('driver_session', JSON.stringify(driver));
       }
-  }  
+  }
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
       goStep(2); 
