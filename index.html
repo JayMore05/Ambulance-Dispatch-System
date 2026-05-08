@@ -967,53 +967,104 @@
   // ==========================================
   // MAPS & TRACKING
   // ==========================================
- function initPatientMap() {
+function initPatientMap() {
 
-  const mapDiv = document.getElementById("patientMap");
+  const mapDiv = document.getElementById("map");
 
   if (!mapDiv) {
     console.log("Map div missing");
     return;
   }
 
-  // Destroy previous map safely
+  // Destroy old map safely
   if (window.leafletMap) {
     window.leafletMap.remove();
     window.leafletMap = null;
   }
 
-  // Small delay prevents render race condition
   setTimeout(() => {
 
     try {
 
-      window.leafletMap = L.map("patientMap").setView(
+      // Create map
+      window.leafletMap = L.map("map").setView(
         [state.userLat, state.userLng],
         13
       );
 
+      // OpenStreetMap tiles
       L.tileLayer(
         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
         {
-          attribution: "&copy; OpenStreetMap contributors"
+          attribution: "&copy; OpenStreetMap contributors",
+          maxZoom: 19
         }
       ).addTo(window.leafletMap);
 
-      L.marker([state.userLat, state.userLng])
-        .addTo(window.leafletMap)
-        .bindPopup("Patient Location");
+      // Patient Marker
+      patientMarker = L.marker([
+        state.userLat,
+        state.userLng
+      ]).addTo(window.leafletMap);
 
-      // Critical Leaflet fix
+      patientMarker.bindPopup(
+        "<b>📍 Patient Location</b>"
+      ).openPopup();
+
+      // Driver icon
+      const driverIcon = L.divIcon({
+        className: '',
+        html: `
+          <div style="
+            width:20px;
+            height:20px;
+            background:#e53935;
+            border-radius:50%;
+            border:3px solid white;
+            box-shadow:0 0 0 5px rgba(229,57,53,0.3);
+            animation:pulse 1.5s infinite;
+          "></div>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      // Temporary driver marker
+      driverMarker = L.marker([
+        state.userLat + 0.01,
+        state.userLng + 0.01
+      ], {
+        icon: driverIcon
+      }).addTo(window.leafletMap);
+
+      driverMarker.bindPopup(
+        "<b>🚑 Ambulance Driver</b>"
+      );
+
+      // Draw route
+      drawOSRMRoute(
+        state.userLat + 0.01,
+        state.userLng + 0.01,
+        state.userLat,
+        state.userLng
+      );
+
+      // Important Leaflet fix
       setTimeout(() => {
-        leafletMap.invalidateSize();
-      }, 200);
+        if (window.leafletMap) {
+          window.leafletMap.invalidateSize();
+        }
+      }, 300);
 
     } catch (e) {
+
       console.error("Leaflet init failed:", e);
+
     }
 
-  }, 100);
+  }, 200);
 }
+
   function updateDriverOnMap(dLat, dLng) {
       if (!leafletMap) return;
       const driverIcon = L.divIcon({ className: '', html: '<div class="driver-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
@@ -1026,87 +1077,104 @@
 
   // 🛡️ ULTIMATE BUG FIX: Bulletproof transitions and error handling
 async function checkStatus() {
+
   if (!state.bookingId) return;
 
   try {
+
     const res = await fetch(
       `${BASE_URL}/api/booking-status?booking_id=${state.bookingId}&t=${Date.now()}`
     );
 
     const data = await res.json();
 
-    console.log("📡 Booking Status:", data.status);
+    console.log("📡 LIVE STATUS:", data.status);
 
-    // ===============================
-    // 🚑 DRIVER ACCEPTED / IN TRANSIT
-    // ===============================
-    if (
-      data.status === "ASSIGNED" ||
-      data.status === "IN_TRANSIT"
-    ) {
-
-      // Prevent repeated transitions
-      if (currentStep !== 6) {
-
-        goStep(6);
-
-        // ETA Details
-        document.getElementById("etaTime").innerText =
-          data.eta_minutes || "--";
-
-        document.getElementById("etaDist").innerText =
-          data.driver_distance_km || "--";
-
-        document.getElementById("trackHospital").innerText =
-          data.hospital_name || state.hospitalName;
-
-        // ✅ SAFE MAP INITIALIZATION
-        // Wait until screen fully renders
-        setTimeout(() => {
-
-          try {
-
-            initPatientMap();
-
-            // Leaflet render fix
-            if (window.leafletMap) {
-              leafletMap.invalidateSize();
-            }
-
-          } catch (mapErr) {
-            console.error("Leaflet Map Error:", mapErr);
-          }
-
-        }, 300);
-      }
-    }
-
-    // ===============================
-    // ✅ TRIP COMPLETED
-    // ===============================
+    // =========================================
+    // ✅ PRIORITY 1: COMPLETED MUST RUN FIRST
+    // =========================================
     if (data.status === "COMPLETED") {
+
+      console.log("✅ Trip completed detected");
 
       clearInterval(pollInterval);
 
+      pollInterval = null;
+
+      // Hide pulse screen completely
+      document.getElementById('step5')?.classList.add('hidden');
+      document.getElementById('step6')?.classList.add('hidden');
+
+      // Open receipt
       goStep(7);
 
       document.getElementById("receiptHospital").innerText =
-        data.hospital_name || state.hospitalName;
+        data.hospital_name || state.hospitalName || "--";
 
       document.getElementById("receiptDist").innerText =
         `${data.final_distance_km || 0} km`;
 
       document.getElementById("receiptCost").innerText =
         `₹${data.final_amount || 0}`;
+
+      return; // 🚨 VERY IMPORTANT
+    }
+
+    // =========================================
+    // 🚑 DRIVER ACCEPTED / TRACKING
+    // =========================================
+    if (
+      data.status === "ASSIGNED" ||
+      data.status === "IN_TRANSIT"
+    ) {
+
+      // Prevent repeated reload
+      if (currentStep !== 6) {
+
+        goStep(6);
+
+        setTimeout(() => {
+
+          try {
+
+            if (typeof initPatientMap === "function" && !window.leafletMap) {
+
+              initPatientMap();
+
+              setTimeout(() => {
+                if (window.leafletMap) {
+                  leafletMap.invalidateSize();
+                }
+              }, 300);
+
+            }
+
+          } catch (e) {
+            console.log("Map safe fail:", e);
+          }
+
+        }, 400);
+      }
+
+      // Update live ETA
+      document.getElementById("etaTime").innerText =
+        data.eta_minutes || "--";
+
+      document.getElementById("etaDist").innerText =
+        data.driver_distance_km || "--";
+
+      document.getElementById("trackHospital").innerText =
+        data.hospital_name || state.hospitalName || "--";
     }
 
   } catch (err) {
 
-    // 🚨 NEVER ALLOW POLLING TO DIE
     console.error("Polling Error:", err);
 
+    // 🚨 NEVER STOP POLLING
+    setTimeout(checkStatus, 3000);
   }
-}  
+}
   function changeDestination() { 
       isUpdatingDestination = true; 
       document.getElementById('step3Title').innerText = "Update Destination"; 
