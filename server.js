@@ -155,8 +155,14 @@ app.get("/api/user/eta", (req, res) => {
         if (err || !rows || rows.length === 0) return res.json({ status: 'SEARCHING' });
         const b = rows[0];
         if(b.status === 'COMPLETED') return res.json({ status: 'COMPLETED', final_cost: b.final_cost, distance: parseFloat(b.hospital_distance_km).toFixed(2), hospital_name: b.hospital_name });
-        const distKm = parseFloat(b.hospital_distance_km) || 0;
-        res.json({ status: b.status, distance: distKm.toFixed(2), eta: distKm > 0 ? Math.max(1, Math.round((distKm / 40) * 60)) : "Calculating...", hospital_name: b.hospital_name, driver_lat: b.driver_lat, driver_lng: b.driver_lng });
+        let driverDist = "Calculating...";
+        let driverEta = "Calculating...";
+        if (b.driver_lat && b.driver_lng && b.user_latitude && b.user_longitude) {
+            const dist = getKmDistance(b.user_latitude, b.user_longitude, b.driver_lat, b.driver_lng);
+            driverDist = dist.toFixed(2);
+            driverEta = Math.max(1, Math.round((dist / 40) * 60));
+        }
+        res.json({ status: b.status, distance: driverDist, eta: driverEta, hospital_name: b.hospital_name, driver_lat: b.driver_lat, driver_lng: b.driver_lng });
     });
 });
 
