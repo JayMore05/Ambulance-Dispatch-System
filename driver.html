@@ -502,25 +502,32 @@
       try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} 
   }
 
-function goStep(n) { 
-      currentStep = n; 
-      // 🚨 FIX: Explicitly listed all driver steps, including 'Pending'
-      const allSteps = ['1', 'Pending', '2', '3', '4', '5', '6'];
-      
-      allSteps.forEach(i => { 
-          let el = document.getElementById('step' + i); 
-          if(el) { 
-              if (i == n) {
-                  el.classList.remove('hidden');
-                  el.style.display = 'block'; // Force visible
-              } else {
-                  el.classList.add('hidden');
-                  el.style.display = 'none';  // Force hidden
-              }
-          } 
-      }); 
-      window.scrollTo(0, 0); 
-  }
+function goStep(n) {
+
+  currentStep = n;
+
+  // ✅ Explicit array supports custom step names
+  const allSteps = ['1', 'Pending', '2', '3', '4', '5', '6'];
+
+  allSteps.forEach(step => {
+
+    const el = document.getElementById('step' + step);
+
+    if (!el) return;
+
+    if (step == n) {
+      el.style.display = 'block';
+      el.classList.remove('hidden');
+    } else {
+      el.style.display = 'none';
+      el.classList.add('hidden');
+    }
+
+  });
+
+  window.scrollTo(0, 0);
+}
+  
   function navTab(stepNum, btnElement) { 
       document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); 
       if(btnElement) btnElement.classList.add('active'); 
@@ -971,58 +978,86 @@ async function confirmAccept() {
 
   
 
-async function completeTrip() { 
-      if (!driver.activeBookingId) return;
+async function completeTrip() {
 
-      try {
-          let dist = 5;
-          if (typeof totalDrivenKm !== 'undefined' && totalDrivenKm > 0) {
-              dist = totalDrivenKm;
-          } else if (typeof currentBookedDistance !== 'undefined' && currentBookedDistance > 0) {
-              dist = currentBookedDistance;
-          }
-
-          const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
-              method: "POST", 
-              headers: {"Content-Type":"application/json"}, 
-              body: JSON.stringify({ 
-                  booking_id: driver.activeBookingId, 
-                  actual_distance: dist 
-              }) 
-          }); 
-          
-          const data = await res.json();
-          
-          if (typeof odometerInterval !== 'undefined' && odometerInterval) clearInterval(odometerInterval); 
-          if (typeof missionInterval !== 'undefined' && missionInterval) clearInterval(missionInterval); 
-
-          // 🚨 FIX: Pass '6' as a string to match the array logic, forcing the receipt to show!
-          goStep('6'); 
-          
-          const rHosp = document.getElementById('receiptHospName');
-          if (rHosp) rHosp.innerText = currentMissionHospital || "Hospital";
-          
-          const rDist = document.getElementById('receiptDist');
-          if (rDist) rDist.innerText = (data.billed_distance || Math.ceil(dist)) + " km"; 
-
-          const rCost = document.getElementById('receiptCost');
-          if (rCost) rCost.innerText = data.final_cost || Math.ceil(dist * 20); // Fallback calc
-          
-          driver.activeBookingId = null;
-          localStorage.setItem('driver_session', JSON.stringify(driver));
-
-      } catch(err) {
-          console.error("Complete Trip Error", err);
-          
-          // 🚨 SAFETY NET: If the network drops, STILL show the local receipt to the driver
-          goStep('6'); 
-          const rHosp = document.getElementById('receiptHospName');
-          if (rHosp) rHosp.innerText = currentMissionHospital || "Hospital";
-          
-          driver.activeBookingId = null;
-          localStorage.setItem('driver_session', JSON.stringify(driver));
-      }
+  if (!driver.activeBookingId) {
+    return alert("No active booking found.");
   }
+
+  try {
+
+    const btn = event.target;
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerText = "Completing Trip...";
+    }
+
+    // ==================================
+    // SEND COMPLETE STATUS TO SERVER
+    // ==================================
+    const res = await fetch(
+      `${BASE_URL}/api/complete-trip`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          booking_id: driver.activeBookingId,
+          final_distance_km: totalDrivenKm,
+          total_amount: Math.ceil(totalDrivenKm * currentBookedDistance)
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Completion failed");
+    }
+
+    // ==================================
+    // STOP GPS + POLLING
+    // ==================================
+    stopGPSSending();
+
+    clearInterval(missionInterval);
+
+    clearInterval(odometerInterval);
+
+    // ==================================
+    // SHOW DRIVER RECEIPT
+    // ==================================
+    goStep('6');
+
+    document.getElementById("receiptHospName").innerText =
+      currentMissionHospital || "Hospital";
+
+    document.getElementById("receiptDist").innerText =
+      `${totalDrivenKm.toFixed(2)} km`;
+
+    document.getElementById("receiptCost").innerText =
+      Math.ceil(totalDrivenKm * currentBookedDistance);
+
+    // ==================================
+    // RESET DRIVER SESSION
+    // ==================================
+    driver.activeBookingId = null;
+
+    localStorage.setItem(
+      'driver_session',
+      JSON.stringify(driver)
+    );
+
+  } catch (err) {
+
+    console.error("Trip Completion Error:", err);
+
+    alert("Failed to complete trip.");
+
+  }
+}
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
       goStep(2); 
