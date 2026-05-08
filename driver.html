@@ -814,22 +814,68 @@ function goStep(n) {
     } catch(err) { }
   }
   async function checkActiveMission() {
-    try {
-        // Cache buster here too!
-        const url = `${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}_${Math.random()}`;
-        const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
-        const data = await res.json();
-        
-        if(data.hasMission) { 
-            clearInterval(radarInterval); 
-            setupActiveMissionUI(data.mission); 
-        } else { 
-            goStep(2); 
-            fetchRadar(); 
-            if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
+
+  try {
+
+    const url =
+      `${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}_${Math.random()}`;
+
+    const res = await fetch(
+      url,
+      {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         }
-    } catch(err) {}
+      }
+    );
+
+    const data = await res.json();
+
+    // =========================================
+    // IGNORE COMPLETED BOOKINGS
+    // =========================================
+    if (
+      data.hasMission &&
+      data.mission &&
+      data.mission.status !== "COMPLETED"
+    ) {
+
+      clearInterval(radarInterval);
+
+      setupActiveMissionUI(data.mission);
+
+    } else {
+
+      // CLEANUP AFTER COMPLETION
+      driver.activeBookingId = null;
+
+      localStorage.setItem(
+        'driver_session',
+        JSON.stringify(driver)
+      );
+
+      goStep(2);
+
+      fetchRadar();
+
+      if (!radarInterval) {
+
+        radarInterval = setInterval(
+          fetchRadar,
+          5000
+        );
+      }
+    }
+
+  } catch (err) {
+
+    console.error(
+      "Mission Check Error:",
+      err
+    );
   }
+}
   function initDriverMap(pLat, pLng) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
@@ -993,9 +1039,19 @@ async function completeTrip() {
       btn.innerText = "Completing Trip...";
     }
 
-    // ==================================
-    // SEND COMPLETE STATUS TO SERVER
-    // ==================================
+    // =========================================
+    // CALCULATE FINAL BILL
+    // =========================================
+    let billedDistance = Math.max(
+      Math.ceil(currentBookedDistance),
+      Math.ceil(totalDrivenKm)
+    );
+
+    let finalAmount = billedDistance * 100;
+
+    // =========================================
+    // SEND COMPLETION TO BACKEND
+    // =========================================
     const res = await fetch(
       `${BASE_URL}/api/complete-trip`,
       {
@@ -1005,8 +1061,9 @@ async function completeTrip() {
         },
         body: JSON.stringify({
           booking_id: driver.activeBookingId,
-          final_distance_km: totalDrivenKm,
-          total_amount: Math.ceil(totalDrivenKm * currentBookedDistance)
+          final_distance_km: billedDistance,
+          total_amount: finalAmount,
+          status: "COMPLETED"
         })
       }
     );
@@ -1014,50 +1071,98 @@ async function completeTrip() {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || "Completion failed");
+      throw new Error(data.error || "Trip completion failed");
     }
 
-    // ==================================
-    // STOP GPS + POLLING
-    // ==================================
+    // =========================================
+    // STOP ALL ACTIVE INTERVALS
+    // =========================================
     stopGPSSending();
 
-    clearInterval(missionInterval);
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
 
-    clearInterval(odometerInterval);
+    if (missionInterval) {
+      clearInterval(missionInterval);
+      missionInterval = null;
+    }
 
-    // ==================================
-    // SHOW DRIVER RECEIPT
-    // ==================================
+    if (radarInterval) {
+      clearInterval(radarInterval);
+      radarInterval = null;
+    }
+
+    if (odometerInterval) {
+      clearInterval(odometerInterval);
+      odometerInterval = null;
+    }
+
+    // =========================================
+    // UPDATE DRIVER STATE
+    // =========================================
+    driver.status = "COMPLETED";
+
+    driver.activeBookingId = null;
+
+    driver.isOnline = true;
+
+    // =========================================
+    // SAVE CLEAN SESSION
+    // =========================================
+    localStorage.setItem(
+      'driver_session',
+      JSON.stringify(driver)
+    );
+
+    console.log("✅ Trip completed successfully");
+
+    // =========================================
+    // SHOW RECEIPT SCREEN
+    // =========================================
     goStep('6');
 
     document.getElementById("receiptHospName").innerText =
       currentMissionHospital || "Hospital";
 
     document.getElementById("receiptDist").innerText =
-      `${totalDrivenKm.toFixed(2)} km`;
+      billedDistance + " km";
 
     document.getElementById("receiptCost").innerText =
-      Math.ceil(totalDrivenKm * currentBookedDistance);
+      finalAmount;
 
-    // ==================================
-    // RESET DRIVER SESSION
-    // ==================================
-    driver.activeBookingId = null;
+    // =========================================
+    // RESET TEMP VARIABLES
+    // =========================================
+    totalDrivenKm = 0;
 
-    localStorage.setItem(
-      'driver_session',
-      JSON.stringify(driver)
-    );
+    currentBookedDistance = 0;
+
+    lastLat = null;
+
+    lastLng = null;
+
+    currentMissionHospital = null;
+
+    pendingAcceptData = null;
 
   } catch (err) {
 
     console.error("Trip Completion Error:", err);
 
-    alert("Failed to complete trip.");
+    alert(
+      err.message || "Failed to complete trip."
+    );
 
+    const btn = event.target;
+
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = "✅ Arrived at Dropoff";
+    }
   }
-}
+}  
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
       goStep(2); 
