@@ -700,7 +700,7 @@
     
     if(driver.isOnline) { 
         requestWakeLock(); 
-        document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
+        document.getElementById('radarTitle').innerText = "Scanning 8 km Radius..."; 
         document.querySelector('.pulse').style.display = "flex"; 
         const city = await fetchCityName(driver.lat, driver.lng);
         document.getElementById('toggleText').innerText = city ? `ONLINE (${city})` : "ONLINE";
