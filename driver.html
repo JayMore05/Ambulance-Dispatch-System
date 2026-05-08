@@ -11,7 +11,8 @@
   <meta name="apple-mobile-web-app-title" content="DriverOps">
   <link rel="apple-touch-icon" href="/icons/icon-driver-192.png">
 
-  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     :root {
@@ -222,7 +223,7 @@
         <a id="btnCallPatient" href="#" class="btn info" style="width:auto; padding:8px 16px; font-size:14px; text-decoration:none;">📞 Call</a>
     </div>
 
-    
+    <div id="driverMap"></div>
 
     <div class="request-card">
       <div class="req-detail"><strong>Patient:</strong> <span id="missionPatient"></span></div>
@@ -502,32 +503,16 @@
       try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} 
   }
 
-function goStep(n) {
+  function goStep(n) { 
+      const steps = [1, 'Pending', 2, 3, 4, 5, 6];
+      steps.forEach(i => { 
+          let el = document.getElementById('step' + i); 
+          if (el) el.style.display = 'none'; 
+      }); 
+      document.getElementById('step' + n).style.display = 'block'; 
+      window.scrollTo(0, 0); 
+  }
 
-  currentStep = n;
-
-  // ✅ Explicit array supports custom step names
-  const allSteps = ['1', 'Pending', '2', '3', '4', '5', '6'];
-
-  allSteps.forEach(step => {
-
-    const el = document.getElementById('step' + step);
-
-    if (!el) return;
-
-    if (step == n) {
-      el.style.display = 'block';
-      el.classList.remove('hidden');
-    } else {
-      el.style.display = 'none';
-      el.classList.add('hidden');
-    }
-
-  });
-
-  window.scrollTo(0, 0);
-}
-  
   function navTab(stepNum, btnElement) { 
       document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); 
       if(btnElement) btnElement.classList.add('active'); 
@@ -814,68 +799,22 @@ function goStep(n) {
     } catch(err) { }
   }
   async function checkActiveMission() {
-
-  try {
-
-    const url =
-      `${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}_${Math.random()}`;
-
-    const res = await fetch(
-      url,
-      {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+    try {
+        // Cache buster here too!
+        const url = `${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}_${Math.random()}`;
+        const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
+        const data = await res.json();
+        
+        if(data.hasMission) { 
+            clearInterval(radarInterval); 
+            setupActiveMissionUI(data.mission); 
+        } else { 
+            goStep(2); 
+            fetchRadar(); 
+            if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
         }
-      }
-    );
-
-    const data = await res.json();
-
-    // =========================================
-    // IGNORE COMPLETED BOOKINGS
-    // =========================================
-    if (
-      data.hasMission &&
-      data.mission &&
-      data.mission.status !== "COMPLETED"
-    ) {
-
-      clearInterval(radarInterval);
-
-      setupActiveMissionUI(data.mission);
-
-    } else {
-
-      // CLEANUP AFTER COMPLETION
-      driver.activeBookingId = null;
-
-      localStorage.setItem(
-        'driver_session',
-        JSON.stringify(driver)
-      );
-
-      goStep(2);
-
-      fetchRadar();
-
-      if (!radarInterval) {
-
-        radarInterval = setInterval(
-          fetchRadar,
-          5000
-        );
-      }
-    }
-
-  } catch (err) {
-
-    console.error(
-      "Mission Check Error:",
-      err
-    );
+    } catch(err) {}
   }
-}
   function initDriverMap(pLat, pLng) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
@@ -890,22 +829,24 @@ function goStep(n) {
   function setupActiveMissionUI(m) {
     driver.activeBookingId = m.booking_id; 
     window.currentPatientPhone = m.user_phone; 
-    currentBookedDistance = parseFloat(m.hospital_distance_km) || 0; 
+    currentBookedDistance = parseFloat(m.hospital_distance_km) || 0; // Save initial distance
+    
+    if (currentMissionHospital && currentMissionHospital !== m.hospital_name) { 
+        document.body.style.backgroundColor = "#ef5350"; 
+        setTimeout(() => { document.body.style.backgroundColor = "var(--bg)"; }, 3000); 
+        if (navigator.vibrate) navigator.vibrate([1000, 500, 1000]); 
+        document.getElementById('alertBeep').play(); 
+    }
     currentMissionHospital = m.hospital_name;
     
     document.getElementById('missionPatient').innerText = m.user_name; 
     document.getElementById('missionCondition').innerText = m.emergency_category; 
     document.getElementById('missionHospital').innerText = m.hospital_name; 
+    document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
     
-    const callBtn = document.getElementById('btnCallPatient');
-    if(callBtn) callBtn.href = `tel:${m.user_phone}`;
-    
-    const navPat = document.getElementById('navToPatient');
-    if(navPat) navPat.href = `https://www.google.com/maps/dir/?api=1&destination=$$${m.user_latitude},${m.user_longitude}`;
-    
+    document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=$${m.user_latitude},${m.user_longitude}`;
     let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
-    const navHosp = document.getElementById('navToHospital');
-    if(navHosp) navHosp.href = `https://www.google.com/maps/dir/?api=1&destination=$$${hospDest}`;
+    document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
     
     if(m.status === 'IN_TRANSIT') { 
         document.getElementById('phase1Box').style.display = 'none'; 
@@ -917,8 +858,8 @@ function goStep(n) {
     
     goStep(3); 
     startGPSSending(); 
-    // Map removed entirely from here
-    if(typeof missionInterval === 'undefined' || !missionInterval) { missionInterval = setInterval(checkActiveMission, 5000); }
+    setTimeout(() => { initDriverMap(m.user_latitude, m.user_longitude); dMap.invalidateSize(); }, 200);
+    if(!missionInterval) { missionInterval = setInterval(checkActiveMission, 5000); }
   }
 
   function sendWhatsAppToPatient() {
@@ -955,39 +896,24 @@ function goStep(n) {
       pendingAcceptData = null; 
   }
   
-async function confirmAccept() {
+  async function confirmAccept() {
     if(!pendingAcceptData) return; 
-    document.getElementById('dispatchModal').style.display = 'none';
-    
+    document.getElementById('dispatchModal').style.display='none';
     try { 
         const res = await fetch(`${BASE_URL}/api/driver/accept`, { 
-            method: "POST", 
-            headers: {"Content-Type":"application/json"}, 
-            body: JSON.stringify({ 
-                booking_id: pendingAcceptData.booking_id, 
-                driver_id: driver.id 
-            }) 
+            method: "POST", headers: {"Content-Type":"application/json"}, 
+            body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
         }); 
-        
         const data = await res.json();
         
-        // 🚨 FIX: Accept the trip if 'success' is true OR if the HTTP response is OK (200)
-        if (data.success || res.ok) { 
-            if (radarInterval) clearInterval(radarInterval); 
-            driver.activeBookingId = pendingAcceptData.booking_id;
-            localStorage.setItem('driver_session', JSON.stringify(driver));
-            
-            // Instantly pull the mission details to show the driving screen
-            await checkActiveMission(); 
+        if (res.ok && data.success) { 
+            clearInterval(radarInterval); checkActiveMission(); 
         } else { 
-            alert("❌ Trip already taken by another driver."); 
-            fetchRadar(); 
+            alert("❌ " + (data.message || "Taken by another driver.")); fetchRadar(); 
         }
-    } catch(err) {
-        console.error("Acceptance Error:", err);
-        alert("Connection Error. Please check your internet.");
-    }
-  }  
+    } catch(err) {}
+  }
+
   async function pickup() { 
       if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
       
@@ -1024,145 +950,22 @@ async function confirmAccept() {
 
   
 
-async function completeTrip() {
+async function completeTrip() { 
+      clearInterval(odometerInterval); clearInterval(missionInterval); 
+      odometerInterval = null; missionInterval = null;
 
-  if (!driver.activeBookingId) {
-    return alert("No active booking found.");
+      const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
+          method: "POST", headers: {"Content-Type":"application/json"}, 
+          body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) 
+      }); 
+      const data = await res.json();
+      
+      // Use the verified billed distance returned by the server
+      document.getElementById('receiptDist').innerText = (data.billed_distance || 0) + " km"; 
+      document.getElementById('receiptCost').innerText = data.final_cost || 0; 
+      goStep(6); 
   }
-
-  try {
-
-    const btn = event.target;
-
-    if (btn) {
-      btn.disabled = true;
-      btn.innerText = "Completing Trip...";
-    }
-
-    // =========================================
-    // CALCULATE FINAL BILL
-    // =========================================
-    let billedDistance = Math.max(
-      Math.ceil(currentBookedDistance),
-      Math.ceil(totalDrivenKm)
-    );
-
-    let finalAmount = billedDistance * 100;
-
-    // =========================================
-    // SEND COMPLETION TO BACKEND
-    // =========================================
-    const res = await fetch(
-      `${BASE_URL}/api/complete-trip`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          booking_id: driver.activeBookingId,
-          final_distance_km: billedDistance,
-          total_amount: finalAmount,
-          status: "COMPLETED"
-        })
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || "Trip completion failed");
-    }
-
-    // =========================================
-    // STOP ALL ACTIVE INTERVALS
-    // =========================================
-    stopGPSSending();
-
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
-
-    if (missionInterval) {
-      clearInterval(missionInterval);
-      missionInterval = null;
-    }
-
-    if (radarInterval) {
-      clearInterval(radarInterval);
-      radarInterval = null;
-    }
-
-    if (odometerInterval) {
-      clearInterval(odometerInterval);
-      odometerInterval = null;
-    }
-
-    // =========================================
-    // UPDATE DRIVER STATE
-    // =========================================
-    driver.status = "COMPLETED";
-
-    driver.activeBookingId = null;
-
-    driver.isOnline = true;
-
-    // =========================================
-    // SAVE CLEAN SESSION
-    // =========================================
-    localStorage.setItem(
-      'driver_session',
-      JSON.stringify(driver)
-    );
-
-    console.log("✅ Trip completed successfully");
-
-    // =========================================
-    // SHOW RECEIPT SCREEN
-    // =========================================
-    goStep('6');
-
-    document.getElementById("receiptHospName").innerText =
-      currentMissionHospital || "Hospital";
-
-    document.getElementById("receiptDist").innerText =
-      billedDistance + " km";
-
-    document.getElementById("receiptCost").innerText =
-      finalAmount;
-
-    // =========================================
-    // RESET TEMP VARIABLES
-    // =========================================
-    totalDrivenKm = 0;
-
-    currentBookedDistance = 0;
-
-    lastLat = null;
-
-    lastLng = null;
-
-    currentMissionHospital = null;
-
-    pendingAcceptData = null;
-
-  } catch (err) {
-
-    console.error("Trip Completion Error:", err);
-
-    alert(
-      err.message || "Failed to complete trip."
-    );
-
-    const btn = event.target;
-
-    if (btn) {
-      btn.disabled = false;
-      btn.innerText = "✅ Arrived at Dropoff";
-    }
-  }
-}  
+  
   function closeReceipt() { 
       driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
       goStep(2); 
