@@ -1083,7 +1083,7 @@ async function checkStatus() {
   try {
 
     const res = await fetch(
-      `${BASE_URL}/api/booking-status?booking_id=${state.bookingId}&t=${Date.now()}`
+      `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`
     );
 
     const data = await res.json();
@@ -1112,10 +1112,10 @@ async function checkStatus() {
         data.hospital_name || state.hospitalName || "--";
 
       document.getElementById("receiptDist").innerText =
-        `${data.final_distance_km || 0} km`;
+        `${data.distance || 0} km`;
 
       document.getElementById("receiptCost").innerText =
-        `₹${data.final_amount || 0}`;
+        `₹${data.final_cost || 0}`;
 
       return; // 🚨 VERY IMPORTANT
     }
@@ -1157,11 +1157,12 @@ async function checkStatus() {
       }
 
       // Update live ETA
-      document.getElementById("etaTime").innerText =
-        data.eta_minutes || "--";
+      let displayEta = data.eta || "--";
+      if (typeof data.eta === 'number') displayEta = data.eta + " min";
+      document.getElementById("etaTime").innerText = displayEta;
 
       document.getElementById("etaDist").innerText =
-        data.driver_distance_km || "--";
+        data.distance || "--";
 
       document.getElementById("trackHospital").innerText =
         data.hospital_name || state.hospitalName || "--";
