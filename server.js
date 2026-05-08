@@ -251,6 +251,13 @@ app.get("/api/driver/active-mission", (req, res) => {
 app.get("/api/driver/radar", (req, res) => {
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booking_id DESC`, (err, results) => {
         if (err) return res.status(500).json({ error: "Radar failed." });
+
+        if (!req.query.driverLat || !req.query.driverLng) {
+    return res.status(400).json({
+        success: false,
+        error: "Driver location missing"
+    });
+}
         
         const driverType = req.query.driverType; 
         const nearby = (results || []).filter(b => {
@@ -267,8 +274,10 @@ app.get("/api/driver/radar", (req, res) => {
             return dist <= 8 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
         }).map(b => {
             const rawTime = b.booked_at || b.created_at;
-            const bookedDate = rawTime ? new Date(rawTime) : new Date();
-            const formatT = bookedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const bookedDate =
+    rawTime && !isNaN(new Date(rawTime))
+        ? new Date(rawTime)
+        : new Date();            const formatT = bookedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
             const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
 
