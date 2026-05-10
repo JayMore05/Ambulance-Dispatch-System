@@ -28,18 +28,58 @@ process.on('unhandledRejection', (reason, promise) => {
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression()); 
 app.use(morgan('dev')); 
-app.use(cors());
+// 🛡️ Restrict CORS to your domains only
+const allowedOrigins = [
+    'https://ambulance-dispatch-system.onrender.com',
+    'http://localhost:4000',
+    'http://localhost:3000'
+];
+app.use(cors({
+    origin: function(origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            return callback(new Error('CORS policy violation'), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.static(__dirname));
 
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100000, message: { error: "Too many requests" }});
-app.use("/api/", apiLimiter);
+// 🛡️ Stricter rate limits per IP
+const strictLimiter = rateLimit({ 
+    windowMs: 60 * 1000, // 1 minute
+    max: 30, // 30 requests per minute per IP
+    message: { error: "Too many requests. Please slow down." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
-// ==========================================================
-// 🔐 JWT AUTH & WEB PUSH SETUP
-// ==========================================================
-const JWT_SECRET = process.env.JWT_SECRET || "fastrescue_super_secret_key";
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || "admin123";
+const generalLimiter = rateLimit({ 
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // 200 requests per 15 min per IP
+    message: { error: "Rate limit exceeded" }
+});
+
+// Apply strict limits to sensitive endpoints
+app.use("/api/driver/accept", strictLimiter);
+app.use("/api/driver/request-otp", strictLimiter);
+app.use("/api/save-user", strictLimiter);
+app.use("/api/bookings", strictLimiter);
+
+// General limit for everything else
+app.use("/api/", generalLimiter);
+
+if (!process.env.JWT_SECRET) {
+    throw new Error("❌ FATAL: JWT_SECRET environment variable is required");
+}
+if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 8) {
+    throw new Error("❌ FATAL: ADMIN_PASSWORD must be set and at least 8 characters");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails('mailto:admin@fastrescue.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
@@ -51,6 +91,8 @@ const adminAuth = (req, res, next) => {
     if (!token) return res.status(401).json({ error: "Unauthorized" });
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(403).json({ error: "Invalid token" });
+        // 🛡️ CRITICAL: Verify this is actually an admin token
+        if (decoded.role !== 'admin') return res.status(403).json({ error: "Admin access only" });
         next();
     });
 };
@@ -128,7 +170,18 @@ app.post("/api/bookings", (req, res) => {
 });
 
 app.post("/api/bookings/cancel", (req, res) => {
-    db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [req.body.booking_id], (err) => res.json({ success: !err }));
+    const { booking_id } = req.body;
+    
+    // 🛡️ Notify driver if already assigned
+    db.query("SELECT driver_id, push_subscription FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
+        if (!err && rows && rows[0] && rows[0].driver_id) {
+            pushNotify(rows[0].push_subscription, "❌ Booking Cancelled", "The patient has cancelled this emergency request.");
+        }
+        
+        db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [booking_id], (err2) => {
+            res.json({ success: !err2 });
+        });
+    });
 });
 
 
@@ -452,4 +505,42 @@ app.post("/api/admin/approve-delete", adminAuth, (req, res) => {
 app.get("/ping", (req, res) => res.send("pong"));
 
 const PORT = process.env.PORT || 4000;
+// 🛡️ AUTO-CLEANUP: Cancel bookings stuck in REQUESTED for > 10 minutes
+setInterval(() => {
+    db.query(
+        "UPDATE bookings SET status = 'CANCELLED' WHERE status = 'REQUESTED' AND booked_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)",
+        (err, result) => {
+            if (!err && result.affectedRows > 0) {
+                console.log(`🧹 Auto-cancelled ${result.affectedRows} stale booking(s)`);
+            }
+        }
+    );
+}, 60000); // Run every 60 seconds
+// 🛡️ NEW: Secure image upload proxy to ImgBB
+app.post("/api/upload/kyc", (req, res) => {
+    const { image, driver_id } = req.body;
+    if (!image || !driver_id) return res.status(400).json({ error: "Missing image or driver_id" });
+    
+    // Verify driver exists
+    db.query("SELECT driver_id FROM drivers WHERE driver_id = ?", [driver_id], (err, rows) => {
+        if (err || !rows || rows.length === 0) return res.status(404).json({ error: "Driver not found" });
+        
+        const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+        if (!IMGBB_API_KEY) return res.status(500).json({ error: "Server misconfigured" });
+        
+        const formData = new FormData();
+        formData.append("image", image);
+        
+        fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) res.json({ url: data.data.url });
+            else res.status(500).json({ error: "ImgBB upload failed" });
+        })
+        .catch(e => res.status(500).json({ error: e.message }));
+    });
+});
 app.listen(PORT, () => console.log(`🚀 Production Server live on Port ${PORT}`));
