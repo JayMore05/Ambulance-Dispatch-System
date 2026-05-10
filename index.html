@@ -658,16 +658,22 @@
   }
 
   // ⚡ ULTRA FAST GPS ON LOAD
-  window.onload = () => {
+window.onload = () => {
     const savedState = localStorage.getItem('patient_session');
-    if (savedState) { 
-        state = JSON.parse(savedState); 
+        if (savedState) { 
+        state = JSON.parse(savedState);
+        // Don't re-poll if trip was recently completed
+        if (state.lastCompletedAt && Date.now() - state.lastCompletedAt < 300000) {
+            state.bookingId = null;
+        }
         if (state.bookingId) { 
             pollInterval = setInterval(checkStatus, currentPollRate); 
             checkStatus(); 
             return; 
         } 
     }
+  // ... rest of GPS code stays the same
+};
     
     const statusEl = document.getElementById('locStatus');
     
@@ -1077,102 +1083,69 @@ function initPatientMap() {
 
   // 🛡️ ULTIMATE BUG FIX: Bulletproof transitions and error handling
 async function checkStatus() {
-
   if (!state.bookingId) return;
-
   try {
-
-    const res = await fetch(
-      `${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`
-    );
-
+    const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`);
     const data = await res.json();
-
     console.log("📡 LIVE STATUS:", data.status);
 
-    // =========================================
-    // ✅ PRIORITY 1: COMPLETED MUST RUN FIRST
-    // =========================================
+    // 🛡️ FIX 1: Stop timer immediately when driver is found
+    if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
+      if (searchInterval) {
+        clearInterval(searchInterval);
+        searchInterval = null;
+        searchTimer = 0;
+        document.getElementById('timerText').innerText = "0";
+      }
+    }
+    // Stop timer if driver found
+    if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
+      clearInterval(searchInterval);
+    }
     if (data.status === "COMPLETED") {
-
       console.log("✅ Trip completed detected");
-
       clearInterval(pollInterval);
-
       pollInterval = null;
-
-      // Hide pulse screen completely
+            state.lastCompletedAt = Date.now();
+      localStorage.setItem('patient_session', JSON.stringify(state));
+      // 🛡️ FIX 2: Clear booking from localStorage so refresh doesn't re-poll
+      state.bookingId = null;
+      state.lastCompletedAt = Date.now();
+      localStorage.setItem('patient_session', JSON.stringify(state));
+      
       document.getElementById('step5')?.classList.add('hidden');
       document.getElementById('step6')?.classList.add('hidden');
-
-      // Open receipt
       goStep(7);
-
-      document.getElementById("receiptHospital").innerText =
-        data.hospital_name || state.hospitalName || "--";
-
-      document.getElementById("receiptDist").innerText =
-        `${data.distance || 0} km`;
-
-      document.getElementById("receiptCost").innerText =
-        `₹${data.final_cost || 0}`;
-
-      return; // 🚨 VERY IMPORTANT
+      document.getElementById("receiptHospital").innerText = data.hospital_name || state.hospitalName || "--";
+      document.getElementById("receiptDist").innerText = `${data.distance || 0} km`;
+      document.getElementById("receiptCost").innerText = `₹${data.final_cost || 0}`;
+      return;
     }
 
-    // =========================================
-    // 🚑 DRIVER ACCEPTED / TRACKING
-    // =========================================
-    if (
-      data.status === "ASSIGNED" ||
-      data.status === "IN_TRANSIT"
-    ) {
-
-      // Prevent repeated reload
+    if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
       if (currentStep !== 6) {
-
         goStep(6);
-
         setTimeout(() => {
-
           try {
-
             if (typeof initPatientMap === "function" && !window.leafletMap) {
-
               initPatientMap();
-
               setTimeout(() => {
-                if (window.leafletMap) {
-                  leafletMap.invalidateSize();
-                }
+                if (window.leafletMap) leafletMap.invalidateSize();
               }, 300);
-
             }
-
           } catch (e) {
             console.log("Map safe fail:", e);
           }
-
         }, 400);
       }
-
-      // Update live ETA
       let displayEta = data.eta || "--";
       if (typeof data.eta === 'number') displayEta = data.eta + " min";
       document.getElementById("etaTime").innerText = displayEta;
-
-      document.getElementById("etaDist").innerText =
-        data.distance || "--";
-
-      document.getElementById("trackHospital").innerText =
-        data.hospital_name || state.hospitalName || "--";
+      document.getElementById("etaDist").innerText = data.distance || "--";
+      document.getElementById("trackHospital").innerText = data.hospital_name || state.hospitalName || "--";
     }
-
   } catch (err) {
-
     console.error("Polling Error:", err);
-
-    // 🚨 NEVER STOP POLLING
     setTimeout(checkStatus, 3000);
   }
 }
@@ -1243,11 +1216,20 @@ async function checkStatus() {
       } 
   }
 
-  function sendSOS() {
-      const dest = state.hospitalName || state.customName || "Hospital"; 
-      let phone = state.userPhone; if (phone && phone.length === 10) phone = '91' + phone;
-      window.open('https://wa.me/?text=' + encodeURIComponent(`URGENT: I have booked an ambulance via FastRescue for a ${state.emergency}. Driver is arriving soon. Dropoff Location: ${dest}. Please reach there immediately.`));
-  }
+function sendSOS() {
+    const dest = state.hospitalName || state.customName || "Hospital"; 
+    let phone = state.userPhone; 
+    if (phone && phone.length === 10) phone = '91' + phone;
+    
+    // 🛡️ FIX: Include live location link
+    const mapsLink = state.userLat && state.userLng 
+        ? `https://maps.google.com/?q=${state.userLat},${state.userLng}` 
+        : "Location not available";
+    
+    const message = `🚨 URGENT: I have booked an ambulance via FastRescue for a ${state.emergency}.\n\n📍 My Location: ${mapsLink}\n🏥 Dropoff: ${dest}\n📞 My Phone: ${state.userPhone}\n\nDriver is arriving soon. Please reach there immediately.`;
+    
+    window.open('https://wa.me/?text=' + encodeURIComponent(message));
+}
 
   async function confirmCancel() {
       clearInterval(pollInterval); clearInterval(searchInterval);
