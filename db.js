@@ -1,20 +1,27 @@
 const mysql = require('mysql');
 require('dotenv').config();
 
-// Create a connection pool instead of a single connection
+// Create a connection pool with SSL support for Clever Cloud
 const pool = mysql.createPool({
-    connectionLimit: 4, // IMPORTANT: Set this to 4 (one less than your max of 5 to be safe)
+    connectionLimit: 3, // Reduced to 3 for Clever Cloud free tier (max 5)
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    waitForConnections: true, // If all connections are busy, wait in a queue
-    queueLimit: 0 // No limit to the queue
+    port: process.env.DB_PORT || 3306,
+    ssl: {
+        rejectUnauthorized: false // Required for Clever Cloud
+    },
+    waitForConnections: true,
+    queueLimit: 0,
+    acquireTimeout: 10000, // 10 seconds
+    timeout: 60000 // 60 seconds
 });
 
-// Test the pool connection when the server starts
+// Test connection on startup
 pool.getConnection((err, connection) => {
     if (err) {
+        console.error('❌ Database connection failed:', err.code);
         if (err.code === 'PROTOCOL_CONNECTION_LOST') {
             console.error('Database connection was closed.');
         }
@@ -24,13 +31,21 @@ pool.getConnection((err, connection) => {
         if (err.code === 'ECONNREFUSED') {
             console.error('Database connection was refused.');
         }
+        if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+            console.error('Access denied - check your credentials.');
+        }
+        return;
     }
     
     if (connection) {
-        console.log('✅ Connected to MySQL Database Pool successfully.');
-        connection.release(); // IMMEDIATELY release the connection back to the pool
+        console.log('✅ Connected to Clever Cloud MySQL successfully.');
+        connection.release();
     }
-    return;
+});
+
+// Handle pool errors
+pool.on('error', (err) => {
+    console.error('❌ MySQL Pool Error:', err.message);
 });
 
 module.exports = pool;
