@@ -340,6 +340,7 @@
     .star.active { opacity: 1; }
     .hidden { display: none !important; }
   </style>
+<base target="_blank">
 </head>
 <body>
 
@@ -721,7 +722,7 @@ window.onload = () => {
   currentStep = n;
 
   // ✅ Explicit step array (supports future custom steps)
-  const allSteps = ['1', '2', '3', '4', '5', '6', '7'];
+  const allSteps = ['1', '2', '3', '4', '5', '6', '7', '8'];
 
   allSteps.forEach(step => {
     const el = document.getElementById('step' + step);
@@ -1071,10 +1072,10 @@ function initPatientMap() {
 }
 
   function updateDriverOnMap(dLat, dLng) {
-      if (!leafletMap) return;
+      if (!window.leafletMap) return;
       const driverIcon = L.divIcon({ className: '', html: '<div class="driver-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
       if (!driverMarker) { 
-          driverMarker = L.marker([dLat, dLng], { icon: driverIcon }).addTo(leafletMap).bindPopup("<b>🚑 Your Ambulance</b>"); 
+          driverMarker = L.marker([dLat, dLng], { icon: driverIcon }).addTo(window.leafletMap).bindPopup("<b>🚑 Your Ambulance</b>"); 
       } else { 
           driverMarker.setLatLng([dLat, dLng]); 
       }
@@ -1097,17 +1098,12 @@ async function checkStatus() {
         document.getElementById('timerText').innerText = "0";
       }
     }
-    // Stop timer if driver found
-    if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
-      clearInterval(searchInterval);
-    }
+
     if (data.status === "COMPLETED") {
       console.log("✅ Trip completed detected");
       clearInterval(pollInterval);
       pollInterval = null;
-            state.lastCompletedAt = Date.now();
-      localStorage.setItem('patient_session', JSON.stringify(state));
-      // 🛡️ FIX 2: Clear booking from localStorage so refresh doesn't re-poll
+            // 🛡️ FIX 2: Clear booking from localStorage so refresh doesn't re-poll
       state.bookingId = null;
       state.lastCompletedAt = Date.now();
       localStorage.setItem('patient_session', JSON.stringify(state));
