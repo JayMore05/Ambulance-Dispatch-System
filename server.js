@@ -162,10 +162,17 @@ app.post("/api/save-user", (req, res) => {
 // 🛡️ FIXED: NOW EXACTLY STAMPS 'booked_at' WITH REAL TIME
 app.post("/api/bookings", (req, res) => {
     const { user_id, hospital_id, custom_destination, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
-    db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km, booked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, 
-    [user_id, hospital_id || null, custom_destination || null, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ booking_id: result.insertId });
+    if (!user_id || !emergency_type || !ambulance_type || !Number.isFinite(Number(user_lat)) || !Number.isFinite(Number(user_lng))) {
+        return res.status(400).json({ success: false, error: "Missing booking details or valid patient coordinates." });
+    }
+    db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km, status, booked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', NOW())`,
+    [user_id, hospital_id || null, custom_destination || null, emergency_type, ambulance_type, Number(user_lat), Number(user_lng), distance_km || 0, rate_per_km || 0], (err, result) => {
+        if (err) {
+            console.error("[Booking] Insert failed:", err.message);
+            return res.status(500).json({ success: false, error: "Could not create booking. Please retry." });
+        }
+        console.log(`[Booking] Created booking ${result.insertId} as REQUESTED`);
+        res.status(201).json({ success: true, booking_id: result.insertId, status: "REQUESTED" });
     });
 });
 
@@ -204,81 +211,50 @@ app.post("/api/bookings/update-destination", (req, res) => {
 });
 
 app.get("/api/user/eta", (req, res) => {
-    const bookingId = Number.parseInt(req.query.booking_id, 10);
+    const bookingId = Number(req.query.booking_id);
     if (!Number.isInteger(bookingId) || bookingId <= 0) {
         return res.status(400).json({ success: false, error: "A valid booking_id is required." });
     }
-
-    const query = `
-        SELECT
-            b.*,
-            COALESCE(b.custom_destination, h.name) AS hospital_name,
-            d.latitude AS driver_lat,
-            d.longitude AS driver_lng,
-            d.name AS driver_name,
-            d.phone AS driver_phone,
-            d.ambulance_number,
-            d.ambulance_type AS driver_ambulance_type
+    const sql = `SELECT b.*, COALESCE(b.custom_destination, h.name) AS hospital_name,
+        d.name AS driver_name, d.phone AS driver_phone,
+        d.ambulance_type AS driver_ambulance_type, d.ambulance_number,
+        d.latitude AS driver_lat, d.longitude AS driver_lng
         FROM bookings b
         LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id
         LEFT JOIN drivers d ON b.driver_id = d.driver_id
-        WHERE b.booking_id = ?
-        LIMIT 1
-    `;
-
-    db.query(query, [bookingId], (err, rows) => {
+        WHERE b.booking_id = ? LIMIT 1`;
+    db.query(sql, [bookingId], (err, rows) => {
         if (err) {
-            console.error("[user/eta] Database query failed:", err.message);
-            return res.status(500).json({ success: false, error: "Unable to read booking status right now." });
+            console.error("[Patient status] Database query failed:", err.message);
+            return res.status(500).json({ success: false, error: "Could not check booking status." });
         }
         if (!rows || rows.length === 0) {
             return res.status(404).json({ success: false, error: "Booking not found." });
         }
-
         const b = rows[0];
-        const response = {
-            success: true,
-            status: b.status,
-            booking_id: b.booking_id,
-            hospital_name: b.hospital_name || "Hospital not specified",
-            driver_name: b.driver_name || null,
-            driver_phone: b.driver_phone || null,
-            ambulance_number: b.ambulance_number || null,
+        const status = String(b.status || "REQUESTED").toUpperCase();
+        const payload = {
+            success: true, booking_id: b.booking_id, status,
+            hospital_name: b.hospital_name || b.custom_destination || "Destination pending",
+            driver_name: b.driver_name || null, driver_phone: b.driver_phone || null,
             driver_ambulance_type: b.driver_ambulance_type || null,
-            driver_lat: b.driver_lat ?? null,
-            driver_lng: b.driver_lng ?? null
+            ambulance_number: b.ambulance_number || null,
+            driver_lat: b.driver_lat, driver_lng: b.driver_lng
         };
-
-        if (b.status === "COMPLETED") {
-            return res.json({
-                ...response,
-                final_cost: Number(b.final_cost || 0),
-                distance: Number(b.hospital_distance_km || 0).toFixed(2)
-            });
+        if (status === "COMPLETED") {
+            payload.final_cost = Number(b.final_cost || 0);
+            payload.distance = Number(b.hospital_distance_km || 0).toFixed(2);
+            return res.json(payload);
         }
-
-        if (b.status === "CANCELLED") {
-            return res.json(response);
-        }
-
-        let driverDist = "Calculating...";
-        let driverEta = "Calculating...";
-        if (
-            b.driver_lat !== null && b.driver_lat !== undefined &&
-            b.driver_lng !== null && b.driver_lng !== undefined &&
-            b.user_latitude !== null && b.user_latitude !== undefined &&
-            b.user_longitude !== null && b.user_longitude !== undefined
-        ) {
+        if (b.driver_lat != null && b.driver_lng != null && Number(b.driver_lat) !== 0 && Number(b.driver_lng) !== 0 && b.user_latitude != null && b.user_longitude != null) {
             const dist = getKmDistance(b.user_latitude, b.user_longitude, b.driver_lat, b.driver_lng);
-            if (Number.isFinite(dist) && dist < 999) {
-                driverDist = dist.toFixed(2);
-                driverEta = Math.max(1, Math.round((dist / 40) * 60));
-            }
+            payload.distance = dist.toFixed(2);
+            payload.eta = Math.max(1, Math.round((dist / 40) * 60));
+        } else {
+            payload.distance = "Calculating...";
+            payload.eta = "Calculating...";
         }
-
-        response.distance = driverDist;
-        response.eta = driverEta;
-        return res.json(response);
+        return res.json(payload);
     });
 });
 
@@ -362,14 +338,12 @@ app.post("/api/driver/toggle-status", (req, res) => {
 const activeQuery = `SELECT b.*, u.name AS user_name, u.phone AS user_phone, COALESCE(b.custom_destination, h.name) AS hospital_name, h.latitude AS hosp_lat, h.longitude AS hosp_lng FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id`;
 
 app.get("/api/driver/active-mission", (req, res) => {
-    const driverId = Number.parseInt(req.query.driver_id, 10);
-    if (!Number.isInteger(driverId) || driverId <= 0) {
-        return res.status(400).json({ success: false, error: "A valid driver_id is required." });
-    }
+    const driverId = Number(req.query.driver_id);
+    if (!Number.isInteger(driverId) || driverId <= 0) return res.status(400).json({ success: false, error: "Valid driver_id is required." });
     db.query(`${activeQuery} WHERE b.driver_id = ? AND b.status IN ('ASSIGNED', 'IN_TRANSIT') ORDER BY b.booking_id DESC LIMIT 1`, [driverId], (err, results) => {
         if (err) {
-            console.error("[driver/active-mission] Database query failed:", err.message);
-            return res.status(500).json({ success: false, error: "Unable to check active mission." });
+            console.error("[Driver mission] Query failed:", err.message);
+            return res.status(500).json({ success: false, error: "Could not check active mission." });
         }
         if (!results || results.length === 0) return res.json({ success: true, hasMission: false });
         return res.json({ success: true, hasMission: true, mission: results[0] });
@@ -379,85 +353,83 @@ app.get("/api/driver/active-mission", (req, res) => {
 // 🛡️ FIXED: NOW CALCULATES ACTUAL MINUTES ELAPSED SINCE BOOKING
 // 🛡️ FIXED: Hides old "Ghost Bookings" older than 10 minutes so driver doesn't click wrong ride
 app.get("/api/driver/radar", (req, res) => {
+    const driverLat = Number(req.query.driverLat);
+    const driverLng = Number(req.query.driverLng);
+    const driverType = String(req.query.driverType || "").trim().toUpperCase();
+    if (!Number.isFinite(driverLat) || !Number.isFinite(driverLng) || Math.abs(driverLat) > 90 || Math.abs(driverLng) > 180 || (driverLat === 0 && driverLng === 0)) {
+        return res.status(400).json({ success: false, error: "A valid live driver location is required." });
+    }
+    if (!driverType) return res.status(400).json({ success: false, error: "Driver ambulance type is missing." });
+
     db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booking_id DESC`, (err, results) => {
-        if (err) return res.status(500).json({ error: "Radar failed." });
-
-        if (!req.query.driverLat || !req.query.driverLng) {
-    return res.status(400).json({
-        success: false,
-        error: "Driver location missing"
-    });
-}
-        
-        const driverType = req.query.driverType; 
+        if (err) {
+            console.error("[Driver radar] Query failed:", err.message);
+            return res.status(500).json({ success: false, error: "Could not load emergency requests." });
+        }
         const nearby = (results || []).filter(b => {
-            const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-            
-            // Calculate how many minutes ago it was booked
-            const rawTime = b.booked_at || b.created_at;
-            const bookedDate = rawTime ? new Date(rawTime) : new Date();
-            const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
-
-            // 🚫 MAGIC FIX: If the booking is older than 10 minutes, hide it!
-            if (elapsedMins > 10) return false;
-
-            return dist <= 8 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
+            const userLat = Number(b.user_latitude);
+            const userLng = Number(b.user_longitude);
+            if (!Number.isFinite(userLat) || !Number.isFinite(userLng) || (userLat === 0 && userLng === 0)) return false;
+            const dist = getKmDistance(driverLat, driverLng, userLat, userLng);
+            const requestedType = String(b.ambulance_type || "").trim().toUpperCase();
+            // Do not silently expire genuine pending emergencies after 10 minutes.
+            return dist <= 8 && (requestedType === "ANY" || requestedType === driverType);
         }).map(b => {
+            const dist = getKmDistance(driverLat, driverLng, b.user_latitude, b.user_longitude);
             const rawTime = b.booked_at || b.created_at;
-            const bookedDate =
-    rawTime && !isNaN(new Date(rawTime))
-        ? new Date(rawTime)
-        : new Date();            const formatT = bookedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const bookedDate = rawTime && !Number.isNaN(new Date(rawTime).getTime()) ? new Date(rawTime) : new Date();
             const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
-            const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
-
-            return { 
-                ...b, 
-                priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), 
-                elapsed_mins: elapsedMins, 
-                formatted_time: formatT,
+            return {
+                ...b,
+                priorityStar: String(b.emergency_category || "").toLowerCase().includes("heart") && (driverType === "ALS" || driverType === "ECG"),
+                elapsed_mins: elapsedMins,
+                formatted_time: bookedDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+                distance_km: Number(dist.toFixed(2)),
                 real_eta: Math.max(1, Math.round((dist / 40) * 60))
             };
         });
-        res.json({ bookings: nearby });
+        console.log(`[Driver radar] type=${driverType} coords=${driverLat},${driverLng} pending=${(results || []).length} nearby=${nearby.length}`);
+        return res.json({ success: true, bookings: nearby });
     });
 });
+
 // ==========================================================
 // 🛡️ MISSION LIFECYCLE APIS (SILENT TIMESTAMP FIX)
 // ==========================================================
 app.post("/api/driver/accept", (req, res) => {
-    const { driver_id, booking_id } = req.body;
-    
-    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
-    db.query(query, [driver_id, booking_id], (err, result) => {
-        if (err) return res.json({ success: false, message: "Database Error: " + err.message });
-        if (result.affectedRows === 0) return res.json({ success: false, message: "Too late! Another driver accepted this emergency." });
-        
-        db.query(`UPDATE bookings SET accepted_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
-        res.json({ success: true, message: "Booking assigned to you!" });
+    const driverId = Number(req.body.driver_id);
+    const bookingId = Number(req.body.booking_id);
+    if (!Number.isInteger(driverId) || driverId <= 0 || !Number.isInteger(bookingId) || bookingId <= 0) {
+        return res.status(400).json({ success: false, message: "Valid driver and booking IDs are required." });
+    }
+    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED', accepted_at = NOW() WHERE booking_id = ? AND status = 'REQUESTED'`;
+    db.query(query, [driverId, bookingId], (err, result) => {
+        if (err) {
+            console.error("[Driver accept] Failed:", err.message);
+            return res.status(500).json({ success: false, message: "Database error while accepting this request." });
+        }
+        if (!result || result.affectedRows !== 1) {
+            return res.status(409).json({ success: false, message: "This request is no longer available. Refresh the radar." });
+        }
+        console.log(`[Driver accept] booking=${bookingId} assigned_to_driver=${driverId}`);
+        return res.json({ success: true, booking_id: bookingId, status: "ASSIGNED", message: "Booking assigned to you." });
     });
 });
 
 app.post("/api/driver/pickup", (req, res) => {
-    const bookingId = Number.parseInt(req.body.booking_id, 10);
-    const driverId = Number.parseInt(req.body.driver_id, 10);
-    if (!Number.isInteger(bookingId) || bookingId <= 0 || !Number.isInteger(driverId) || driverId <= 0) {
-        return res.status(400).json({ success: false, message: "Valid booking_id and driver_id are required." });
+    const driverId = Number(req.body.driver_id);
+    const bookingId = Number(req.body.booking_id);
+    if (!Number.isInteger(driverId) || driverId <= 0 || !Number.isInteger(bookingId) || bookingId <= 0) {
+        return res.status(400).json({ success: false, message: "Valid driver and booking IDs are required." });
     }
-    db.query(
-        "UPDATE bookings SET status = 'IN_TRANSIT', picked_up_at = NOW() WHERE booking_id = ? AND driver_id = ? AND status = 'ASSIGNED'",
-        [bookingId, driverId],
-        (err, result) => {
-            if (err) {
-                console.error("[driver/pickup] Database update failed:", err.message);
-                return res.status(500).json({ success: false, message: "Could not update trip status." });
-            }
-            if (!result.affectedRows) {
-                return res.status(409).json({ success: false, message: "This booking is not assigned to you or is no longer awaiting pickup." });
-            }
-            return res.json({ success: true, status: "IN_TRANSIT", message: "Patient picked up. Trip started." });
+    db.query(`UPDATE bookings SET status = 'IN_TRANSIT', picked_up_at = NOW() WHERE booking_id = ? AND driver_id = ? AND status = 'ASSIGNED'`, [bookingId, driverId], (err, result) => {
+        if (err) {
+            console.error("[Driver pickup] Failed:", err.message);
+            return res.status(500).json({ success: false, message: "Could not update pickup status." });
         }
-    );
+        if (!result || result.affectedRows !== 1) return res.status(409).json({ success: false, message: "This booking is not assigned to this driver or was already updated." });
+        return res.json({ success: true, booking_id: bookingId, status: "IN_TRANSIT", message: "Patient picked up." });
+    });
 });
 
 app.post("/api/driver/update-status", (req, res) => {
