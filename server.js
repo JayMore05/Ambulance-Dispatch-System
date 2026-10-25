@@ -1,1120 +1,630 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DriverOps Pro</title>
+require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const helmet = require("helmet");
+const compression = require("compression");
+const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
+const jwt = require("jsonwebtoken");
+const webpush = require("web-push");
+const db = require("./db"); 
 
-  <link rel="manifest" href="/driver-manifest.json">
-  <meta name="theme-color" content="#e53935">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="DriverOps">
-  <link rel="apple-touch-icon" href="/icons/icon-driver-192.png">
+const app = express();
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+// ==========================================================
+// 🛡️ CRASH PREVENTION SHIELD (Prevents 503 Errors!)
+// ==========================================================
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL ERROR CAUGHT (Server kept alive):', err.message);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Promise Rejection (Server kept alive):', reason);
+});
 
-  <style>
-    :root {
-        --bg: #121212; --card: #1e1e1e; --border: #333;
-        --primary: #e53935; --success: #4caf50; --text: #ffffff;
-        --muted: #aaaaaa; --highlight: #2c2c2c;
-        --warning: #ffb300; --info: #2196F3;
-    }
+// ==========================================================
+// 🛡️ SECURITY & PERFORMANCE MIDDLEWARE
+// ==========================================================
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(compression()); 
+app.use(morgan('dev')); 
+// 🛡️ Restrict CORS to your domains only
+const allowedOrigins = [
+    'https://ambulance-dispatch-system.onrender.com',
+    'http://localhost:4000',
+    'http://localhost:3000'
+];
+app.use(cors({
+    origin: function(origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            return callback(new Error('CORS policy violation'), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
+app.use(express.json());
+app.use(express.static(__dirname));
 
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    
-    body { 
-        margin: 0; 
-        background: var(--bg); 
-        color: var(--text); 
-        padding-bottom: 70px; 
-        transition: background-color 0.5s ease; 
-    }
-    
-    .container { width: 100%; max-width: 600px; margin: auto; padding: 16px; }
+// 🛡️ Stricter rate limits per IP
+const strictLimiter = rateLimit({ 
+    windowMs: 60 * 1000, // 1 minute
+    max: 30, // 30 requests per minute per IP
+    message: { error: "Too many requests. Please slow down." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
-    .topbar {
-        position: sticky; top: 0; background: rgba(30,30,30,0.95);
-        backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
-        z-index: 10; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
-    }
-    
-    .brand { font-weight: 800; font-size: 1.2rem; color: var(--primary); }
+const generalLimiter = rateLimit({ 
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // 200 requests per 15 min per IP
+    message: { error: "Rate limit exceeded" }
+});
 
-    .status-toggle { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 12px; display: none; }
-    
-    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 34px; transition: .4s; }
-    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; border-radius: 50%; transition: .4s; }
-    input:checked + .slider { background-color: var(--success); }
-    input:checked + .slider:before { transform: translateX(20px); }
+// Apply strict limits to sensitive endpoints
+app.use("/api/driver/accept", strictLimiter);
+app.use("/api/driver/request-otp", strictLimiter);
+app.use("/api/save-user", strictLimiter);
+app.use("/api/bookings", strictLimiter);
 
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-bottom: 16px; }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+// General limit for everything else
+app.use("/api/", generalLimiter);
 
-    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; text-transform: uppercase; }
-    input, select { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; outline: none; transition: 0.2s; }
-    input:focus, select:focus { border-color: var(--primary); }
-    input.error { border-color: var(--primary) !important; }
-    input[type="file"] { padding: 10px; background: var(--highlight); font-size: 14px; }
-    .field-error { color: var(--primary); font-size: 12px; margin: 4px 0 0; font-weight: 600; display: none; }
+if (!process.env.JWT_SECRET) {
+    throw new Error("❌ FATAL: JWT_SECRET environment variable is required");
+}
+if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 8) {
+    throw new Error("❌ FATAL: ADMIN_PASSWORD must be set and at least 8 characters");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const ADMIN_PASS = process.env.ADMIN_PASSWORD;
 
-    .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.1s; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .btn:active { transform: scale(0.98); }
-    .btn.primary { background: var(--primary); color: #fff; }
-    .btn.success { background: var(--success); color: #fff; }
-    .btn.info { background: var(--info); color: #fff; }
-    .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
-    .btn.danger { background: #ef4444; color: white; }
-    .btn.whatsapp { background: #25D366; color: white; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2); }
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails('mailto:admin@fastrescue.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+}
 
-    .auth-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-    .auth-tab { flex: 1; padding: 12px; text-align: center; background: var(--highlight); border-radius: 10px; cursor: pointer; font-weight: bold; color: var(--muted); border: 2px solid transparent; }
-    .auth-tab.active { background: rgba(229, 57, 53, 0.1); color: var(--primary); border-color: var(--primary); }
-
-    .request-card { background: var(--highlight); border: 2px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
-    .request-card.priority { border-color: var(--warning); background: rgba(255, 179, 0, 0.05); }
-    .req-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-    .req-title { font-weight: 700; font-size: 16px; color: var(--primary); }
-    .req-dist { font-size: 14px; font-weight: bold; color: var(--muted); }
-    .req-detail { font-size: 14px; margin-bottom: 4px; color: #ddd; }
-    .star-badge { background: rgba(255, 179, 0, 0.2); color: var(--warning); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; display: inline-block; margin-bottom: 10px; }
-
-    .radar-box { text-align: center; padding: 30px 0; }
-    .pulse { width: 80px; height: 80px; background: rgba(76, 175, 80, 0.2); border-radius: 50%; margin: 0 auto 20px; position: relative; display: flex; justify-content: center; align-items: center; }
-    .pulse::before { content: "📡"; font-size: 30px; z-index: 2; }
-    .pulse::after { content: ""; position: absolute; width: 100%; height: 100%; border: 2px solid var(--success); border-radius: 50%; z-index: 1; animation: pulse-anim 2s infinite; }
-    @keyframes pulse-anim { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
-
-    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 10px; display: none; z-index: 10; }
-    .nav-item { color: var(--muted); background: none; border: none; font-size: 14px; cursor: pointer; padding: 8px 16px; border-radius: 8px; }
-    .nav-item.active { background: rgba(229, 57, 53, 0.1); color: var(--primary); font-weight: bold; }
-
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
-    .modal { background: var(--card); border: 1px solid var(--primary); padding: 24px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(229, 57, 53, 0.3); }
-
-    #uploadProgress { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
-    #uploadBar { width: 0%; height: 100%; background: var(--info); transition: 0.3s; }
-
-    #driverMap { height: 200px; width: 100%; border-radius: 12px; margin-bottom: 15px; border: 1px solid var(--border); z-index: 1; }
-    .analytics-box { background: rgba(76, 175, 80, 0.1); border: 1px solid var(--success); padding: 15px; border-radius: 12px; display: flex; justify-content: space-around; text-align: center; margin-bottom: 15px; }
-  </style>
-</head>
-<body>
-
-<div class="topbar">
-  <div class="brand">🚑 DriverOps Pro</div>
-  <div class="status-toggle" id="navToggle">
-    <span id="toggleText" style="color:var(--success);">ONLINE</span>
-    <label class="switch">
-        <input type="checkbox" id="statusCheckbox" checked onchange="toggleStatus()">
-        <span class="slider"></span>
-    </label>
-  </div>
-</div>
-
-<div class="container">
-
-  <div id="step1" class="card" style="display: block;">
-    <div class="auth-tabs">
-      <div class="auth-tab active" id="tabLogin" onclick="switchAuthMode('login')">Login</div>
-      <div class="auth-tab" id="tabRegister" onclick="switchAuthMode('register')">Register (KYC)</div>
-    </div>
-
-    <div id="rejectionBox" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-        <h3 style="color: #ef4444; margin: 0 0 5px 0;">⚠️ Verification Failed</h3>
-        <p style="margin: 0; font-size: 13px;" id="rejectionReasonText"></p>
-        <p style="margin: 5px 0 0 0; font-size: 12px; font-weight: bold;">Please fix the issue below and re-submit.</p>
-    </div>
-
-    <div id="loginForm">
-      <div id="regPart1" style="display: none;">
-        <label>Full Name</label>
-        <input id="regName" placeholder="e.g. Rahul Kumar" oninput="clearFErr('regName')">
-        <div class="field-error" id="err-regName">Please enter a valid name.</div>
-
-      <label>Phone Number</label>
-<input id="regPhone" type="tel" placeholder="10-digit number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFErr('regPhone')">
-        <div class="field-error" id="err-regPhone">Enter valid 10-digit number.</div>
-
-        <label>Vehicle Number</label>
-        <input id="regVehicle" placeholder="MH-02-AB-1234" style="text-transform: uppercase;">
-
-        <label>Ambulance Type</label>
-        <select id="regType">
-          <option value="PTV">🚐 Patient Transport (PTV)</option>
-          <option value="BLS">🚑 Basic Life Support (BLS)</option>
-          <option value="ALS" selected>🚨 Advanced Life Support (ALS)</option>
-          <option value="ECG">💓 ECG Ambulance</option>
-          <option value="NEO">👶 Neonatal / Incubator</option>
-        </select>
-
-        <button class="btn info" style="margin-top:20px;" onclick="goToRegPart2()">Next: Upload Documents ➔</button>
-      </div>
-
-      <div id="regPart2" style="display: none;">
-        <button class="btn ghost" style="margin-bottom:15px; padding:8px;" onclick="goToRegPart1()">⬅ Back</button>
-        <p style="color:var(--warning); font-size:13px; font-weight:bold;">Please upload clear images for verification.</p>
-
-        <label>Aadhar Card / Gov ID</label>
-        <input type="file" id="fileAadhar" accept="image/*">
-
-        <label>Vehicle RC Book</label>
-        <input type="file" id="fileRC" accept="image/*">
-
-        <label>Active Insurance</label>
-        <input type="file" id="fileInsurance" accept="image/*">
-
-        <label>PUC Certificate</label>
-        <input type="file" id="filePUC" accept="image/*">
-
-        <div style="margin: 20px 0; display:flex; align-items:center; gap:10px;">
-            <input type="checkbox" id="regPCC" style="width:20px; height:20px; margin:0;">
-            <label style="margin:0; text-transform:none;">I have a valid Police Clearance</label>
-        </div>
-
-        <div id="uploadProgress"><div id="uploadBar"></div></div>
-        <p id="uploadText" style="text-align:center; font-size:12px; color:var(--info); display:none;">Uploading securely to cloud...</p>
-
-        <button id="btnSubmitKYC" class="btn primary" style="margin-top:16px;" onclick="submitKYC()">Upload & Get OTP</button>
-      </div>
-
-      <div id="loginOnlyFields">
-<label>Registered Phone Number</label>
-<input id="authPhone" type="tel" placeholder="10-digit number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFErr('authPhone')">
-        <div class="field-error" id="err-authPhone">Enter valid 10-digit number.</div>
-        <button class="btn primary" style="margin-top:16px;" onclick="requestOTP()">Send Login OTP</button>
-      </div>
-    </div>
-
-    <div id="otpForm" style="display: none;">
-      <div id="demoOtpBox" style="background: rgba(255, 179, 0, 0.2); border: 1px dashed var(--warning); color: var(--warning); padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 16px; font-weight: bold;">Loading...</div>
-      <label>Enter 4-Digit OTP</label>
-      <input id="driverOtp" type="number" placeholder="XXXX" style="letter-spacing: 4px; font-weight:bold; text-align:center;">
-      <button class="btn success" style="margin-top:16px;" onclick="verifyOTP()">Verify Account</button>
-      <button class="btn ghost" style="margin-top:10px;" onclick="cancelLogin()">← Cancel</button>
-    </div>
-  </div>
-
-  <div id="stepPending" class="card" style="display: none; text-align:center; padding: 40px 20px;">
-    <h1 style="font-size: 50px; margin: 0;">⏳</h1>
-    <h1 style="color: var(--warning);">Verification Pending</h1>
-    <p>Your KYC documents are currently under review by our Admin team.</p>
-    <button class="btn info" style="margin-top:20px;" onclick="checkApprovalStatus()">Refresh Status</button>
-    <button class="btn ghost" style="margin-top:10px; color: var(--primary); border-color: var(--primary);" onclick="logout()">Logout</button>
-  </div>
-
-  <div id="step2" class="card" style="display: none;">
-    <div class="radar-box">
-        <div class="pulse"></div>
-       <h1 style="color: var(--success);" id="radarTitle">Scanning 8km Radius...</h1>
-<p>Searching 8km radius for emergencies.</p>
-        <p id="radarSub">Waiting for emergency dispatches.</p>
-    </div>
-    <div id="emergencyList"></div>
-  </div>
-
-  <div id="step3" class="card" style="display: none;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-        <h1 style="color: var(--primary); margin:0;">🚨 ONGOING MISSION</h1>
-        <a id="btnCallPatient" href="#" class="btn info" style="width:auto; padding:8px 16px; font-size:14px; text-decoration:none;">📞 Call</a>
-    </div>
-
-    <div id="driverMap"></div>
-
-    <div class="request-card">
-      <div class="req-detail"><strong>Patient:</strong> <span id="missionPatient"></span></div>
-      <div class="req-detail"><strong>Condition:</strong> <span id="missionCondition"></span></div>
-      <hr style="border-color: var(--border); margin: 12px 0;">
-      <div class="req-detail" style="color: var(--warning);"><strong>Destination:</strong></div>
-      <div class="req-title" id="missionHospital"></div>
-    </div>
-
-    <div id="phase1Box" style="display: none;">
-      <p style="color:var(--warning); font-weight:bold; text-align:center;">Phase 1: Drive to Patient</p>
-      <a id="navToPatient" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🗺️ Google Maps Nav</a>
-      <button class="btn whatsapp" onclick="sendWhatsAppToPatient()">💬 Send Multilingual ETA (WhatsApp)</button>
-      <button class="btn info" onclick="pickup()">📍 Patient Picked Up</button>
-    </div>
-
-    <div id="phase2Box" style="display: none;">
-      <div style="background:#333; padding:15px; border-radius:8px; text-align:center; margin-bottom:15px;">
-        <p style="margin:0; font-size:12px; color:var(--muted)">LIVE ODOMETER (Actual Distance)</p>
-        <h2 style="margin:5px 0 0 0; color:var(--success);"><span id="liveOdo">0.00</span> km</h2>
-      </div>
-      <p style="color:var(--success); font-weight:bold; text-align:center;">Phase 2: Drive to Hospital</p>
-      <a id="navToHospital" href="#" target="_blank" class="btn ghost" style="text-decoration:none; margin-bottom:10px;">🏥 Google Maps Nav</a>
-      <button class="btn ghost" style="margin-bottom:10px;" onclick="document.getElementById('destModal').style.display='flex'">🔄 Change Destination</button>
-      <button class="btn success" onclick="completeTrip()">✅ Arrived at Dropoff</button>
-    </div>
-  </div>
-
-  <div id="step6" class="card" style="display: none; text-align:center;">
-    <h1 style="color:var(--success)">Trip Finished</h1>
-    <div style="background:#2c2c2c; padding:20px; border-radius:12px; margin:20px 0;">
-      <p style="color:var(--muted); margin:0;">Actual Distance Driven</p>
-      <h2><span id="receiptDist"></span> km</h2>
-      <hr style="border-color:#444;">
-      <p style="color:var(--muted); margin:0; margin-top:10px;">Amount to Collect</p>
-      <h1 style="color:var(--success); font-size:40px; margin:5px 0;">₹<span id="receiptCost"></span></h1>
-    </div>
-    <button class="btn primary" onclick="closeReceipt()">Finish & Return to Radar</button>
-  </div>
-
-  <div id="step4" class="card" style="display: none;">
-    <h1>Mission History</h1>
-    <div class="analytics-box">
-        <div><h1 style="color:var(--success); margin:0;" id="statEarnings">₹0</h1><small style="color:var(--muted)">Total Earnings</small></div>
-        <div><h1 style="color:var(--text); margin:0;" id="statTrips">0</h1><small style="color:var(--muted)">Total Trips</small></div>
-    </div>
-    <div id="historyList">Loading history...</div>
-  </div>
-
-  <div id="step5" class="card" style="display: none;">
-    <h1>Driver Profile</h1>
-    <div style="background: rgba(76, 175, 80, 0.1); border: 1px solid var(--success); padding: 10px; border-radius: 8px; margin-bottom: 20px; text-align: center; color: var(--success); font-weight: bold;">✅ KYC Verified</div>
-    
-    <label>Full Name</label><input id="editName">
-    <label>Phone Number</label><input id="editPhone" readonly style="opacity:0.6;">
-    <label>Vehicle Number</label><input id="editVehicle" style="text-transform: uppercase;">
-    <label>Ambulance Type</label>
-    <select id="editType">
-        <option value="PTV">🚐 Patient Transport (PTV)</option>
-        <option value="BLS">🚑 Basic Life Support (BLS)</option>
-        <option value="ALS">🚨 Advanced Life Support (ALS)</option>
-        <option value="ECG">💓 ECG Ambulance</option>
-        <option value="NEO">👶 Neonatal / Incubator</option>
-    </select>
-    
-    <button class="btn success" style="margin-top:20px;" onclick="saveProfile()">💾 Save Changes</button>
-    <button class="btn ghost" style="margin-top:10px; color:var(--primary); border-color:var(--primary);" onclick="logout()">🚪 Logout Completely</button>
-    <hr style="border-color: var(--border); margin: 20px 0;">
-    <button class="btn danger" onclick="requestAccountDeletion()">🗑️ Request Account Deletion</button>
-  </div>
-</div>
-
-<div id="bottomNav" class="bottom-nav">
-  <button class="nav-item active" onclick="navTab(2, this)">📡 Radar</button>
-  <button class="nav-item" onclick="navTab(4, this)">📜 History</button>
-  <button class="nav-item" onclick="navTab(5, this)">👤 Profile</button>
-</div>
-
-<div id="destModal" class="modal-overlay" style="display: none;">
-  <div class="modal">
-    <h2 style="margin-top:0;">Change Destination</h2>
-    <p style="color:var(--muted); font-size:14px;">Enter exact name of the new hospital.</p>
-    <input id="driverNewDest" placeholder="e.g. City Care Hospital" style="text-align:center; margin-bottom:10px;">
-    <div style="display:flex; gap:10px; margin-top:10px;">
-      <button class="btn ghost" onclick="document.getElementById('destModal').style.display='none'">Cancel</button>
-      <button class="btn primary" onclick="submitDriverDest()">Update Destination</button>
-    </div>
-  </div>
-</div>
-
-<div id="dispatchModal" class="modal-overlay" style="display: none;">
-    <div class="modal">
-        <div class="modal-warning" style="font-size: 40px;">⚠️</div>
-        <h2 style="color:var(--primary); margin:0 0 10px;">URGENT DISPATCH</h2>
-        <div style="text-align:left; background:var(--bg); padding:16px; border-radius:12px; margin-bottom:20px;">
-            <div class="req-detail"><strong>Patient:</strong> <span id="modalPatient"></span></div>
-            <div class="req-detail"><strong>Emergency:</strong> <span id="modalCondition" style="color:var(--warning);"></span></div>
-            <div class="req-detail"><strong>Dropoff:</strong> <span id="modalHospital"></span></div>
-        </div>
-        <p style="color:var(--text); font-weight:bold;">Are you sure you can respond immediately?</p>
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button class="btn ghost" onclick="closeModal()">Cancel</button>
-            <button class="btn primary" onclick="confirmAccept()">YES, RESPOND NOW</button>
-        </div>
-    </div>
-</div>
-
-<audio id="alertBeep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
-
-<script>
-  // ==========================================
-  // ✅ PWA — Service Worker + Push + Install
-  // ==========================================
-  let driverInstallPrompt = null;
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', async () => {
-      try { await navigator.serviceWorker.register('/sw.js'); } catch(e) {}
+const adminAuth = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; 
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(403).json({ error: "Invalid token" });
+        // 🛡️ CRITICAL: Verify this is actually an admin token
+        if (decoded.role !== 'admin') return res.status(403).json({ error: "Admin access only" });
+        next();
     });
-  }
+};
 
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault(); driverInstallPrompt = e;
-  });
-
-  async function subscribeDriverPush(driverId) {
-    if (!('PushManager' in window) || !navigator.serviceWorker) return;
+async function pushNotify(subscriptionJson, title, body) {
+    if (!subscriptionJson || !process.env.VAPID_PUBLIC_KEY) return;
     try {
-      const reg = await navigator.serviceWorker.ready;
-      const keyRes = await fetch(`${BASE_URL}/api/push/vapid-key`);
-      const { publicKey } = await keyRes.json();
-      const padding = '='.repeat((4 - publicKey.length % 4) % 4);
-      const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
-      const raw = window.atob(base64);
-      const u8arr = new Uint8Array([...raw].map(c => c.charCodeAt(0)));
-      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8arr });
-      await fetch(`${BASE_URL}/api/push/subscribe-driver`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver_id: driverId, subscription: sub }) });
-    } catch(e) { console.log("Push failed"); }
-  }
+        const sub = JSON.parse(subscriptionJson);
+        await webpush.sendNotification(sub, JSON.stringify({ title, body }));
+    } catch (e) { console.error("Push Error:", e.message); }
+}
 
-  // ==========================================
-  // 🛡️ GPS SENDER LOGIC
-  // ========================================
-  let gpsSendInterval = null;
+const getKmDistance = (lat1, lon1, lat2, lon2) => {
+    const rLat1 = parseFloat(lat1) || 0, rLon1 = parseFloat(lon1) || 0, rLat2 = parseFloat(lat2) || 0, rLon2 = parseFloat(lon2) || 0;
+    if (rLat1 === 0 || rLon1 === 0 || rLat2 === 0 || rLon2 === 0) return 999;
+    const R = 6371; 
+    const dLat = (rLat2 - rLat1) * Math.PI / 180;
+    const dLon = (rLon2 - rLon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rLat1 * Math.PI / 180) * Math.cos(rLat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
+};
 
-  function startGPSSending() {
-    if (gpsSendInterval) return;
-    gpsSendInterval = setInterval(async () => {
-      if (!driver.id || !driver.activeBookingId) return;
-      try {
-        await fetch(`${BASE_URL}/api/driver/location`, { 
-            method: "POST", 
-            headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify({ driver_id: driver.id, latitude: driver.lat, longitude: driver.lng }) 
-        });
-      } catch(e) {}
-    }, 5000);
-  }
+function processAndSort(rows, userLat, userLng) {
+    return rows.map(h => {
+        const distance = getKmDistance(userLat, userLng, h.latitude, h.longitude);
+        return { ...h, distance_km: parseFloat(distance.toFixed(2)) };
+    }).filter(h => h.distance_km < 500).sort((a, b) => a.distance_km - b.distance_km);
+}
 
-  function stopGPSSending() {
-    if (gpsSendInterval) clearInterval(gpsSendInterval); 
-    gpsSendInterval = null;
-  }
+// ==========================================================
+// 🏥 PATIENT SIDE APIS
+// ==========================================================
+app.get("/api/hospitals", (req, res) => {
+    const { condition, ayushman_only, lat, lng } = req.query;
+    const cleanCondition = condition ? condition.replace(/[^\x00-\x7F]/g, "").trim() : "";
+    let query = `SELECT DISTINCT h.* FROM hospitals h INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id WHERE hd.department = ?`;
+    if (ayushman_only === 'true') query += " AND (h.accepts_ayushman = 1 OR h.is_gov = 1)";
 
-  // 🛡️ FREEZE FIX (Visibility Change)
-  document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-          if(driver.activeBookingId) { checkActiveMission(); }
-          else if(driver.isOnline) { fetchRadar(); }
-      }
-  });
-
-  async function fetchCityName(lat, lng) {
-      try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-          const data = await res.json();
-          return data.address.city || data.address.town || data.address.village || data.address.suburb || "Local Area";
-      } catch (e) { return null; }
-  }
-
-  // ==========================================
-  // SETUP & VARIABLES
-  // ==========================================
-  const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
- 
-  
-  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null };
-  let radarInterval = null; 
-  let isRegisterMode = false; 
-  let lastEmergencyCount = 0; 
-  let pendingAcceptData = null; 
-  let uploadedURLs = {}; 
-  let missionInterval = null; 
-  let odometerInterval = null; 
-  let totalDrivenKm = 0; 
-  let currentBookedDistance = 0; // Added for billing logic
-  let lastLat = null; 
-  let lastLng = null;
-  let currentMissionHospital = null; 
-  let wakeLock = null; 
-  let dMap = null; 
-  let driverMarker = null; 
-  let patientMarker = null;
-
-  const getKmDistance = (lat1, lon1, lat2, lon2) => { 
-      const R = 6371; 
-      const dLat = (lat2 - lat1) * Math.PI / 180; 
-      const dLon = (lon2 - lon1) * Math.PI / 180; 
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2); 
-      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
-  };
-
-  // ⚡ ULTRA FAST DRIVER GPS
-  window.onload = () => {
-    // 🛡️ FIX: Show last receipt if driver refreshed after completion
-    const lastReceipt = localStorage.getItem('last_receipt');
-    if (lastReceipt) {
-        const receipt = JSON.parse(lastReceipt);
-        // Only show if completed within last 5 minutes
-        if (Date.now() - receipt.completedAt < 300000) {
-            document.getElementById('receiptDist').innerText = receipt.dist;
-            document.getElementById('receiptCost').innerText = receipt.cost;
-            goStep(6);
-            // Clear after showing
-            localStorage.removeItem('last_receipt');
+    db.query(query, [cleanCondition], (err, rows) => {
+        if (err || !rows) return res.status(500).json({ error: "Database error" });
+        if (rows.length === 0) {
+            const fallbackSQL = `SELECT h.* FROM hospitals h INNER JOIN hospital_departments hd ON h.hospital_id = hd.hospital_id WHERE hd.department = 'General Sickness' ${ayushman_only === 'true' ? ' AND (h.accepts_ayushman = 1 OR h.is_gov = 1)' : ''}`;
+            db.query(fallbackSQL, (err2, fallbackRows) => res.json({ hospitals: processAndSort(fallbackRows || [], lat, lng) }));
             return;
         }
-        localStorage.removeItem('last_receipt');
-    }
-
-    if (driver.id) { 
-        if (driver.status === 'PENDING') { 
-            goStep('Pending'); 
-        } else { 
-            document.getElementById('navToggle').style.display = 'flex'; 
-            document.getElementById('bottomNav').style.display = 'flex'; 
-            driver.isOnline = true; 
-            checkActiveMission(); 
-        }
-    }
-    
-    let lastCityFetch = 0; 
-    if (navigator.geolocation) {
-        navigator.geolocation.watchPosition(
-            async pos => { 
-                driver.lat = pos.coords.latitude; 
-                driver.lng = pos.coords.longitude; 
-                if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
-                
-                if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
-                    lastCityFetch = Date.now();
-                    const city = await fetchCityName(driver.lat, driver.lng);
-                    const tText = document.getElementById('toggleText');
-                    if(tText.innerText.includes("ONLINE")) tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
-                }
-            }, 
-            err => console.log("GPS denied or slow"), 
-            { enableHighAccuracy: false, maximumAge: 10000 }
-        );
-    }
-};
-  async function requestWakeLock() { 
-      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} 
-  }
-
-  function goStep(n) { 
-      const steps = [1, 'Pending', 2, 3, 4, 5, 6];
-      steps.forEach(i => { 
-          let el = document.getElementById('step' + i); 
-          if (el) el.style.display = 'none'; 
-      }); 
-      document.getElementById('step' + n).style.display = 'block'; 
-      window.scrollTo(0, 0); 
-  }
-
-  function navTab(stepNum, btnElement) { 
-      document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); 
-      if(btnElement) btnElement.classList.add('active'); 
-      goStep(stepNum); 
-      if(stepNum === 2) fetchRadar(); 
-      if(stepNum === 4) loadHistory(); 
-      if(stepNum === 5) { 
-          document.getElementById('editName').value = driver.name || ''; 
-          document.getElementById('editPhone').value = driver.phone || ''; 
-          document.getElementById('editVehicle').value = driver.vehicle_num || ''; 
-          document.getElementById('editType').value = driver.type || 'ALS'; 
-      } 
-  }
-
-  function showFErr(id, msg) { 
-      document.getElementById(id).classList.add('error'); 
-      const el = document.getElementById('err-' + id); 
-      if (el) { el.innerText = msg; el.style.display = 'block'; } 
-  }
-  
-  function clearFErr(id) { 
-      document.getElementById(id).classList.remove('error'); 
-      const el = document.getElementById('err-' + id); 
-      if (el) el.style.display = 'none'; 
-  }
-  
- function isValidPhone(p) { return /^[6-9]\d{9}$/.test(String(p).trim()); }
-
-  function switchAuthMode(mode) { 
-      isRegisterMode = (mode === 'register'); 
-      document.getElementById('tabLogin').classList.toggle('active', !isRegisterMode); 
-      document.getElementById('tabRegister').classList.toggle('active', isRegisterMode); 
-      document.getElementById('loginOnlyFields').style.display = isRegisterMode ? 'none' : 'block';
-      document.getElementById('regPart1').style.display = isRegisterMode ? 'block' : 'none';
-      document.getElementById('regPart2').style.display = 'none'; 
-  }
-
-  function goToRegPart2() { 
-      const name = document.getElementById('regName').value.trim(); 
-      const phone = document.getElementById('regPhone').value.trim(); 
-      const veh = document.getElementById('regVehicle').value.trim(); 
-      let valid = true;
-      
-      if (!name || name.length < 2) { showFErr('regName', 'Enter a valid name.'); valid = false; }
-      if (!isValidPhone(phone)) { showFErr('regPhone', 'Enter a valid 10-digit number.'); valid = false; }
-      if (!veh) { alert("Please enter vehicle number."); valid = false; }
-      if (!valid) return;
-      
-      document.getElementById('regPart1').style.display = 'none'; 
-      document.getElementById('regPart2').style.display = 'block'; 
-  }
-
-  function goToRegPart1() { 
-      document.getElementById('regPart2').style.display = 'none'; 
-      document.getElementById('regPart1').style.display = 'block'; 
-  }
-  
-  function cancelLogin() { 
-      document.getElementById('otpForm').style.display = 'none'; 
-      document.getElementById('loginForm').style.display = 'block'; 
-  }
-
-  function getBase64(file) { 
-      return new Promise((resolve, reject) => { 
-          const reader = new FileReader(); 
-          reader.readAsDataURL(file); 
-          reader.onload = () => resolve(reader.result.split(',')[1]); 
-          reader.onerror = error => reject(error); 
-      }); 
-  }
-
-
-  // 🛡️ FIX: Upload to YOUR backend, not directly to ImgBB
-async function uploadImageToImgBB(fileInputId) {
-    const fileField = document.getElementById(fileInputId); 
-    if (!fileField.files || fileField.files.length === 0) return null;
-    
-    // Check file size (max 5MB)
-    if (fileField.files[0].size > 5 * 1024 * 1024) {
-        alert("File too large. Maximum 5MB allowed.");
-        return null;
-    }
-    
-    try {
-        const base64Image = await getBase64(fileField.files[0]);
-        const res = await fetch(`${BASE_URL}/api/upload/kyc`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64Image, driver_id: driver.id })
-        });
-        const data = await res.json();
-        return data.url || null;
-    } catch (err) { 
-        console.error("Upload failed:", err);
-        return null; 
-    }
-}
-
-  async function submitKYC() {
-      const btn = document.getElementById('btnSubmitKYC'); 
-      const bar = document.getElementById('uploadBar');
-      
-      if (!document.getElementById('fileAadhar').files[0] && !driver.id) return alert("Aadhar Card is mandatory.");
-      
-      btn.disabled = true; 
-      btn.innerText = "Uploading Documents..."; 
-      document.getElementById('uploadProgress').style.display = "block"; 
-      document.getElementById('uploadText').style.display = "block";
-      
-      bar.style.width = "20%"; uploadedURLs.aadhar = await uploadImageToImgBB('fileAadhar');
-      bar.style.width = "50%"; uploadedURLs.rc = await uploadImageToImgBB('fileRC');
-      bar.style.width = "75%"; uploadedURLs.insurance = await uploadImageToImgBB('fileInsurance');
-      bar.style.width = "95%"; uploadedURLs.puc = await uploadImageToImgBB('filePUC'); 
-      bar.style.width = "100%";
-      
-      if(!uploadedURLs.aadhar && !driver.id) { 
-          btn.disabled = false; 
-          btn.innerText = "Upload & Get OTP"; 
-          return alert("Failed to upload. Try a smaller image."); 
-      }
-      await requestOTP(document.getElementById('regPhone').value);
-  }
-
-  async function requestOTP(phoneOverride) {
-    const phone = phoneOverride || document.getElementById('authPhone').value.trim(); 
-    if (!isValidPhone(phone)) { showFErr('authPhone', 'Enter a valid 10-digit number.'); return; }
-    try {
-      const res = await fetch(`${BASE_URL}/api/driver/request-otp`, { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ phone, isRegister: isRegisterMode }) 
-      });
-      const data = await res.json();
-      if (res.ok) { 
-          document.getElementById('loginForm').style.display = 'none'; 
-          document.getElementById('otpForm').style.display = 'block'; 
-          document.getElementById('demoOtpBox').innerText = `📱 DEMO MODE: Your OTP is ${data.simulated_otp}`; 
-      } else { 
-          alert("❌ " + data.error); 
-          document.getElementById('btnSubmitKYC').disabled = false; 
-          document.getElementById('btnSubmitKYC').innerText = "Upload & Get OTP"; 
-      }
-    } catch(err) { alert("Server error."); }
-  }
-
-  async function verifyOTP() {
-    const phone = isRegisterMode ? document.getElementById('regPhone').value : document.getElementById('authPhone').value; 
-    const otp = document.getElementById('driverOtp').value;
-    
-    const payload = { 
-        phone: phone, otp: otp, isRegister: isRegisterMode, 
-        name: document.getElementById('regName').value, 
-        vehicle_num: document.getElementById('regVehicle').value, 
-        ambulance_type: document.getElementById('regType').value, 
-        aadhar_url: uploadedURLs.aadhar || null, 
-        rc_url: uploadedURLs.rc || null, 
-        insurance_url: uploadedURLs.insurance || null, 
-        puc_url: uploadedURLs.puc || null, 
-        pcc_status: document.getElementById('regPCC').checked ? 'YES' : 'NO' 
-    };
-    
-    try {
-      const res = await fetch(`${BASE_URL}/api/driver/verify-otp`, { 
-          method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) 
-      });
-      const data = await res.json();
-      
-      if (data.driver_id) {
-        if (data.verification_status === 'REJECTED') { 
-            document.getElementById('otpForm').style.display = 'none'; 
-            switchAuthMode('register'); 
-            document.getElementById('rejectionBox').style.display = 'block'; 
-            document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; 
-            return; 
-        }
-        
-        driver = { id: data.driver_id, type: data.ambulance_type, name: data.name, phone: phone, vehicle_num: data.ambulance_number, status: data.verification_status, isOnline: false };
-        localStorage.setItem('driver_session', JSON.stringify(driver));
-        
-        if (data.verification_status === 'PENDING') { 
-            goStep('Pending'); 
-        } else { 
-            driver.isOnline = true; 
-            document.getElementById('navToggle').style.display = 'flex'; 
-            document.getElementById('bottomNav').style.display = 'flex'; 
-            subscribeDriverPush(data.driver_id); 
-            checkActiveMission(); 
-            toggleStatus(); 
-        }
-      } else { alert("❌ " + data.error); }
-    } catch(err) { alert("Failed to verify."); }
-  }
-
-  async function checkApprovalStatus() {
-      if(!driver.id) return;
-      try {
-          const res = await fetch(`${BASE_URL}/api/driver/check-status?driver_id=${driver.id}`); 
-          const data = await res.json();
-          
-          if (data.verification_status === 'APPROVED') { 
-              driver.status = 'APPROVED'; driver.isOnline = true; 
-              localStorage.setItem('driver_session', JSON.stringify(driver)); 
-              document.getElementById('navToggle').style.display = 'flex'; 
-              document.getElementById('bottomNav').style.display = 'flex'; 
-              checkActiveMission(); 
-              toggleStatus(); 
-          } else if (data.verification_status === 'REJECTED') { 
-              driver.status = 'REJECTED'; 
-              localStorage.setItem('driver_session', JSON.stringify(driver)); 
-              goStep(1); 
-              switchAuthMode('register'); 
-              document.getElementById('rejectionBox').style.display = 'block'; 
-              document.getElementById('rejectionReasonText').innerText = `Admin Message: "${data.rejection_reason || 'Documents unclear.'}"`; 
-          } else { 
-              alert("Still under review. Please check again later."); 
-          }
-      } catch(e) { alert("Server error. Try again."); }
-  }
-
-  async function toggleStatus() {
-    driver.isOnline = document.getElementById('statusCheckbox').checked; 
-    document.getElementById('toggleText').innerText = driver.isOnline ? "ONLINE" : "OFFLINE"; 
-    document.getElementById('toggleText').style.color = driver.isOnline ? "var(--success)" : "var(--muted)";
-    const audio = document.getElementById('alertBeep'); 
-    audio.muted = false; 
-    audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => {});
-    
-    if(driver.isOnline) { 
-        requestWakeLock(); 
-        document.getElementById('radarTitle').innerText = "Scanning 8 km Radius..."; 
-        document.querySelector('.pulse').style.display = "flex"; 
-        const city = await fetchCityName(driver.lat, driver.lng);
-        document.getElementById('toggleText').innerText = city ? `ONLINE (${city})` : "ONLINE";
-        fetchRadar(); 
-        radarInterval = setInterval(fetchRadar, 5000); 
-    } else { 
-        if (wakeLock) wakeLock.release(); 
-        document.getElementById('radarTitle').innerText = "You are Offline"; 
-        document.querySelector('.pulse').style.display = "none"; 
-        document.getElementById('emergencyList').innerHTML = ""; 
-        clearInterval(radarInterval); 
-    }
-    fetch(`${BASE_URL}/api/driver/toggle-status`, { 
-        method: "POST", headers: {"Content-Type":"application/json"}, 
-        body: JSON.stringify({ driver_id: driver.id, status: driver.isOnline ? 'ONLINE' : 'OFFLINE' }) 
+        res.json({ hospitals: processAndSort(rows, lat, lng) });
     });
-  }
+});
 
-  // 🛡️ FRONTEND UPDATE ONLY: Formatting time and calculating elapsed minutes
- async function fetchRadar() {
-    if(!driver.isOnline || driver.activeBookingId) return;
-    try {
-      // Magic Fix: &t=${Date.now()} prevents the phone from showing "Ghost" bookings
-      const url = `${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}&t=${Date.now()}_${Math.random()}`;
-      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
-      const data = await res.json(); 
-      const list = document.getElementById('emergencyList'); 
-      list.innerHTML = "";
-      
-      if(data.bookings && data.bookings.length > 0) {
-        if (data.bookings.length > lastEmergencyCount) { 
-            document.body.style.backgroundColor = "#fff59d"; 
-            setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); 
-            if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
-            document.getElementById('alertBeep').play().catch(e => {}); 
+app.get("/api/hospitals/search", (req, res) => {
+    const { term, lat, lng } = req.query;
+    if (!term) return res.json({ hospitals: [] });
+    const searchTerm = `%${term}%`;
+    db.query(`SELECT * FROM hospitals WHERE name LIKE ? OR address LIKE ? LIMIT 15`, [searchTerm, searchTerm], (err, rows) => {
+        if (err) return res.status(500).json({ error: "Search failed" });
+        res.json({ hospitals: processAndSort(rows || [], lat, lng) });
+    });
+});
+
+app.post("/api/save-user", (req, res) => {
+    db.query("INSERT INTO users (name, phone, latitude, longitude) VALUES (?, ?, ?, ?)", [req.body.name, req.body.phone, req.body.latitude, req.body.longitude], (err, result) => {
+        if (err) return res.status(500).json({ error: "User save failed: " + err.message });
+        res.json({ success: true, user_id: result.insertId });
+    });
+});
+
+// 🛡️ FIXED: NOW EXACTLY STAMPS 'booked_at' WITH REAL TIME
+app.post("/api/bookings", (req, res) => {
+    const { user_id, hospital_id, custom_destination, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km } = req.body;
+    db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km, booked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, 
+    [user_id, hospital_id || null, custom_destination || null, emergency_type, ambulance_type, user_lat, user_lng, distance_km, rate_per_km], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ booking_id: result.insertId });
+    });
+});
+
+app.post("/api/bookings/cancel", (req, res) => {
+    const { booking_id } = req.body;
+    
+    // 🛡️ Notify driver if already assigned
+    db.query("SELECT driver_id, push_subscription FROM bookings WHERE booking_id = ?", [booking_id], (err, rows) => {
+        if (!err && rows && rows[0] && rows[0].driver_id) {
+            pushNotify(rows[0].push_subscription, "❌ Booking Cancelled", "The patient has cancelled this emergency request.");
         }
-        lastEmergencyCount = data.bookings.length;
         
-        data.bookings.forEach(b => {
-          const safeName = b.user_name.replace(/'/g, "\\'"); 
-          const safeHosp = b.hospital_name.replace(/'/g, "\\'"); 
-          const safeCond = b.emergency_category.replace(/'/g, "\\'");
-          const card = document.createElement('div'); 
-          card.className = `request-card ${b.priorityStar ? 'priority' : ''}`;
-          const starHTML = b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : '';
-
-          const rawTime = b.booked_at || b.created_at || Date.now();
-          const bookingTime = new Date(rawTime);
-          const timeStr = bookingTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-          const elapsedMins = Math.max(0, Math.floor((Date.now() - bookingTime.getTime()) / 60000));
-          
-          card.innerHTML = `${starHTML}<div class="req-header"><div class="req-title"></div><div style="text-align: right;"><div style="font-size: 13px; font-weight: bold; color: var(--text);" class="r-time"></div><div style="font-size: 13px; color: var(--warning); margin-top: 4px;" class="r-elapsed"></div></div></div><div class="req-detail"><strong>Patient:</strong> <span class="pname"></span></div><div class="req-detail"><strong>Dropoff:</strong> <span class="phosp"></span></div><button class="btn primary" style="margin-top:12px;">ACCEPT EMERGENCY</button>`;
-          
-          card.querySelector('.req-title').textContent = b.emergency_category; 
-          card.querySelector('.r-time').textContent = "⏰ " + timeStr; 
-          card.querySelector('.r-elapsed').textContent = "⏳ ~" + elapsedMins + " mins ago"; 
-          card.querySelector('.pname').textContent = b.user_name; 
-          card.querySelector('.phosp').textContent = b.hospital_name;
-          card.querySelector('button').onclick = () => promptModal(b.booking_id, safeName, b.user_phone, safeCond, safeHosp, b.user_latitude, b.user_longitude, b.hosp_lat || 0, b.hosp_lng || 0);
-          
-          list.appendChild(card);
+        db.query("UPDATE bookings SET status = 'CANCELLED' WHERE booking_id = ?", [booking_id], (err2) => {
+            res.json({ success: !err2 });
         });
-      } else { 
-          list.innerHTML = `<p style="text-align:center; color:var(--muted); margin-top:20px;">No emergencies in range.</p>`; 
-          lastEmergencyCount = 0; 
-      }
-    } catch(err) { }
-  }
-  async function checkActiveMission() {
-    try {
-        const url = `${BASE_URL}/api/driver/active-mission?driver_id=${encodeURIComponent(driver.id)}&t=${Date.now()}`;
-        const res = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
-        const data = await res.json();
-        if (!res.ok || data.success === false) {
-            throw new Error(data.error || `Active mission request failed (${res.status})`);
+    });
+});
+
+
+// 🌟 NEW: ESCALATION & RE-ROUTING API
+app.post("/api/bookings/escalate", (req, res) => {
+    const { booking_id } = req.body;
+    // Un-assigns the driver and changes status back to REQUESTED so it hits other radars!
+    db.query("UPDATE bookings SET driver_id = NULL, status = 'REQUESTED' WHERE booking_id = ?", [booking_id], (err) => {
+        res.json({ success: !err });
+    });
+});
+
+app.post("/api/bookings/update-destination", (req, res) => {
+    const { booking_id, new_destination, new_distance } = req.body;
+    let query = "UPDATE bookings SET hospital_id = NULL, custom_destination = ?";
+    let params = [new_destination];
+    if (new_distance) { query += ", hospital_distance_km = ?"; params.push(new_distance); }
+    query += " WHERE booking_id = ?"; params.push(booking_id);
+    db.query(query, params, (err) => res.json({ success: !err }));
+});
+
+app.get("/api/user/eta", (req, res) => {
+    const bookingId = Number.parseInt(req.query.booking_id, 10);
+    if (!Number.isInteger(bookingId) || bookingId <= 0) {
+        return res.status(400).json({ success: false, error: "A valid booking_id is required." });
+    }
+
+    const query = `
+        SELECT
+            b.*,
+            COALESCE(b.custom_destination, h.name) AS hospital_name,
+            d.latitude AS driver_lat,
+            d.longitude AS driver_lng,
+            d.name AS driver_name,
+            d.phone AS driver_phone,
+            d.ambulance_number,
+            d.ambulance_type AS driver_ambulance_type
+        FROM bookings b
+        LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id
+        LEFT JOIN drivers d ON b.driver_id = d.driver_id
+        WHERE b.booking_id = ?
+        LIMIT 1
+    `;
+
+    db.query(query, [bookingId], (err, rows) => {
+        if (err) {
+            console.error("[user/eta] Database query failed:", err.message);
+            return res.status(500).json({ success: false, error: "Unable to read booking status right now." });
+        }
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, error: "Booking not found." });
         }
 
-        if (data.hasMission && data.mission) {
-            if (radarInterval) clearInterval(radarInterval);
-            radarInterval = null;
-            setupActiveMissionUI(data.mission);
-        } else {
-            goStep(2);
-            await fetchRadar();
-            if (!radarInterval) radarInterval = setInterval(fetchRadar, 5000);
-        }
-    } catch (err) {
-        console.error("[Driver] Could not refresh active mission:", err);
-    }
-  }
-  function initDriverMap(pLat, pLng) {
-      if (dMap) return;
-      dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
-      // 🛡️ CARTODB MAPS - NO BAN!
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(dMap);
-      driverMarker = L.marker([driver.lat, driver.lng]).addTo(dMap).bindPopup("<b>You (Ambulance)</b>").openPopup();
-      patientMarker = L.marker([pLat, pLng]).addTo(dMap).bindPopup("<b>Patient Location</b>").openPopup();
-      let group = new L.featureGroup([driverMarker, patientMarker]); 
-      dMap.fitBounds(group.getBounds().pad(0.5));
-  }
-
-  function setupActiveMissionUI(m) {
-    driver.activeBookingId = m.booking_id; 
-    window.currentPatientPhone = m.user_phone; 
-    currentBookedDistance = parseFloat(m.hospital_distance_km) || 0; // Save initial distance
-    
-    if (currentMissionHospital && currentMissionHospital !== m.hospital_name) { 
-        document.body.style.backgroundColor = "#ef5350"; 
-        setTimeout(() => { document.body.style.backgroundColor = "var(--bg)"; }, 3000); 
-        if (navigator.vibrate) navigator.vibrate([1000, 500, 1000]); 
-        document.getElementById('alertBeep').play(); 
-    }
-    currentMissionHospital = m.hospital_name;
-    
-    document.getElementById('missionPatient').innerText = m.user_name; 
-    document.getElementById('missionCondition').innerText = m.emergency_category; 
-    document.getElementById('missionHospital').innerText = m.hospital_name; 
-    document.getElementById('btnCallPatient').href = `tel:${m.user_phone}`;
-    
-    document.getElementById('navToPatient').href = `https://www.google.com/maps/dir/?api=1&destination=$${m.user_latitude},${m.user_longitude}`;
-    let hospDest = (m.hosp_lat && m.hosp_lng) ? `${m.hosp_lat},${m.hosp_lng}` : encodeURIComponent(m.hospital_name); 
-    document.getElementById('navToHospital').href = `https://www.google.com/maps/dir/?api=1&destination=$${hospDest}`;
-    
-    if(m.status === 'IN_TRANSIT') { 
-        document.getElementById('phase1Box').style.display = 'none'; 
-        document.getElementById('phase2Box').style.display = 'block'; 
-    } else { 
-        document.getElementById('phase1Box').style.display = 'block'; 
-        document.getElementById('phase2Box').style.display = 'none'; 
-    }
-    
-    goStep(3); 
-    startGPSSending(); 
-    setTimeout(() => { initDriverMap(m.user_latitude, m.user_longitude); dMap.invalidateSize(); }, 200);
-    if(!missionInterval) { missionInterval = setInterval(checkActiveMission, 5000); }
-  }
-
-  function sendWhatsAppToPatient() {
-      let phone = window.currentPatientPhone; 
-      if (phone && phone.length === 10) phone = '91' + phone;
-      const msg = `🚑 *FastRescue Alert / अलर्ट / सूचना*\n\n[EN] I have accepted your emergency request and I am on the way.\n[HI] मैंने आपका आपातकालीन अनुरोध स्वीकार कर लिया है और मैं रास्ते में हूँ।\n[MR] मी तुमची आणीबाणीची विनंती स्वीकारली आहे आणि मी वाटेत आहे.\n\n👨‍⚕️ *Driver:* ${driver.name}\n🚐 *Ambulance:* ${driver.type}\n🔢 *Vehicle Number:* ${driver.vehicle_num}\n\nPlease keep your phone nearby and stay calm. Help is arriving!`;
-      window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg));
-  }
-
-  async function submitDriverDest() {
-      const newDest = document.getElementById('driverNewDest').value; 
-      const newDist = prompt("Enter approximate distance to new hospital (in km):", "5");
-      if(newDest && driver.activeBookingId) { 
-          await fetch(`${BASE_URL}/api/bookings/update-destination`, { 
-              method: "POST", headers: {"Content-Type":"application/json"}, 
-              body: JSON.stringify({ booking_id: driver.activeBookingId, new_destination: newDest, new_distance: newDist }) 
-          }); 
-          currentBookedDistance = parseFloat(newDist) || 0; // Update local odometer base
-          document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km (Billed)";
-          document.getElementById('destModal').style.display='none'; 
-          checkActiveMission(); 
-      }
-  }
-  function promptModal(id, name, phone, cond, hosp, uLat, uLng, hLat, hLng) { 
-      pendingAcceptData = { booking_id: id, user_name: name, user_phone: phone, emergency_category: cond, hospital_name: hosp, user_latitude: uLat, user_longitude: uLng, hosp_lat: hLat, hosp_lng: hLng }; 
-      document.getElementById('modalPatient').textContent = name; 
-      document.getElementById('modalCondition').textContent = cond; 
-      document.getElementById('modalHospital').textContent = hosp; 
-      document.getElementById('dispatchModal').style.display='flex'; 
-  }
-  
-  function closeModal() { 
-      document.getElementById('dispatchModal').style.display='none'; 
-      pendingAcceptData = null; 
-  }
-  
-  async function confirmAccept() {
-    if(!pendingAcceptData) return;
-    const btn = document.querySelector('#dispatchModal .btn.primary');
-    if(btn) btn.disabled = true;
-    document.getElementById('dispatchModal').style.display='none';
-    
-    try { 
-        const res = await fetch(`${BASE_URL}/api/driver/accept`, { 
-            method: "POST", headers: {"Content-Type":"application/json"}, 
-            body: JSON.stringify({ booking_id: pendingAcceptData.booking_id, driver_id: driver.id }) 
-        }); 
-        const data = await res.json();
-        
-        document.getElementById('dispatchModal').style.display='none';
-        
-        if (res.ok && data.success) { 
-            clearInterval(radarInterval); 
-            checkActiveMission(); 
-        } else { 
-            alert("❌ " + (data.message || "Taken by another driver.")); 
-            fetchRadar(); 
-        }
-    } catch(err) {
-        alert("❌ Network error. Please try again.");
-        fetchRadar();
-    } finally {
-        // Re-enable button for next time
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = "YES, RESPOND NOW";
-        }
-        pendingAcceptData = null;
-    }
-}
-  async function pickup() {
-      if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
-      if (odometerInterval) clearInterval(odometerInterval);
-
-      try {
-          const pickupRes = await fetch(`${BASE_URL}/api/driver/pickup`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ booking_id: driver.activeBookingId, driver_id: driver.id })
-          });
-          const pickupData = await pickupRes.json();
-          if (!pickupRes.ok || !pickupData.success) {
-              throw new Error(pickupData.message || "Could not start the trip.");
-          }
-
-          document.getElementById('phase1Box').style.display = 'none';
-          document.getElementById('phase2Box').style.display = 'block';
-          await checkActiveMission();
-
-          lastLat = driver.lat;
-          lastLng = driver.lng;
-          totalDrivenKm = 0;
-          document.getElementById('liveOdo').innerText = Math.ceil(currentBookedDistance) + " km (Minimum Billed)";
-
-          odometerInterval = setInterval(() => {
-              const d = getKmDistance(lastLat, lastLng, driver.lat, driver.lng);
-              if (d > 0.05) {
-                  totalDrivenKm += d;
-                  lastLat = driver.lat;
-                  lastLng = driver.lng;
-                  const billed = Math.max(Math.ceil(currentBookedDistance), Math.ceil(totalDrivenKm));
-                  document.getElementById('liveOdo').innerText = billed + " km (Billed)";
-              }
-          }, 3000);
-      } catch (err) {
-          console.error("[Driver] Pickup update failed:", err);
-          alert(err.message || "Could not start the trip. Please retry.");
-          document.getElementById('phase1Box').style.display = 'block';
-          document.getElementById('phase2Box').style.display = 'none';
-      }
-  }
-
-  
-async function completeTrip() {
-      if (odometerInterval) clearInterval(odometerInterval);
-      if (missionInterval) clearInterval(missionInterval);
-      odometerInterval = null;
-      missionInterval = null;
-
-      try {
-          const res = await fetch(`${BASE_URL}/api/driver/complete`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm })
-          });
-          const data = await res.json();
-          if (!res.ok || !data.success) {
-              throw new Error(data.message || "The server could not complete this trip.");
-          }
-
-          document.getElementById('receiptDist').innerText = (data.billed_distance || 0) + " km";
-          document.getElementById('receiptCost').innerText = data.final_cost || 0;
-          goStep(6);
-      } catch (err) {
-          console.error("[Driver] Trip completion failed:", err);
-          alert("Could not complete the trip on the server. Please check your connection and try again.");
-          if (!missionInterval) missionInterval = setInterval(checkActiveMission, 5000);
-      }
-  }
-
-  
-function closeReceipt() { 
-    // 🛡️ FIX: Store receipt data before clearing
-    const receiptData = {
-        dist: document.getElementById('receiptDist').innerText,
-        cost: document.getElementById('receiptCost').innerText,
-        completedAt: Date.now()
-    };
-    localStorage.setItem('last_receipt', JSON.stringify(receiptData));
-    
-    driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
-    goStep(2); 
-    document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
-    document.querySelector('.pulse').style.display = "flex"; 
-    stopGPSSending(); 
-    fetchRadar(); 
-    if(radarInterval) { clearInterval(radarInterval); } 
-    radarInterval = setInterval(fetchRadar, 5000); 
-    document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); 
-    document.querySelectorAll('.nav-item')[0].classList.add('active'); 
-}
-  async function loadHistory() {
-    const list = document.getElementById('historyList'); 
-    list.innerHTML = "Loading history..."; 
-    
-    const res = await fetch(`${BASE_URL}/api/driver/history?driver_id=${driver.id}`); 
-    const data = await res.json();
-    
-    if(!data.history || data.history.length === 0) { list.innerHTML = "<p>No completed missions.</p>"; return; }
-    
-    list.innerHTML = ""; 
-    const totalCash = data.history.reduce((sum, t) => sum + (t.final_cost || 0), 0); 
-    document.getElementById('statEarnings').innerText = "₹" + totalCash; 
-    document.getElementById('statTrips').innerText = data.history.length;
-    
-    data.history.forEach(h => { 
-        const item = document.createElement('div'); 
-        item.className = 'request-card'; 
-        item.style.cursor = 'pointer'; 
-        item.onclick = () => { 
-            let d = document.getElementById(`hist-${h.booking_id}`); 
-            d.style.display = d.style.display === 'none' ? 'block' : 'none'; 
+        const b = rows[0];
+        const response = {
+            success: true,
+            status: b.status,
+            booking_id: b.booking_id,
+            hospital_name: b.hospital_name || "Hospital not specified",
+            driver_name: b.driver_name || null,
+            driver_phone: b.driver_phone || null,
+            ambulance_number: b.ambulance_number || null,
+            driver_ambulance_type: b.driver_ambulance_type || null,
+            driver_lat: b.driver_lat ?? null,
+            driver_lng: b.driver_lng ?? null
         };
-        
-        const details = document.createElement('div'); 
-        details.id = `hist-${h.booking_id}`; 
-        details.style.display = 'none'; 
-        details.style.cssText = 'display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);';
-        
-        item.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;"><div style="color:var(--success); font-weight:bold;">✅ COMPLETED</div><div style="font-size:12px; color:var(--muted);">▼ Details</div></div><div class="req-title" style="margin:5px 0;"></div><div class="req-detail">Dropoff: <span class="hosp-name"></span></div>`;
-        item.querySelector('.req-title').textContent = h.emergency_category; 
-        item.querySelector('.hosp-name').textContent = h.hospital_name;
-        
-        details.innerHTML = `<div class="req-detail"><strong>Patient:</strong> <span></span></div><div class="req-detail" style="margin-top:8px;"><strong>⏱️ Booked:</strong> ${new Date(h.booked_at || h.created_at).toLocaleTimeString()}</div><div class="req-detail"><strong>🏥 Dropped Off:</strong> ${h.completed_at ? new Date(h.completed_at).toLocaleTimeString() : '--'}</div><div class="req-detail" style="margin-top:8px; color:var(--success); font-weight:bold; font-size:16px;">💰 Trip Cost: ₹${h.final_cost}</div>`;
-        details.querySelector('span').textContent = h.user_name; 
-        
-        item.appendChild(details); 
-        list.appendChild(item);
+
+        if (b.status === "COMPLETED") {
+            return res.json({
+                ...response,
+                final_cost: Number(b.final_cost || 0),
+                distance: Number(b.hospital_distance_km || 0).toFixed(2)
+            });
+        }
+
+        if (b.status === "CANCELLED") {
+            return res.json(response);
+        }
+
+        let driverDist = "Calculating...";
+        let driverEta = "Calculating...";
+        if (
+            b.driver_lat !== null && b.driver_lat !== undefined &&
+            b.driver_lng !== null && b.driver_lng !== undefined &&
+            b.user_latitude !== null && b.user_latitude !== undefined &&
+            b.user_longitude !== null && b.user_longitude !== undefined
+        ) {
+            const dist = getKmDistance(b.user_latitude, b.user_longitude, b.driver_lat, b.driver_lng);
+            if (Number.isFinite(dist) && dist < 999) {
+                driverDist = dist.toFixed(2);
+                driverEta = Math.max(1, Math.round((dist / 40) * 60));
+            }
+        }
+
+        response.distance = driverDist;
+        response.eta = driverEta;
+        return res.json(response);
     });
-  }
+});
 
-  async function saveProfile() { 
-      const p = { 
-          driver_id: driver.id, 
-          name: document.getElementById('editName').value, 
-          phone: document.getElementById('editPhone').value, 
-          ambulance_number: document.getElementById('editVehicle').value, 
-          ambulance_type: document.getElementById('editType').value 
-      }; 
-      
-      const res = await fetch(`${BASE_URL}/api/driver/update-profile`, { 
-          method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(p) 
-      }); 
-      
-      if(res.ok) { 
-          driver = {...driver, name: p.name, phone: p.phone, vehicle_num: p.ambulance_number, type: p.ambulance_type}; 
-          localStorage.setItem('driver_session', JSON.stringify(driver)); 
-          alert("Profile Updated Successfully!"); 
-      } 
-  }
+app.get("/api/user/history", (req, res) => {
+    db.query(`SELECT b.*, d.name as driver_name, d.ambulance_type, d.ambulance_number, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id LEFT JOIN drivers d ON b.driver_id = d.driver_id WHERE u.phone = ? ORDER BY b.booking_id DESC LIMIT 10`, [req.query.phone], (err, results) => {
+        if (err) return res.status(500).json({ error: "Failed" });
+        res.json({ history: results || [] });
+    });
+});
 
-  function logout() { 
-      if(!confirm("Are you sure? All session data will be cleared.")) return; 
-      if (radarInterval) clearInterval(radarInterval); 
-      if (wakeLock) wakeLock.release(); 
-      stopGPSSending();
+// ==========================================================
+// 🚑 DRIVER SIDE APIS
+// ==========================================================
+app.post("/api/driver/request-otp", (req, res) => {
+    const { phone, isRegister } = req.body;
+    db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
+        if (isRegister && drivers && drivers.length > 0) return res.status(400).json({ error: "Phone already registered." });
+        if (!isRegister && (!drivers || drivers.length === 0)) return res.status(400).json({ error: "Driver not found." });
+        
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        db.query("DELETE FROM driver_otps WHERE phone = ?", [phone], () => { 
+            db.query("INSERT INTO driver_otps (phone, otp, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE))", [phone, otp], (err) => res.json({ success: true, simulated_otp: otp }));
+        });
+    });
+});
 
-      localStorage.removeItem('driver_session'); 
-      driver = { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null }; 
-      document.getElementById('navToggle').style.display = 'none'; 
-      document.getElementById('bottomNav').style.display = 'none'; 
-      cancelLogin(); 
-      goStep(1); 
-  }
+app.post("/api/driver/verify-otp", (req, res) => {
+    const { phone, otp, isRegister, name, vehicle_num, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url } = req.body;
+    db.query("SELECT * FROM driver_otps WHERE phone = ? AND otp = ? AND expires_at > NOW()", [phone, otp], (err, otps) => {
+        if (err || !otps || otps.length === 0) return res.status(400).json({ error: "Invalid OTP." });
+        
+        if (isRegister) {
+            db.query("INSERT INTO drivers (name, phone, ambulance_number, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url, verification_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'OFFLINE')", 
+            [name, phone, vehicle_num, ambulance_type, aadhar_url, pcc_status, rc_url, insurance_url, puc_url], (err, result) => {
+                if(err) return res.status(500).json({error: "Registration failed."});
+                res.json({ driver_id: result.insertId, verification_status: 'PENDING' });
+            });
+        } else {
+            db.query("SELECT * FROM drivers WHERE phone = ?", [phone], (err, drivers) => {
+                if(!drivers || drivers.length === 0) return res.status(400).json({ error: "Driver not found" });
+                const drv = drivers[0];
+                if (drv.verification_status !== 'APPROVED') return res.json({ driver_id: drv.driver_id, verification_status: drv.verification_status, rejection_reason: drv.rejection_reason });
+                
+                db.query("UPDATE drivers SET status='ONLINE' WHERE driver_id=?", [drv.driver_id]);
+                res.json({ driver_id: drv.driver_id, verification_status: 'APPROVED', ...drv });
+            });
+        }
+    });
+});
 
-  async function requestAccountDeletion() {
-      if(!confirm("Are you sure you want to permanently delete your account? You will lose access to this profile.")) return;
-      try {
-          const res = await fetch(`${BASE_URL}/api/driver/request-delete`, { 
-              method: "POST", headers: {"Content-Type":"application/json"}, 
-              body: JSON.stringify({ driver_id: driver.id }) 
-          });
-          const data = await res.json();
-          if (data.error) { 
-              alert(data.error); 
-          } else { 
-              alert("Deletion requested. Your account will be deactivated once the Admin approves."); 
-              logout(); 
-          }
-      } catch(e) { alert("Server Error"); }
-  }
-</script>
-</body>
-</html>
+app.get("/api/driver/check-status", (req, res) => {
+    db.query("SELECT verification_status, rejection_reason FROM drivers WHERE driver_id = ?", [req.query.driver_id], (err, rows) => {
+        if (err || !rows || rows.length === 0) return res.status(400).json({ error: "Not found" });
+        res.json(rows[0]);
+    });
+});
+
+app.post("/api/driver/update-profile", (req, res) => {
+    const { driver_id, name, phone, ambulance_number, ambulance_type } = req.body;
+    db.query("UPDATE drivers SET name=?, phone=?, ambulance_number=?, ambulance_type=? WHERE driver_id=?", [name, phone, ambulance_number, ambulance_type, driver_id], (err) => res.json({ success: !err }));
+});
+
+app.post("/api/driver/request-delete", (req, res) => {
+    const { driver_id } = req.body;
+    db.query(`SELECT * FROM bookings WHERE driver_id = ? AND status IN ('ASSIGNED', 'IN_TRANSIT')`, [driver_id], (err, rows) => {
+        if (rows && rows.length > 0) return res.status(400).json({ error: "Cannot delete account: You have an active emergency!" });
+        db.query("UPDATE drivers SET verification_status = 'DELETION_REQUESTED' WHERE driver_id = ?", [driver_id], (err) => res.json({ success: !err }));
+    });
+});
+
+app.post("/api/driver/location", (req, res) => {
+    const { driver_id, latitude, longitude } = req.body;
+    db.query("UPDATE drivers SET latitude=?, longitude=? WHERE driver_id=?", [latitude, longitude, driver_id], (err) => res.json({ success: !err }));
+});
+
+app.post("/api/driver/toggle-status", (req, res) => {
+    const { driver_id, status } = req.body;
+    db.query("UPDATE drivers SET status=? WHERE driver_id=?", [status, driver_id], (err) => res.json({ success: !err }));
+});
+
+const activeQuery = `SELECT b.*, u.name AS user_name, u.phone AS user_phone, COALESCE(b.custom_destination, h.name) AS hospital_name, h.latitude AS hosp_lat, h.longitude AS hosp_lng FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id`;
+
+app.get("/api/driver/active-mission", (req, res) => {
+    const driverId = Number.parseInt(req.query.driver_id, 10);
+    if (!Number.isInteger(driverId) || driverId <= 0) {
+        return res.status(400).json({ success: false, error: "A valid driver_id is required." });
+    }
+    db.query(`${activeQuery} WHERE b.driver_id = ? AND b.status IN ('ASSIGNED', 'IN_TRANSIT') ORDER BY b.booking_id DESC LIMIT 1`, [driverId], (err, results) => {
+        if (err) {
+            console.error("[driver/active-mission] Database query failed:", err.message);
+            return res.status(500).json({ success: false, error: "Unable to check active mission." });
+        }
+        if (!results || results.length === 0) return res.json({ success: true, hasMission: false });
+        return res.json({ success: true, hasMission: true, mission: results[0] });
+    });
+});
+
+// 🛡️ FIXED: NOW CALCULATES ACTUAL MINUTES ELAPSED SINCE BOOKING
+// 🛡️ FIXED: Hides old "Ghost Bookings" older than 10 minutes so driver doesn't click wrong ride
+app.get("/api/driver/radar", (req, res) => {
+    db.query(`${activeQuery} WHERE b.status = 'REQUESTED' ORDER BY b.booking_id DESC`, (err, results) => {
+        if (err) return res.status(500).json({ error: "Radar failed." });
+
+        if (!req.query.driverLat || !req.query.driverLng) {
+    return res.status(400).json({
+        success: false,
+        error: "Driver location missing"
+    });
+}
+        
+        const driverType = req.query.driverType; 
+        const nearby = (results || []).filter(b => {
+            const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
+            
+            // Calculate how many minutes ago it was booked
+            const rawTime = b.booked_at || b.created_at;
+            const bookedDate = rawTime ? new Date(rawTime) : new Date();
+            const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
+
+            // 🚫 MAGIC FIX: If the booking is older than 10 minutes, hide it!
+            if (elapsedMins > 10) return false;
+
+            return dist <= 8 && (b.ambulance_type === 'ANY' || b.ambulance_type === driverType);
+        }).map(b => {
+            const rawTime = b.booked_at || b.created_at;
+            const bookedDate =
+    rawTime && !isNaN(new Date(rawTime))
+        ? new Date(rawTime)
+        : new Date();            const formatT = bookedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const elapsedMins = Math.max(0, Math.floor((Date.now() - bookedDate.getTime()) / 60000));
+            const dist = getKmDistance(req.query.driverLat, req.query.driverLng, b.user_latitude, b.user_longitude);
+
+            return { 
+                ...b, 
+                priorityStar: (b.emergency_category.includes('Heart') && (driverType === 'ALS' || driverType === 'ECG')), 
+                elapsed_mins: elapsedMins, 
+                formatted_time: formatT,
+                real_eta: Math.max(1, Math.round((dist / 40) * 60))
+            };
+        });
+        res.json({ bookings: nearby });
+    });
+});
+// ==========================================================
+// 🛡️ MISSION LIFECYCLE APIS (SILENT TIMESTAMP FIX)
+// ==========================================================
+app.post("/api/driver/accept", (req, res) => {
+    const { driver_id, booking_id } = req.body;
+    
+    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
+    db.query(query, [driver_id, booking_id], (err, result) => {
+        if (err) return res.json({ success: false, message: "Database Error: " + err.message });
+        if (result.affectedRows === 0) return res.json({ success: false, message: "Too late! Another driver accepted this emergency." });
+        
+        db.query(`UPDATE bookings SET accepted_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
+        res.json({ success: true, message: "Booking assigned to you!" });
+    });
+});
+
+app.post("/api/driver/pickup", (req, res) => {
+    const bookingId = Number.parseInt(req.body.booking_id, 10);
+    const driverId = Number.parseInt(req.body.driver_id, 10);
+    if (!Number.isInteger(bookingId) || bookingId <= 0 || !Number.isInteger(driverId) || driverId <= 0) {
+        return res.status(400).json({ success: false, message: "Valid booking_id and driver_id are required." });
+    }
+    db.query(
+        "UPDATE bookings SET status = 'IN_TRANSIT', picked_up_at = NOW() WHERE booking_id = ? AND driver_id = ? AND status = 'ASSIGNED'",
+        [bookingId, driverId],
+        (err, result) => {
+            if (err) {
+                console.error("[driver/pickup] Database update failed:", err.message);
+                return res.status(500).json({ success: false, message: "Could not update trip status." });
+            }
+            if (!result.affectedRows) {
+                return res.status(409).json({ success: false, message: "This booking is not assigned to you or is no longer awaiting pickup." });
+            }
+            return res.json({ success: true, status: "IN_TRANSIT", message: "Patient picked up. Trip started." });
+        }
+    );
+});
+
+app.post("/api/driver/update-status", (req, res) => {
+    const { booking_id, status } = req.body;
+    db.query(`UPDATE bookings SET status = ? WHERE booking_id = ?`, [status, booking_id], (err, result) => {
+        res.json({ success: true });
+    });
+});
+
+app.post("/api/driver/complete", (req, res) => {
+    const { booking_id, actual_distance } = req.body;
+    
+    // Fetch original distance and correct ambulance rate from database
+    db.query(`SELECT hospital_distance_km, price_per_km FROM bookings WHERE booking_id = ?`, [booking_id], (err, rows) => {
+        if (err || !rows || rows.length === 0) return res.json({ success: false, message: "Booking not found." });
+        
+        const booked_dist = parseFloat(rows[0].hospital_distance_km) || 0;
+        const rate = parseFloat(rows[0].price_per_km) || 0;
+        const driven_dist = parseFloat(actual_distance) || 0;
+        
+        // 1. Strict Rounding Up (e.g., 2.9 -> 3, 3.2 -> 4)
+        const roundedBooked = Math.ceil(booked_dist);
+        const roundedDriven = Math.ceil(driven_dist);
+        
+        // 2. Logic: If driven exceeds booked due to traffic, use driven. Otherwise, use booked.
+        const billed_distance = Math.max(roundedBooked, roundedDriven);
+        
+        // 3. Exact Cost Calculation
+        const final_cost = billed_distance * rate;
+        
+        db.query(`UPDATE bookings SET status = 'COMPLETED', hospital_distance_km = ?, final_cost = ? WHERE booking_id = ?`, 
+        [billed_distance, final_cost, booking_id], (err2) => {
+            if (err2) return res.json({ success: false, message: "Database Error: " + err2.message });
+            db.query(`UPDATE bookings SET completed_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
+            res.json({ success: true, final_cost: final_cost, billed_distance: billed_distance });
+        });
+    });
+});
+
+app.get("/api/driver/history", (req, res) => {
+    const query = `SELECT b.*, u.name as user_name, COALESCE(b.custom_destination, h.name) AS hospital_name FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.driver_id = ? AND b.status IN ('COMPLETED', 'CANCELLED') ORDER BY b.booking_id DESC LIMIT 15`;
+    db.query(query, [req.query.driver_id], (err, rows) => {
+        if (err) return res.status(500).json({ error: "Failed" });
+        res.json({ history: rows || [] });
+    });
+});
+
+// ==========================================================
+// 🔔 WEB PUSH APIS
+// ==========================================================
+app.get("/api/push/vapid-key", (req, res) => {
+    res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+app.post("/api/push/subscribe-patient", (req, res) => {
+    db.query("UPDATE bookings SET push_subscription = ? WHERE booking_id = ?", [JSON.stringify(req.body.subscription), req.body.booking_id], (err) => res.json({ success: !err }));
+});
+
+app.post("/api/push/subscribe-driver", (req, res) => {
+    db.query("UPDATE drivers SET push_subscription = ? WHERE driver_id = ?", [JSON.stringify(req.body.subscription), req.body.driver_id], (err) => res.json({ success: !err }));
+});
+
+// ==========================================================
+// 🛡️ ADMIN APIS
+// ==========================================================
+app.post("/api/admin/login", (req, res) => {
+    if (req.body.password === ADMIN_PASS) {
+        res.json({ success: true, token: jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '12h' }) });
+    } else res.status(401).json({ success: false, error: "Invalid password" });
+});
+
+app.get("/api/admin/drivers", adminAuth, (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+    const query = `SELECT * FROM drivers ORDER BY verification_status DESC, driver_id DESC LIMIT ? OFFSET ?`;
+    db.query(query, [limit, offset], (err, rows) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        res.json({ drivers: rows || [], page, limit });
+    });
+});
+
+app.get("/api/admin/live-bookings", adminAuth, (req, res) => {
+    const query = `SELECT b.*, u.name AS patient_name, u.phone AS patient_phone, d.name AS driver_name, d.ambulance_number, COALESCE(b.custom_destination, h.name) AS destination FROM bookings b JOIN users u ON b.user_id = u.user_id LEFT JOIN drivers d ON b.driver_id = d.driver_id LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id WHERE b.status IN ('REQUESTED', 'ASSIGNED', 'IN_TRANSIT') ORDER BY b.booking_id DESC`;
+    db.query(query, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ bookings: rows || [] });
+    });
+});
+
+app.get("/api/admin/history", adminAuth, (req, res) => {
+    const query = `
+        SELECT b.*, u.name AS patient_name, u.phone AS patient_phone, 
+        d.name AS driver_name, d.ambulance_number, d.ambulance_type AS drv_amb_type,
+        COALESCE(b.custom_destination, h.name) AS destination 
+        FROM bookings b 
+        JOIN users u ON b.user_id = u.user_id 
+        LEFT JOIN drivers d ON b.driver_id = d.driver_id 
+        LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id 
+        WHERE b.status IN ('COMPLETED', 'CANCELLED') 
+        ORDER BY b.booking_id DESC LIMIT 100
+    `;
+    db.query(query, (err, rows) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        res.json({ history: rows || [] });
+    });
+});
+
+app.post("/api/admin/verify", adminAuth, (req, res) => {
+    const { driver_id, status, reason } = req.body;
+    db.query("UPDATE drivers SET verification_status = ?, rejection_reason = ? WHERE driver_id = ?", [status, reason || null, driver_id], (err) => {
+        if (!err) {
+            db.query("SELECT push_subscription, name FROM drivers WHERE driver_id=?", [driver_id], (e2, rows) => {
+                if (!e2 && rows && rows[0]) {
+                    const msg = status === 'APPROVED' ? `Welcome to FastRescue, ${rows[0].name}! You can now go online.` : `Your account was not approved. Please re-submit your documents.`;
+                    pushNotify(rows[0].push_subscription, status === 'APPROVED' ? "✅ KYC Approved!" : "❌ KYC Rejected", msg);
+                }
+            });
+        }
+        res.json({ success: !err });
+    });
+});
+
+app.post("/api/admin/approve-delete", adminAuth, (req, res) => {
+    const { driver_id } = req.body;
+    db.query("UPDATE drivers SET verification_status = 'DELETED', status = 'OFFLINE', phone = CONCAT(phone, '_DEL_', driver_id) WHERE driver_id = ?", [driver_id], (err) => res.json({ success: !err }));
+});
+
+app.get("/ping", (req, res) => res.send("pong"));
+
+const PORT = process.env.PORT || 4000;
+// 🛡️ AUTO-CLEANUP: Cancel bookings stuck in REQUESTED for > 10 minutes
+setInterval(() => {
+    db.query(
+        "UPDATE bookings SET status = 'CANCELLED' WHERE status = 'REQUESTED' AND booked_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)",
+        (err, result) => {
+            if (!err && result.affectedRows > 0) {
+                console.log(`🧹 Auto-cancelled ${result.affectedRows} stale booking(s)`);
+            }
+        }
+    );
+}, 60000); // Run every 60 seconds
+// 🛡️ NEW: Secure image upload proxy to ImgBB
+app.post("/api/upload/kyc", (req, res) => {
+    const { image, driver_id } = req.body;
+    if (!image || !driver_id) return res.status(400).json({ error: "Missing image or driver_id" });
+    
+    // Verify driver exists
+    db.query("SELECT driver_id FROM drivers WHERE driver_id = ?", [driver_id], (err, rows) => {
+        if (err || !rows || rows.length === 0) return res.status(404).json({ error: "Driver not found" });
+        
+        const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+        if (!IMGBB_API_KEY) return res.status(500).json({ error: "Server misconfigured" });
+        
+        const formData = new FormData();
+        formData.append("image", image);
+        
+        fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) res.json({ url: data.data.url });
+            else res.status(500).json({ error: "ImgBB upload failed" });
+        })
+        .catch(e => res.status(500).json({ error: e.message }));
+    });
+});
+app.listen(PORT, () => console.log(`🚀 Production Server live on Port ${PORT}`));
