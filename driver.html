@@ -372,7 +372,7 @@
   function startGPSSending() {
     if (gpsSendInterval) return;
     gpsSendInterval = setInterval(async () => {
-      if (!driver.id || !driver.activeBookingId) return;
+      if (!driver.id || !driver.isOnline || !Number.isFinite(Number(driver.lat)) || !Number.isFinite(Number(driver.lng))) return;
       try {
         await fetch(`${BASE_URL}/api/driver/location`, { 
             method: "POST", 
@@ -410,7 +410,8 @@
   const BASE_URL = "https://ambulance-dispatch-system.onrender.com";
  
   
-  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: 19.0760, lng: 72.8777, type: "ALS", activeBookingId: null, isOnline: false, status: null };
+  let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: null, lng: null, type: "ALS", activeBookingId: null, isOnline: false, status: null };
+  let driverGpsReady = false; // Require a fresh browser GPS fix each session; do not trust stale/default coordinates.
   let radarInterval = null; 
   let isRegisterMode = false; 
   let lastEmergencyCount = 0; 
@@ -469,9 +470,12 @@
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(
             async pos => { 
-                driver.lat = pos.coords.latitude; 
-                driver.lng = pos.coords.longitude; 
-                if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]); 
+                driver.lat = pos.coords.latitude;
+                driver.lng = pos.coords.longitude;
+                driverGpsReady = true;
+                localStorage.setItem('driver_session', JSON.stringify(driver));
+                if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]);
+                if (driver.isOnline && !driver.activeBookingId) fetchRadar(); 
                 
                 if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
                     lastCityFetch = Date.now();
@@ -480,8 +484,13 @@
                     if(tText.innerText.includes("ONLINE")) tText.innerText = city ? `ONLINE (${city})` : "ONLINE";
                 }
             }, 
-            err => console.log("GPS denied or slow"), 
-            { enableHighAccuracy: false, maximumAge: 10000 }
+            err => {
+                driverGpsReady = false;
+                console.warn("[Driver GPS] Location unavailable:", err.message);
+                const list = document.getElementById('emergencyList');
+                if (list && driver.isOnline) list.innerHTML = '<p style="color:var(--primary);text-align:center;">Enable location permission to receive nearby emergency requests.</p>';
+            },
+            { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
         );
     }
 };
@@ -732,14 +741,18 @@ async function uploadImageToImgBB(fileInputId) {
         document.querySelector('.pulse').style.display = "flex"; 
         const city = await fetchCityName(driver.lat, driver.lng);
         document.getElementById('toggleText').innerText = city ? `ONLINE (${city})` : "ONLINE";
-        fetchRadar(); 
-        radarInterval = setInterval(fetchRadar, 5000); 
+        if (radarInterval) clearInterval(radarInterval);
+        startGPSSending();
+        fetchRadar();
+        radarInterval = setInterval(fetchRadar, 4000); 
     } else { 
         if (wakeLock) wakeLock.release(); 
         document.getElementById('radarTitle').innerText = "You are Offline"; 
         document.querySelector('.pulse').style.display = "none"; 
         document.getElementById('emergencyList').innerHTML = ""; 
-        clearInterval(radarInterval); 
+        if (radarInterval) clearInterval(radarInterval);
+        radarInterval = null;
+        stopGPSSending();
     }
     fetch(`${BASE_URL}/api/driver/toggle-status`, { 
         method: "POST", headers: {"Content-Type":"application/json"}, 
@@ -749,71 +762,90 @@ async function uploadImageToImgBB(fileInputId) {
 
   // 🛡️ FRONTEND UPDATE ONLY: Formatting time and calculating elapsed minutes
  async function fetchRadar() {
-    if(!driver.isOnline || driver.activeBookingId) return;
+    if (!driver.isOnline || driver.activeBookingId) return;
+    const list = document.getElementById('emergencyList');
+    if (!driverGpsReady || !Number.isFinite(Number(driver.lat)) || !Number.isFinite(Number(driver.lng))) {
+      if (list) list.innerHTML = '<p style="text-align:center;color:var(--primary);">Getting your live location… Allow location access to receive nearby requests.</p>';
+      return;
+    }
     try {
-      // Magic Fix: &t=${Date.now()} prevents the phone from showing "Ghost" bookings
-      const url = `${BASE_URL}/api/driver/radar?driverLat=${driver.lat}&driverLng=${driver.lng}&driverType=${driver.type}&t=${Date.now()}_${Math.random()}`;
-      const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
-      const data = await res.json(); 
-      const list = document.getElementById('emergencyList'); 
-      list.innerHTML = "";
-      
-      if(data.bookings && data.bookings.length > 0) {
-        if (data.bookings.length > lastEmergencyCount) { 
-            document.body.style.backgroundColor = "#fff59d"; 
-            setTimeout(() => document.body.style.backgroundColor = "var(--bg)", 2000); 
-            if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
-            document.getElementById('alertBeep').play().catch(e => {}); 
+      const url = `${BASE_URL}/api/driver/radar?driverLat=${encodeURIComponent(driver.lat)}&driverLng=${encodeURIComponent(driver.lng)}&driverType=${encodeURIComponent(driver.type || '')}&t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.error || `Radar failed (${res.status})`);
+      if (!list) return;
+      list.innerHTML = '';
+      const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+      if (bookings.length > 0) {
+        if (bookings.length > lastEmergencyCount) {
+          document.body.style.backgroundColor = '#fff59d';
+          setTimeout(() => document.body.style.backgroundColor = 'var(--bg)', 2000);
+          if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+          const beep = document.getElementById('alertBeep');
+          if (beep) beep.play().catch(() => {});
         }
-        lastEmergencyCount = data.bookings.length;
-        
-        data.bookings.forEach(b => {
-          const safeName = b.user_name.replace(/'/g, "\\'"); 
-          const safeHosp = b.hospital_name.replace(/'/g, "\\'"); 
-          const safeCond = b.emergency_category.replace(/'/g, "\\'");
-          const card = document.createElement('div'); 
+        lastEmergencyCount = bookings.length;
+        bookings.forEach(b => {
+          const safeName = String(b.user_name || 'Patient');
+          const safeHosp = String(b.hospital_name || 'Destination not provided');
+          const safeCond = String(b.emergency_category || 'Emergency');
+          const card = document.createElement('div');
           card.className = `request-card ${b.priorityStar ? 'priority' : ''}`;
-          const starHTML = b.priorityStar ? '<div class="star-badge">⭐ PRIORITY MATCH</div>' : '';
-
-          const rawTime = b.booked_at || b.created_at || Date.now();
-          const bookingTime = new Date(rawTime);
-          const timeStr = bookingTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-          const elapsedMins = Math.max(0, Math.floor((Date.now() - bookingTime.getTime()) / 60000));
-          
-          card.innerHTML = `${starHTML}<div class="req-header"><div class="req-title"></div><div style="text-align: right;"><div style="font-size: 13px; font-weight: bold; color: var(--text);" class="r-time"></div><div style="font-size: 13px; color: var(--warning); margin-top: 4px;" class="r-elapsed"></div></div></div><div class="req-detail"><strong>Patient:</strong> <span class="pname"></span></div><div class="req-detail"><strong>Dropoff:</strong> <span class="phosp"></span></div><button class="btn primary" style="margin-top:12px;">ACCEPT EMERGENCY</button>`;
-          
-          card.querySelector('.req-title').textContent = b.emergency_category; 
-          card.querySelector('.r-time').textContent = "⏰ " + timeStr; 
-          card.querySelector('.r-elapsed').textContent = "⏳ ~" + elapsedMins + " mins ago"; 
-          card.querySelector('.pname').textContent = b.user_name; 
-          card.querySelector('.phosp').textContent = b.hospital_name;
-          card.querySelector('button').onclick = () => promptModal(b.booking_id, safeName, b.user_phone, safeCond, safeHosp, b.user_latitude, b.user_longitude, b.hosp_lat || 0, b.hosp_lng || 0);
-          
-          list.appendChild(card);
+          if (b.priorityStar) card.innerHTML = '<div class="star-badge">⭐ PRIORITY MATCH</div>';
+          const header = document.createElement('div'); header.className = 'req-header';
+          const title = document.createElement('div'); title.className = 'req-title'; title.textContent = safeCond;
+          const timeBox = document.createElement('div'); timeBox.style.textAlign = 'right';
+          const time = document.createElement('div'); time.style.cssText = 'font-size:13px;font-weight:bold;color:var(--text)';
+          const d = new Date(b.booked_at || b.created_at || Date.now());
+          time.textContent = '⏰ ' + (Number.isNaN(d.getTime()) ? 'New request' : d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+          const elapsed = document.createElement('div'); elapsed.style.cssText = 'font-size:13px;color:var(--warning);margin-top:4px';
+          elapsed.textContent = `⏳ ${Number(b.elapsed_mins || 0)} min ago`;
+          timeBox.append(time, elapsed); header.append(title, timeBox); card.append(header);
+          const patient = document.createElement('div'); patient.className = 'req-detail'; patient.innerHTML = '<strong>Patient:</strong> ';
+          patient.append(document.createTextNode(safeName));
+          const dest = document.createElement('div'); dest.className = 'req-detail'; dest.innerHTML = '<strong>Dropoff:</strong> ';
+          dest.append(document.createTextNode(safeHosp));
+          const distance = document.createElement('div'); distance.className = 'req-detail';
+          distance.textContent = `📍 ${b.distance_km ?? '—'} km away · ETA ${b.real_eta ?? '—'} min`;
+          const button = document.createElement('button'); button.className = 'btn primary'; button.style.marginTop = '12px'; button.textContent = 'ACCEPT EMERGENCY';
+          button.onclick = () => promptModal(b.booking_id, safeName, b.user_phone || '', safeCond, safeHosp, b.user_latitude, b.user_longitude, b.hosp_lat || 0, b.hosp_lng || 0);
+          card.append(patient, dest, distance, button); list.appendChild(card);
         });
-      } else { 
-          list.innerHTML = `<p style="text-align:center; color:var(--muted); margin-top:20px;">No emergencies in range.</p>`; 
-          lastEmergencyCount = 0; 
+      } else {
+        list.innerHTML = '<p style="text-align:center;color:var(--muted);margin-top:20px;">No pending emergencies within 8 km for your ambulance type. Scanning automatically…</p>';
+        lastEmergencyCount = 0;
       }
-    } catch(err) { }
+    } catch (err) {
+      console.error('[Driver radar] Failed:', err);
+      if (list) list.innerHTML = `<p style="text-align:center;color:var(--primary);">Radar connection error: ${String(err.message || 'Please retry')}. Retrying automatically…</p>`;
+    }
   }
+
   async function checkActiveMission() {
+    if (!driver.id) return;
     try {
-        // Cache buster here too!
-        const url = `${BASE_URL}/api/driver/active-mission?driver_id=${driver.id}&t=${Date.now()}_${Math.random()}`;
-        const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }); 
-        const data = await res.json();
-        
-        if(data.hasMission) { 
-            clearInterval(radarInterval); 
-            setupActiveMissionUI(data.mission); 
-        } else { 
-            goStep(2); 
-            fetchRadar(); 
-            if(!radarInterval) radarInterval = setInterval(fetchRadar, 5000); 
-        }
-    } catch(err) {}
+      const url = `${BASE_URL}/api/driver/active-mission?driver_id=${encodeURIComponent(driver.id)}&t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.error || `Mission check failed (${res.status})`);
+      if (data.hasMission && data.mission) {
+        if (radarInterval) clearInterval(radarInterval);
+        radarInterval = null;
+        setupActiveMissionUI(data.mission);
+      } else {
+        driver.activeBookingId = null;
+        localStorage.setItem('driver_session', JSON.stringify(driver));
+        goStep(2);
+        await fetchRadar();
+        if (!radarInterval && driver.isOnline) radarInterval = setInterval(fetchRadar, 4000);
+      }
+    } catch (err) {
+      console.error('[Driver mission] Check failed:', err);
+      const list = document.getElementById('emergencyList');
+      if (list) list.innerHTML = `<p style="text-align:center;color:var(--primary);">Cannot refresh driver status: ${String(err.message || 'network error')}.</p>`;
+    }
   }
+
   function initDriverMap(pLat, pLng) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
@@ -932,15 +964,22 @@ async function uploadImageToImgBB(fileInputId) {
   async function pickup() { 
       if (!confirm("Are you sure the patient is in the ambulance? Start trip now?")) return;
       
-      document.getElementById('phase1Box').style.display = 'none'; 
       if (odometerInterval) clearInterval(odometerInterval);
-
-      await fetch(`${BASE_URL}/api/driver/pickup`, { 
-          method: "POST", headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ booking_id: driver.activeBookingId }) 
-      }); 
-      
-      checkActiveMission(); 
+      try {
+        const res = await fetch(`${BASE_URL}/api/driver/pickup`, {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ booking_id: driver.activeBookingId, driver_id: driver.id })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || `Pickup update failed (${res.status})`);
+        document.getElementById('phase1Box').style.display = 'none';
+        document.getElementById('phase2Box').style.display = 'block';
+        await checkActiveMission();
+      } catch (err) {
+        console.error('[Driver pickup] Failed:', err);
+        alert('Could not update pickup status: ' + (err.message || 'Network error'));
+        return;
+      } 
       
       lastLat = driver.lat; 
       lastLng = driver.lng; 
