@@ -371,7 +371,7 @@
 <input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFieldError('userPhone')">
 <div class="field-error" id="err-userPhone">Enter a valid 10-digit Indian number.</div>
 
-<p>Searching 8km radius for the fastest driver.</p>
+<p id="searchStatusText">Searching 8km radius for the fastest driver.</p>
     
     <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
     
@@ -462,7 +462,14 @@
   <div id="step6" class="card hidden">
     <h1 style="color: var(--success);" data-i18n="driver_otw">✅ Driver is on the way!</h1>
     
-    <div id="map"></div> 
+    <div id="map"></div>
+
+    <div id="assignedDriverCard" class="list-item" style="cursor:default; display:none; border-color:#86efac; background:#f0fdf4;">
+        <div class="meta">Assigned Ambulance Driver</div>
+        <div class="title" id="assignedDriverName">Confirming driver details...</div>
+        <div class="meta" id="assignedAmbulanceDetails"></div>
+        <div class="meta" id="assignedDriverPhone"></div>
+    </div> 
     
     <div style="background:#f8fafc; padding:20px; border-radius:16px; border: 1px solid var(--border); margin-bottom:16px; text-align: center;">
       <p style="margin:0; font-weight: bold; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-size: 12px;">Estimated Arrival</p>
@@ -1081,69 +1088,116 @@ function initPatientMap() {
       }
   }
 
-  // 🛡️ ULTIMATE BUG FIX: Bulletproof transitions and error handling
-async function checkStatus() {
-  if (!state.bookingId) return;
-  try {
-    const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${state.bookingId}&t=${Date.now()}`);
-    const data = await res.json();
-    console.log("📡 LIVE STATUS:", data.status);
+  // Poll the server for the authoritative booking status.
+  async function checkStatus() {
+    if (!state.bookingId) return;
 
-    // 🛡️ FIX 1: Stop timer immediately when driver is found
-    if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
-      if (searchInterval) {
-        clearInterval(searchInterval);
-        searchInterval = null;
+    try {
+      const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${encodeURIComponent(state.bookingId)}&t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" }
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || `Status request failed (${res.status})`);
+      }
+
+      console.log("[Patient] Booking status:", data.status, "booking:", state.bookingId);
+
+      if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
+        if (searchInterval) {
+          clearInterval(searchInterval);
+          searchInterval = null;
+        }
         searchTimer = 0;
-        document.getElementById('timerText').innerText = "0";
-      }
-    }
+        const timer = document.getElementById("timerText");
+        if (timer) timer.innerText = "0";
 
-    if (data.status === "COMPLETED") {
-      console.log("✅ Trip completed detected");
-      clearInterval(pollInterval);
-      pollInterval = null;
-            // 🛡️ FIX 2: Clear booking from localStorage so refresh doesn't re-poll
-      state.bookingId = null;
-      state.lastCompletedAt = Date.now();
-      localStorage.setItem('patient_session', JSON.stringify(state));
-      
-      document.getElementById('step5')?.classList.add('hidden');
-      document.getElementById('step6')?.classList.add('hidden');
-      goStep(7);
-      document.getElementById("receiptHospital").innerText = data.hospital_name || state.hospitalName || "--";
-      document.getElementById("receiptDist").innerText = `${data.distance || 0} km`;
-      document.getElementById("receiptCost").innerText = `₹${data.final_cost || 0}`;
-      return;
-    }
-
-    if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
-      if (currentStep !== 6) {
-        goStep(6);
-        setTimeout(() => {
-          try {
-            if (typeof initPatientMap === "function" && !window.leafletMap) {
-              initPatientMap();
-              setTimeout(() => {
-                if (window.leafletMap) leafletMap.invalidateSize();
-              }, 300);
+        if (currentStep !== 6) {
+          goStep(6);
+          setTimeout(() => {
+            try {
+              if (typeof initPatientMap === "function" && !window.leafletMap) initPatientMap();
+              if (window.leafletMap) window.leafletMap.invalidateSize();
+            } catch (e) {
+              console.warn("[Patient] Map initialization issue:", e);
             }
-          } catch (e) {
-            console.log("Map safe fail:", e);
-          }
-        }, 400);
+          }, 350);
+        }
+
+        const etaEl = document.getElementById("etaTime");
+        const distEl = document.getElementById("etaDist");
+        const hospitalEl = document.getElementById("trackHospital");
+        if (etaEl) etaEl.innerText = typeof data.eta === "number" ? `${data.eta} min` : (data.eta || "Calculating...");
+        if (distEl) distEl.innerText = data.distance || "Calculating...";
+        if (hospitalEl) hospitalEl.innerText = data.hospital_name || state.hospitalName || "--";
+
+        const driverCard = document.getElementById("assignedDriverCard");
+        if (driverCard) driverCard.style.display = "block";
+        const driverName = document.getElementById("assignedDriverName");
+        if (driverName) driverName.innerText = data.driver_name || "Driver assigned";
+        const vehicle = document.getElementById("assignedAmbulanceDetails");
+        if (vehicle) {
+          const parts = [data.driver_ambulance_type, data.ambulance_number].filter(Boolean);
+          vehicle.innerText = parts.length ? `🚑 ${parts.join(" • ")}` : "Ambulance details updating...";
+        }
+        const phone = document.getElementById("assignedDriverPhone");
+        if (phone) phone.innerText = data.driver_phone ? `📞 ${data.driver_phone}` : "";
+
+        if (data.driver_lat != null && data.driver_lng != null) {
+          updateDriverOnMap(Number(data.driver_lat), Number(data.driver_lng));
+        }
+
+        const heading = document.querySelector("#step6 h1");
+        if (heading) heading.innerText = data.status === "IN_TRANSIT"
+          ? "🚑 Patient is on the way to the hospital"
+          : "✅ Driver assigned — ambulance is on the way!";
+        return;
       }
-      let displayEta = data.eta || "--";
-      if (typeof data.eta === 'number') displayEta = data.eta + " min";
-      document.getElementById("etaTime").innerText = displayEta;
-      document.getElementById("etaDist").innerText = data.distance || "--";
-      document.getElementById("trackHospital").innerText = data.hospital_name || state.hospitalName || "--";
+
+      if (data.status === "COMPLETED") {
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = null;
+        if (searchInterval) clearInterval(searchInterval);
+        searchInterval = null;
+
+        state.bookingId = null;
+        state.lastCompletedAt = Date.now();
+        localStorage.setItem("patient_session", JSON.stringify(state));
+
+        document.getElementById("step5")?.classList.add("hidden");
+        document.getElementById("step6")?.classList.add("hidden");
+        goStep(7);
+        document.getElementById("receiptHospital").innerText = data.hospital_name || state.hospitalName || "--";
+        document.getElementById("receiptDist").innerText = `${data.distance || 0} km`;
+        document.getElementById("receiptCost").innerText = `₹${data.final_cost || 0}`;
+        return;
+      }
+
+      if (data.status === "CANCELLED") {
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = null;
+        if (searchInterval) clearInterval(searchInterval);
+        searchInterval = null;
+        const statusText = document.getElementById("searchStatusText");
+        if (statusText) statusText.innerText = "This booking was cancelled. Please return home and place a new request if you still need an ambulance.";
+        document.getElementById("step5")?.classList.remove("hidden");
+        document.getElementById("step6")?.classList.add("hidden");
+        return;
+      }
+
+      const statusText = document.getElementById("searchStatusText");
+      if (statusText && currentStep === 5) statusText.innerText = "Request sent. Waiting for a nearby driver to accept...";
+    } catch (err) {
+      console.error("[Patient] Booking status check failed:", err);
+      const statusText = document.getElementById("searchStatusText");
+      if (statusText && currentStep === 5) {
+        statusText.innerText = "Connection issue while checking driver status. Retrying automatically...";
+      }
     }
-  } catch (err) {
-    console.error("Polling Error:", err);
-    setTimeout(checkStatus, 3000);
   }
-}
+
   function changeDestination() { 
       isUpdatingDestination = true; 
       document.getElementById('step3Title').innerText = "Update Destination"; 
