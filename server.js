@@ -239,11 +239,18 @@ app.get("/api/user/eta", (req, res) => {
             driver_name: b.driver_name || null, driver_phone: b.driver_phone || null,
             driver_ambulance_type: b.driver_ambulance_type || null,
             ambulance_number: b.ambulance_number || null,
-            driver_lat: b.driver_lat, driver_lng: b.driver_lng
+            driver_lat: b.driver_lat, driver_lng: b.driver_lng,
+            ambulance_type: b.ambulance_type || b.driver_ambulance_type || null,
+            emergency_category: b.emergency_category || null,
+            price_per_km: Number(b.price_per_km || 0),
+            booked_at: b.booked_at || null,
+            completed_at: b.completed_at || null
         };
         if (status === "COMPLETED") {
             payload.final_cost = Number(b.final_cost || 0);
+            // hospital_distance_km is the billed (rounded-up) distance saved at completion.
             payload.distance = Number(b.hospital_distance_km || 0).toFixed(2);
+            payload.billed_distance = Number(b.hospital_distance_km || 0);
             return res.json(payload);
         }
         if (b.driver_lat != null && b.driver_lng != null && Number(b.driver_lat) !== 0 && Number(b.driver_lng) !== 0 && b.user_latitude != null && b.user_longitude != null) {
