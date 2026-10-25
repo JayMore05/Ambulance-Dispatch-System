@@ -1222,7 +1222,7 @@ function initPatientMap() {
         // A dedicated tracking page owns the assigned/in-transit experience.
         // Keep the booking ID in localStorage so the tracking page can poll reliably.
         saveState();
-        window.location.replace(`tracking.html?booking_id=${encodeURIComponent(state.bookingId)}`);
+        window.location.replace(`/tracking.html?booking_id=${encodeURIComponent(state.bookingId)}`);
         return;
       }
 
@@ -1232,7 +1232,7 @@ function initPatientMap() {
         if (searchInterval) clearInterval(searchInterval);
         searchInterval = null;
         saveState();
-        window.location.replace(`receipt.html?booking_id=${encodeURIComponent(state.bookingId)}`);
+        window.location.replace(`/receipt.html?booking_id=${encodeURIComponent(state.bookingId)}`);
         return;
       }
 
@@ -1249,7 +1249,7 @@ function initPatientMap() {
       }
 
       const statusText = document.getElementById("searchStatusText");
-      if (statusText && currentStep === 5) statusText.innerText = "Request sent. Waiting for a nearby driver to accept...";
+      if (statusText && (currentStep === 5 || currentStep === 6)) statusText.innerText = `Server booking status: ${data.status || "UNKNOWN"}. Waiting for driver acceptance…`;
     } catch (err) {
       console.error("[Patient] Booking status check failed:", err);
       const statusText = document.getElementById("searchStatusText");
