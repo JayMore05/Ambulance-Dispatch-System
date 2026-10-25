@@ -402,15 +402,22 @@ app.post("/api/driver/accept", (req, res) => {
     if (!Number.isInteger(driverId) || driverId <= 0 || !Number.isInteger(bookingId) || bookingId <= 0) {
         return res.status(400).json({ success: false, message: "Valid driver and booking IDs are required." });
     }
-    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED', accepted_at = NOW() WHERE booking_id = ? AND status = 'REQUESTED'`;
+    // Keep the critical assignment update limited to core columns. Some existing
+    // production schemas do not have the optional accepted_at timestamp column.
+    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
     db.query(query, [driverId, bookingId], (err, result) => {
         if (err) {
-            console.error("[Driver accept] Failed:", err.message);
-            return res.status(500).json({ success: false, message: "Database error while accepting this request." });
+            // Log the exact SQL error in Render logs for diagnosis; don't hide it there.
+            console.error("[Driver accept] Failed:", err.code || "DB_ERROR", err.message);
+            return res.status(500).json({ success: false, message: "Database error while accepting this request. Check the server logs." });
         }
         if (!result || result.affectedRows !== 1) {
-            return res.status(409).json({ success: false, message: "This request is no longer available. Refresh the radar." });
+            return res.status(409).json({ success: false, message: "This request is no longer available or is not in REQUESTED status. Refresh the radar." });
         }
+        // Optional timestamp: do not let a missing legacy column break assignment.
+        db.query(`UPDATE bookings SET accepted_at = NOW() WHERE booking_id = ?`, [bookingId], (timestampErr) => {
+            if (timestampErr) console.warn("[Driver accept] Optional accepted_at timestamp unavailable:", timestampErr.code || timestampErr.message);
+        });
         console.log(`[Driver accept] booking=${bookingId} assigned_to_driver=${driverId}`);
         return res.json({ success: true, booking_id: bookingId, status: "ASSIGNED", message: "Booking assigned to you." });
     });
