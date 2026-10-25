@@ -373,7 +373,8 @@
 
 <p>We will search for an available ambulance within an 8 km radius.</p>
     
-    <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
+    <p id="locStatus" role="status" aria-live="polite" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Getting your current location…</p>
+    <button id="retryGpsBtn" type="button" class="btn ghost" style="display:none; margin-top:8px; padding:10px; font-size:14px;" onclick="acquireUserLocation(true)">📍 Retry location</button>
     
     <button class="btn primary" style="margin-top:16px;" onclick="saveUser()" data-i18n="find_hosp">Find Hospitals ➔</button>
   </div>
@@ -666,50 +667,115 @@
       }); 
   }
 
-  // ⚡ ULTRA FAST GPS ON LOAD
-window.onload = () => {
-    const savedState = localStorage.getItem('patient_session');
-        if (savedState) { 
-        state = JSON.parse(savedState);
-        // Don't re-poll if trip was recently completed
-        if (state.lastCompletedAt && Date.now() - state.lastCompletedAt < 300000) {
-            state.bookingId = null;
-        }
-        if (state.bookingId) { 
-            pollInterval = setInterval(checkStatus, currentPollRate); 
-            checkStatus(); 
-            return; 
-        } 
-    }
-  // ... rest of GPS code stays the same
-    
-    const statusEl = document.getElementById('locStatus');
-    
-    const useFallback = () => {
-        console.warn("GPS timeout. Using estimated location.");
-        statusEl.innerText = "⚠️ Weak Signal. Defaulting location. You can proceed!";
-        statusEl.style.color = "#e53935"; 
-        state.userLat = 19.0760; 
-        state.userLng = 72.8777; 
-    };
+  // Location acquisition: use a quick network-assisted fix first, then a GPS retry.
+  let locationRequestInProgress = false;
+  let locationLastUpdatedAt = null;
 
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => { 
-                state.userLat = pos.coords.latitude; 
-                state.userLng = pos.coords.longitude; 
-                statusEl.innerText = "✅ GPS Locked Instantly"; 
-                statusEl.style.color = "var(--success)"; 
-            },
-            (err) => { 
-                useFallback();
-            },
-            { enableHighAccuracy: false, timeout: 2000, maximumAge: Infinity }
-        );
-    } else { 
-        useFallback();
+  function setLocationMessage(message, color = "var(--muted)", showRetry = false) {
+    const statusEl = document.getElementById("locStatus");
+    const retryBtn = document.getElementById("retryGpsBtn");
+    if (statusEl) {
+      statusEl.textContent = message;
+      statusEl.style.color = color;
     }
-  };  
+    if (retryBtn) retryBtn.style.display = showRetry ? "block" : "none";
+  }
+
+  function getPosition(options) {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        const err = new Error("Geolocation is not supported by this browser.");
+        err.code = 0;
+        reject(err);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+  }
+
+  async function acquireUserLocation(manualRetry = false) {
+    if (locationRequestInProgress) return false;
+    if (!window.isSecureContext) {
+      setLocationMessage("⚠️ Location requires HTTPS. Open the secure https:// site.", "#e53935", true);
+      return false;
+    }
+
+    locationRequestInProgress = true;
+    const retryBtn = document.getElementById("retryGpsBtn");
+    if (retryBtn) retryBtn.disabled = true;
+    setLocationMessage(manualRetry ? "📍 Retrying location… please allow the browser permission prompt." : "📍 Getting your current location…", "var(--muted)", false);
+
+    try {
+      let position;
+      try {
+        // Usually quickest on phones: reuse a recent fix or use network-assisted location.
+        position = await getPosition({ enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 });
+      } catch (firstError) {
+        // A permission denial cannot be fixed by another GPS request; show actionable guidance.
+        if (firstError && firstError.code === 1) throw firstError;
+        setLocationMessage("📍 Signal is taking longer. Trying a more accurate GPS fix…", "var(--muted)", false);
+        position = await getPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+      }
+
+      const lat = Number(position.coords.latitude);
+      const lng = Number(position.coords.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        throw new Error("The browser returned invalid coordinates.");
+      }
+
+      state.userLat = lat;
+      state.userLng = lng;
+      locationLastUpdatedAt = Date.now();
+      saveState();
+      const accuracy = Number(position.coords.accuracy);
+      const accuracyText = Number.isFinite(accuracy) ? ` (accuracy about ${Math.round(accuracy)} m)` : "";
+      setLocationMessage(`✅ Current location detected${accuracyText}.`, "var(--success)", false);
+      console.log("[GPS] Location acquired", { latitude: lat, longitude: lng, accuracy, timestamp: locationLastUpdatedAt });
+      return true;
+    } catch (err) {
+      console.error("[GPS] Location failed:", err);
+      let message = "⚠️ Could not get your location. Turn on Location/GPS and allow location access for this site, then tap Retry.";
+      if (err && err.code === 1) {
+        message = "⚠️ Location permission is blocked. In your browser site settings, allow Location, then tap Retry.";
+      } else if (err && err.code === 2) {
+        message = "⚠️ Your device could not determine a location. Turn on device Location and enable Wi-Fi/mobile data, then tap Retry.";
+      } else if (err && err.code === 3) {
+        message = "⚠️ Location timed out. Move near a window or outdoors, keep Location on, and tap Retry.";
+      } else if (!navigator.geolocation) {
+        message = "⚠️ This browser does not support location. Open the site in Chrome or Safari.";
+      }
+      setLocationMessage(message, "#e53935", true);
+      return false;
+    } finally {
+      locationRequestInProgress = false;
+      if (retryBtn) retryBtn.disabled = false;
+    }
+  }
+
+  window.onload = () => {
+    const savedState = localStorage.getItem("patient_session");
+    if (savedState) {
+      try {
+        state = { ...state, ...JSON.parse(savedState) };
+      } catch (err) {
+        console.warn("[Patient] Saved session could not be restored:", err);
+      }
+      if (state.lastCompletedAt && Date.now() - state.lastCompletedAt < 300000) {
+        state.bookingId = null;
+      }
+      if (state.bookingId) {
+        pollInterval = setInterval(checkStatus, currentPollRate);
+        checkStatus();
+        return;
+      }
+    }
+
+    // Do not substitute a hard-coded Mumbai coordinate: that can dispatch an ambulance
+    // to the wrong place. Ask for a real location and let the user retry if permission fails.
+    state.userLat = null;
+    state.userLng = null;
+    acquireUserLocation(false);
+  };
 
   // 🛡️ TAB SWITCH FIX: Instantly updates radar screen when you switch back to Patient A
  // 🛡️ AGGRESSIVE TAB RECOVERY: Forces phone to wake up the network and restart polling
@@ -780,6 +846,15 @@ window.onload = () => {
     // Strict 10-digit Indian Number validation (starts with 6,7,8, or 9)
     if (!/^[6-9]\d{9}$/.test(phone)) { showFieldError('userPhone', 'Enter a valid 10-digit Indian number.'); valid = false; }
     if (!valid) return;
+
+    // Location must be real before hospital/ambulance matching; never silently use a fake fallback.
+    if (state.userLat == null || state.userLng == null || !Number.isFinite(Number(state.userLat)) || !Number.isFinite(Number(state.userLng))) {
+      const locationReady = await acquireUserLocation(true);
+      if (!locationReady) {
+        alert("We need your current location to find a nearby ambulance. Please allow Location access and try again.");
+        return;
+      }
+    }
     
     try {
       const res = await fetch(BASE_URL + "/api/save-user", { 
