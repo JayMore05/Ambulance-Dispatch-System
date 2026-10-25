@@ -371,7 +371,7 @@
 <input id="userPhone" type="tel" placeholder="10-digit mobile number" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, ''); clearFieldError('userPhone')">
 <div class="field-error" id="err-userPhone">Enter a valid 10-digit Indian number.</div>
 
-<p id="searchStatusText">Searching 8km radius for the fastest driver.</p>
+<p>We will search for an available ambulance within an 8 km radius.</p>
     
     <p id="locStatus" style="font-weight:bold; margin-top:12px; font-size:13px; line-height:1.5;">📍 Acquiring GPS instantly...</p>
     
@@ -452,7 +452,7 @@
       <div class="pulse">🚑</div>
       <h1 data-i18n="broadcasting">Broadcasting...</h1>
       <h2 style="color:var(--primary); font-size:45px; margin: 10px 0;"><span id="timerText">120</span>s</h2>
-      <p>Searching 8km radius for the fastest driver.</p>
+      <p id="searchStatusText">Searching within 8 km for an available driver...</p>
       
       <button class="btn ghost" style="margin-top:15px; padding: 10px; font-size:14px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;" onclick="checkStatus()">🔄 Refresh Status</button>
       
@@ -600,16 +600,17 @@
 
   let lastRouteFetchTime = 0;
   async function drawOSRMRoute(fromLat, fromLng, toLat, toLng) {
-    if (!leafletMap) return;
+    const activeMap = window.leafletMap || leafletMap;
+    if (!activeMap) return;
     if (Date.now() - lastRouteFetchTime < 60000 && osrmRoute) return; 
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.routes && data.routes.length > 0) {
-        if (osrmRoute) leafletMap.removeLayer(osrmRoute);
-        osrmRoute = L.geoJSON(data.routes[0].geometry, { style: { color: '#e53935', weight: 4, opacity: 0.8, dashArray: '8, 4' } }).addTo(leafletMap);
-        leafletMap.fitBounds(osrmRoute.getBounds().pad(0.3));
+        if (osrmRoute) activeMap.removeLayer(osrmRoute);
+        osrmRoute = L.geoJSON(data.routes[0].geometry, { style: { color: '#e53935', weight: 4, opacity: 0.8, dashArray: '8, 4' } }).addTo(activeMap);
+        activeMap.fitBounds(osrmRoute.getBounds().pad(0.3));
         lastRouteFetchTime = Date.now();
       }
     } catch(e) {}
@@ -931,50 +932,96 @@ window.onload = () => {
 }
 
   async function selectAmbulance(type, rate) {
-    state.ambulanceType = type; 
-    state.rate = rate; 
-    saveState(); 
+    state.ambulanceType = type;
+    state.rate = rate;
+    saveState();
+
+    // Stop any previous booking timers before creating a new request.
+    if (pollInterval) clearInterval(pollInterval);
+    if (searchInterval) clearInterval(searchInterval);
+    pollInterval = null;
+    searchInterval = null;
+
+    const statusText = document.getElementById("searchStatusText");
+    if (statusText) statusText.innerText = "Sending your request to nearby drivers...";
     goStep(5);
-    
+
     try {
-      const res = await fetch(BASE_URL + "/api/bookings", { 
-          method: "POST", 
-          headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ 
-              user_id: state.userId, 
-              hospital_id: state.hospitalId, 
-              custom_destination: state.customName, 
-              emergency_type: state.emergency, 
-              ambulance_type: state.ambulanceType, 
-              user_lat: state.userLat, 
-              user_lng: state.userLng, 
-              distance_km: state.distance, 
-              rate_per_km: state.rate 
-          }) 
+      const res = await fetch(BASE_URL + "/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: state.userId,
+          hospital_id: state.hospitalId,
+          custom_destination: state.customName,
+          emergency_type: state.emergency,
+          ambulance_type: state.ambulanceType,
+          user_lat: state.userLat,
+          user_lng: state.userLng,
+          distance_km: state.distance,
+          rate_per_km: state.rate
+        })
       });
-      const data = await res.json(); 
-      state.bookingId = data.booking_id; 
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false || !data.booking_id) {
+        throw new Error(data.error || `Booking request failed (${res.status})`);
+      }
+
+      state.bookingId = data.booking_id;
       saveState();
-      
-      subscribePushForBooking(data.booking_id);
-      
-      if(pollInterval) clearInterval(pollInterval); 
-      if(searchInterval) clearInterval(searchInterval);
-      
-      pollInterval = setInterval(checkStatus, currentPollRate); 
-      checkStatus();
-      
-      searchTimer = 120; 
-      document.getElementById('timerText').innerText = searchTimer;
-      searchInterval = setInterval(() => { 
-          searchTimer--; 
-          document.getElementById('timerText').innerText = searchTimer; 
-          if(searchTimer <= 0) { 
-              clearInterval(searchInterval); 
-              if (currentStep === 5) { confirmCancel(); goStep(8); } 
-          } 
+
+      // Push subscription is optional; booking/status polling must work without it.
+      subscribePushForBooking(data.booking_id).catch(err =>
+        console.warn("[Patient] Push subscription unavailable:", err)
+      );
+
+      searchTimer = 120;
+      const timerEl = document.getElementById("timerText");
+      if (timerEl) timerEl.innerText = String(searchTimer);
+
+      searchInterval = setInterval(() => {
+        searchTimer -= 1;
+        const timer = document.getElementById("timerText");
+        if (timer) timer.innerText = String(Math.max(0, searchTimer));
+
+        if (searchTimer <= 0) {
+          if (searchInterval) clearInterval(searchInterval);
+          searchInterval = null;
+
+          // Keep the patient on the no-driver screen and cancel only this pending request.
+          if (currentStep === 5 && state.bookingId) {
+            const expiredBookingId = state.bookingId;
+            fetch(`${BASE_URL}/api/bookings/cancel`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ booking_id: expiredBookingId })
+            }).catch(err => console.warn("[Patient] Could not cancel expired request:", err));
+
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = null;
+            state.bookingId = null;
+            saveState();
+            const status = document.getElementById("searchStatusText");
+            if (status) status.innerText = "No driver accepted within 120 seconds. Please call 112 if this is an emergency.";
+            goStep(8);
+          }
+        }
       }, 1000);
-    } catch(err) { alert("Network Failed."); goStep(4); }
+
+      pollInterval = setInterval(checkStatus, currentPollRate);
+      await checkStatus();
+    } catch (err) {
+      console.error("[Patient] Booking creation failed:", err);
+      if (pollInterval) clearInterval(pollInterval);
+      if (searchInterval) clearInterval(searchInterval);
+      pollInterval = null;
+      searchInterval = null;
+      state.bookingId = null;
+      saveState();
+      alert(err.message || "Could not create the booking. Please check your connection and try again.");
+      goStep(4);
+    }
   }
 
   // ==========================================
@@ -1153,6 +1200,10 @@ function initPatientMap() {
         if (heading) heading.innerText = data.status === "IN_TRANSIT"
           ? "🚑 Patient is on the way to the hospital"
           : "✅ Driver assigned — ambulance is on the way!";
+        const searchStatus = document.getElementById("searchStatusText");
+        if (searchStatus) searchStatus.innerText = data.status === "IN_TRANSIT"
+          ? "Patient picked up. The ambulance is travelling to the hospital."
+          : "Driver accepted your request. The ambulance is on the way.";
         return;
       }
 
