@@ -101,6 +101,161 @@
 
     #driverMap { height: 200px; width: 100%; border-radius: 12px; margin-bottom: 15px; border: 1px solid var(--border); z-index: 1; }
     .analytics-box { background: rgba(76, 175, 80, 0.1); border: 1px solid var(--success); padding: 15px; border-radius: 12px; display: flex; justify-content: space-around; text-align: center; margin-bottom: 15px; }
+  
+
+    /* UI-only responsive refresh: preserves all existing driver options and behavior */
+    :root {
+      --bg: #0b1220;
+      --card: #111c2e;
+      --border: #26354b;
+      --primary: #ff554f;
+      --success: #22c55e;
+      --text: #f7f9fc;
+      --muted: #a8b6ca;
+      --highlight: #17263b;
+      --warning: #ffc857;
+      --info: #38bdf8;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 10% 0%, rgba(56,189,248,.09), transparent 34rem),
+        radial-gradient(ellipse at 95% 15%, rgba(255,85,79,.08), transparent 30rem),
+        var(--bg);
+      line-height: 1.5;
+      padding-bottom: calc(82px + env(safe-area-inset-bottom));
+    }
+    button, input, select, a { -webkit-tap-highlight-color: transparent; }
+    button, .btn, .auth-tab, .nav-item, input, select { transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(56,189,248,.65);
+      outline-offset: 3px;
+    }
+
+    .topbar {
+      padding: 14px clamp(16px, 3vw, 32px);
+      background: rgba(11,18,32,.88);
+      border-bottom-color: rgba(148,163,184,.18);
+      box-shadow: 0 8px 28px rgba(0,0,0,.16);
+    }
+    .brand { letter-spacing: -.035em; font-size: clamp(1.05rem, 2vw, 1.3rem); }
+    .container {
+      width: min(100%, 1040px);
+      padding: clamp(14px, 2.4vw, 28px);
+    }
+    .card {
+      background: linear-gradient(145deg, rgba(21,33,52,.98), rgba(15,25,41,.98));
+      border-color: rgba(148,163,184,.17);
+      border-radius: 22px;
+      padding: clamp(18px, 2.5vw, 28px);
+      box-shadow: 0 16px 42px rgba(0,0,0,.2);
+    }
+    h1 { letter-spacing: -.035em; line-height: 1.2; }
+    p { color: var(--muted); }
+    label { letter-spacing: .055em; }
+    input, select {
+      min-height: 48px;
+      background: #0b1525;
+      border-color: #34445d;
+      border-radius: 13px;
+    }
+    input::placeholder { color: #71829b; }
+    input:focus, select:focus {
+      border-color: var(--info);
+      box-shadow: 0 0 0 3px rgba(56,189,248,.12);
+    }
+    input[type="checkbox"] { accent-color: var(--success); }
+    .btn {
+      min-height: 48px;
+      border-radius: 14px;
+      letter-spacing: .005em;
+      box-shadow: 0 5px 14px rgba(0,0,0,.12);
+    }
+    .btn:hover { filter: brightness(1.07); }
+    .btn:disabled { opacity: .65; cursor: wait; transform: none; }
+    .btn.primary { box-shadow: 0 8px 20px rgba(255,85,79,.17); }
+    .btn.success { box-shadow: 0 8px 20px rgba(34,197,94,.13); }
+    .auth-tabs { gap: 12px; }
+    .auth-tab { border-radius: 13px; padding: 13px 10px; }
+    .request-card {
+      padding: clamp(15px, 2vw, 22px);
+      background: rgba(20,34,54,.9);
+      border-color: #2d405a;
+      border-radius: 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    }
+    .request-card.priority {
+      background: linear-gradient(135deg, rgba(255,200,87,.11), rgba(20,34,54,.95));
+      box-shadow: 0 0 0 1px rgba(255,200,87,.08);
+    }
+    .req-header { gap: 12px; }
+    .req-title { line-height: 1.35; overflow-wrap: anywhere; }
+    .req-detail { line-height: 1.55; overflow-wrap: anywhere; }
+    .star-badge { border: 1px solid rgba(255,200,87,.25); }
+    .radar-box { padding: clamp(24px, 4vw, 42px) 10px; }
+    #driverMap { height: clamp(220px, 34vw, 360px); border-radius: 16px; overflow: hidden; }
+    .analytics-box { gap: 14px; background: rgba(34,197,94,.08); border-radius: 16px; }
+    .modal-overlay { overflow-y: auto; }
+    .modal { max-height: min(90dvh, 760px); overflow-y: auto; border-color: rgba(255,85,79,.55); border-radius: 22px; }
+
+    .bottom-nav {
+      padding: 10px max(10px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      background: rgba(11,18,32,.94);
+      border-top-color: rgba(148,163,184,.2);
+      backdrop-filter: blur(18px);
+      gap: 8px;
+    }
+    .nav-item { flex: 1; min-height: 44px; padding: 10px 12px; border-radius: 12px; }
+    .nav-item.active { background: rgba(255,85,79,.13); }
+
+    @media (min-width: 760px) {
+      body { padding-bottom: 28px; }
+      .topbar { padding-left: max(28px, calc((100vw - 1100px) / 2)); padding-right: max(28px, calc((100vw - 1100px) / 2)); }
+      .container { display: grid; grid-template-columns: minmax(0, 1fr); }
+      #step1, #stepPending { max-width: 700px; width: 100%; justify-self: center; }
+      #step2, #step3, #step4, #step5, #step6 { width: 100%; }
+      #step2:has(#emergencyList:not(:empty)) #emergencyList {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        align-items: start;
+      }
+      #emergencyList .request-card { margin-bottom: 0; min-width: 0; }
+      #step3 { max-width: 900px; justify-self: center; }
+      #step4, #step5, #step6 { max-width: 900px; justify-self: center; }
+      #driverMap { height: 380px; }
+      .bottom-nav { position: static; max-width: 640px; margin: 0 auto 24px; border: 1px solid var(--border); border-radius: 16px; }
+    }
+
+    @media (max-width: 520px) {
+      .topbar { padding: 12px 14px; }
+      .container { padding: 12px; }
+      .card { border-radius: 18px; padding: 16px; margin-bottom: 12px; }
+      h1 { font-size: 19px; }
+      .auth-tabs { gap: 8px; }
+      .auth-tab { font-size: 14px; padding: 11px 7px; }
+      .req-header { flex-direction: column; align-items: stretch; }
+      .req-header > div:last-child { text-align: left !important; }
+      .analytics-box { padding: 13px 8px; }
+      .analytics-box > div { min-width: 0; }
+      .analytics-box h1 { font-size: 21px; overflow-wrap: anywhere; }
+      #step3 > div:first-child { flex-wrap: wrap; gap: 10px; }
+      #btnCallPatient { flex: 0 0 auto; }
+      #driverMap { height: 230px; }
+      .modal-overlay { padding: 12px; }
+      .modal { padding: 18px; }
+      .modal-overlay .modal > div[style*="display:flex"] { flex-wrap: wrap; }
+      .modal-overlay .modal > div[style*="display:flex"] .btn { flex: 1 1 130px; }
+      .bottom-nav { gap: 4px; padding-left: 6px; padding-right: 6px; }
+      .nav-item { font-size: 12px; padding: 9px 5px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+
   </style>
 </head>
 <body>
