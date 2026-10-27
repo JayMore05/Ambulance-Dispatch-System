@@ -442,15 +442,22 @@ app.post("/api/driver/accept", (req, res) => {
     if (!Number.isInteger(driverId) || driverId <= 0 || !Number.isInteger(bookingId) || bookingId <= 0) {
         return res.status(400).json({ success: false, message: "Valid driver and booking IDs are required." });
     }
-    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED', accepted_at = NOW() WHERE booking_id = ? AND status = 'REQUESTED'`;
+    // Keep the critical assignment update compatible with older production schemas.
+    // accepted_at is optional and must not prevent the booking from being assigned.
+    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
     db.query(query, [driverId, bookingId], (err, result) => {
         if (err) {
-            console.error("[Driver accept] Failed:", err.message);
-            return res.status(500).json({ success: false, message: "Database error while accepting this request." });
+            // Exact database reason is visible in Render logs for quick diagnosis.
+            console.error("[Driver accept] Failed:", err.code || "DB_ERROR", err.message);
+            return res.status(500).json({ success: false, message: "Database error while accepting this request. Check Render logs for [Driver accept] Failed." });
         }
         if (!result || result.affectedRows !== 1) {
-            return res.status(409).json({ success: false, message: "This request is no longer available. Refresh the radar." });
+            return res.status(409).json({ success: false, message: "This request is no longer available or is not in REQUESTED status. Refresh the driver radar." });
         }
+        // Optional timestamp: a missing legacy column must not undo successful assignment.
+        db.query(`UPDATE bookings SET accepted_at = NOW() WHERE booking_id = ?`, [bookingId], (timestampErr) => {
+            if (timestampErr) console.warn("[Driver accept] Optional accepted_at timestamp unavailable:", timestampErr.code || timestampErr.message);
+        });
         console.log(`[Driver accept] booking=${bookingId} assigned_to_driver=${driverId}`);
         return res.json({ success: true, booking_id: bookingId, status: "ASSIGNED", message: "Booking assigned to you." });
     });
@@ -462,12 +469,16 @@ app.post("/api/driver/pickup", (req, res) => {
     if (!Number.isInteger(driverId) || driverId <= 0 || !Number.isInteger(bookingId) || bookingId <= 0) {
         return res.status(400).json({ success: false, message: "Valid driver and booking IDs are required." });
     }
-    db.query(`UPDATE bookings SET status = 'IN_TRANSIT', picked_up_at = NOW() WHERE booking_id = ? AND driver_id = ? AND status = 'ASSIGNED'`, [bookingId, driverId], (err, result) => {
+    // picked_up_at is optional in some older database schemas; status transition is essential.
+    db.query(`UPDATE bookings SET status = 'IN_TRANSIT' WHERE booking_id = ? AND driver_id = ? AND status = 'ASSIGNED'`, [bookingId, driverId], (err, result) => {
         if (err) {
-            console.error("[Driver pickup] Failed:", err.message);
-            return res.status(500).json({ success: false, message: "Could not update pickup status." });
+            console.error("[Driver pickup] Failed:", err.code || "DB_ERROR", err.message);
+            return res.status(500).json({ success: false, message: "Could not update pickup status. Check Render logs." });
         }
         if (!result || result.affectedRows !== 1) return res.status(409).json({ success: false, message: "This booking is not assigned to this driver or was already updated." });
+        db.query(`UPDATE bookings SET picked_up_at = NOW() WHERE booking_id = ?`, [bookingId], (timestampErr) => {
+            if (timestampErr) console.warn("[Driver pickup] Optional picked_up_at timestamp unavailable:", timestampErr.code || timestampErr.message);
+        });
         return res.json({ success: true, booking_id: bookingId, status: "IN_TRANSIT", message: "Patient picked up." });
     });
 });
@@ -500,11 +511,17 @@ app.post("/api/driver/complete", (req, res) => {
         // 3. Exact Cost Calculation
         const final_cost = billed_distance * rate;
         
-        db.query(`UPDATE bookings SET status = 'COMPLETED', hospital_distance_km = ?, final_cost = ? WHERE booking_id = ?`, 
+        db.query(`UPDATE bookings SET status = 'COMPLETED', hospital_distance_km = ?, final_cost = ? WHERE booking_id = ?`,
         [billed_distance, final_cost, booking_id], (err2) => {
-            if (err2) return res.json({ success: false, message: "Database Error: " + err2.message });
-            db.query(`UPDATE bookings SET completed_at = NOW() WHERE booking_id = ?`, [booking_id], () => {});
-            res.json({ success: true, final_cost: final_cost, billed_distance: billed_distance });
+            if (err2) {
+                console.error("[Driver complete] Failed:", err2.code || "DB_ERROR", err2.message);
+                return res.status(500).json({ success: false, message: "Could not complete trip. Check Render logs." });
+            }
+            // completed_at is optional in older schemas; receipt status/cost are already saved.
+            db.query(`UPDATE bookings SET completed_at = NOW() WHERE booking_id = ?`, [booking_id], (timestampErr) => {
+                if (timestampErr) console.warn("[Driver complete] Optional completed_at timestamp unavailable:", timestampErr.code || timestampErr.message);
+            });
+            return res.json({ success: true, status: "COMPLETED", final_cost: final_cost, billed_distance: billed_distance });
         });
     });
 });
