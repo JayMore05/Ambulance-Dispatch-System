@@ -862,7 +862,7 @@ async function uploadImageToImgBB(fileInputId) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
       // 🛡️ CARTODB MAPS - NO BAN!
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(dMap);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(dMap);
       driverMarker = L.marker([driver.lat, driver.lng]).addTo(dMap).bindPopup("<b>You (Ambulance)</b>").openPopup();
       patientMarker = L.marker([pLat, pLng]).addTo(dMap).bindPopup("<b>Patient Location</b>").openPopup();
       let group = new L.featureGroup([driverMarker, patientMarker]); 
