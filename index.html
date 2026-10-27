@@ -1202,6 +1202,58 @@ function initPatientMap() {
       }
   }
 
+  // Patient ride lifecycle stays on this page; do not rely on a separate tracking page redirect.
+  function safeRideText(value, fallback = "Not available") {
+    return value === null || value === undefined || value === "" ? fallback : String(value);
+  }
+  function showRidePanel(data, completed = false) {
+    let panel = document.getElementById("fastRescueRidePanel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "fastRescueRidePanel";
+      panel.setAttribute("role", "status");
+      panel.setAttribute("aria-live", "polite");
+      panel.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(8,18,32,.88);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;font-family:Arial,sans-serif;";
+      document.body.appendChild(panel);
+    }
+    const status = String(data.status || "ASSIGNED").toUpperCase();
+    const title = completed ? "You have reached the hospital" : status === "IN_TRANSIT" ? "Your ride is in progress" : "Your ambulance driver is assigned";
+    const subtitle = completed ? "The driver has closed this ride. Here is your final fare summary." : status === "IN_TRANSIT" ? "The driver has picked you up and started the trip. Keep this page open for live updates." : "Your request was accepted. Driver and ambulance details are shown below.";
+    const card = document.createElement("div");
+    card.style.cssText = "width:min(620px,100%);background:#fff;color:#142033;border-radius:22px;padding:24px;box-shadow:0 20px 70px #0008;max-height:94vh;overflow:auto;";
+    const badge = document.createElement("div"); badge.textContent = completed ? "RIDE COMPLETED" : status === "IN_TRANSIT" ? "IN TRANSIT" : "DRIVER ASSIGNED";
+    badge.style.cssText = "display:inline-block;padding:8px 12px;border-radius:999px;background:"+(completed?"#dcfce7":status === "IN_TRANSIT"?"#dbeafe":"#ffedd5")+";color:#16324f;font-weight:800;font-size:12px;letter-spacing:.5px;";
+    const h = document.createElement("h2"); h.textContent = title; h.style.cssText = "font-size:26px;line-height:1.2;margin:16px 0 8px;";
+    const p = document.createElement("p"); p.textContent = subtitle; p.style.cssText = "color:#526174;line-height:1.5;margin:0 0 18px;";
+    card.append(badge,h,p);
+    const rows = completed ? [
+      ["Booking ID", safeRideText(data.booking_id)], ["Destination hospital", safeRideText(data.hospital_name)],
+      ["Billed distance", safeRideText(data.distance, "0.00") + " km"], ["Final ride cost", "₹" + (Number(data.final_cost) || 0).toFixed(2)]
+    ] : [
+      ["Booking ID", safeRideText(data.booking_id, safeRideText(state.bookingId))], ["Driver name", safeRideText(data.driver_name, "Driver assigned")],
+      ["Driver phone", safeRideText(data.driver_phone)], ["Ambulance", [data.driver_ambulance_type || data.ambulance_type, data.ambulance_number].filter(Boolean).join(" • ") || "Details updating"],
+      ["Destination hospital", safeRideText(data.hospital_name)], ["Emergency", safeRideText(data.emergency_category)],
+      ["Estimated arrival", typeof data.eta === "number" ? data.eta + " min" : safeRideText(data.eta, "Calculating…")],
+      ["Distance from driver", safeRideText(data.distance, "Calculating…") + (data.distance && data.distance !== "Calculating..." ? " km" : "")]
+    ];
+    const grid = document.createElement("div"); grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:18px 0;";
+    rows.forEach(([label,value]) => { const item=document.createElement("div"); item.style.cssText="background:#f3f6fa;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-width:0;"; const l=document.createElement("div");l.textContent=label;l.style.cssText="font-size:12px;color:#64748b;margin-bottom:6px;";const v=document.createElement("div");v.textContent=value;v.style.cssText="font-size:15px;font-weight:700;overflow-wrap:anywhere;";item.append(l,v);grid.appendChild(item); });
+    card.appendChild(grid);
+    if (completed) {
+      const note=document.createElement("p"); note.textContent="Ride closed successfully. Please keep this fare summary for your records."; note.style.cssText="background:#ecfdf5;color:#166534;padding:12px;border-radius:10px;";card.appendChild(note);
+      const home=document.createElement("button");home.textContent="Back to FastRescue";home.style.cssText="width:100%;padding:14px;border:0;border-radius:12px;background:#0f766e;color:white;font-weight:800;font-size:15px;cursor:pointer;";home.onclick=()=>{panel.remove();if(pollInterval)clearInterval(pollInterval);if(searchInterval)clearInterval(searchInterval);pollInterval=null;searchInterval=null;state.bookingId=null;saveState();};card.appendChild(home);
+    } else {
+      if (data.driver_phone) { const call=document.createElement("a");call.href="tel:"+String(data.driver_phone).replace(/[^\d+]/g,"");call.textContent="Call driver";call.style.cssText="display:block;text-align:center;text-decoration:none;padding:13px;border-radius:12px;background:#0f766e;color:white;font-weight:800;margin-bottom:10px;";card.appendChild(call); }
+      const refresh=document.createElement("button");refresh.textContent="Refresh ride status";refresh.style.cssText="width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:12px;background:white;color:#142033;font-weight:800;cursor:pointer;";refresh.onclick=()=>checkStatus();card.appendChild(refresh);
+      const emergency=document.createElement("a");emergency.href="tel:112";emergency.textContent="Emergency? Call 112";emergency.style.cssText="display:block;text-align:center;margin-top:14px;color:#b91c1c;font-weight:700;";card.appendChild(emergency);
+    }
+    panel.replaceChildren(card);
+    if (!panel.dataset.notified && status !== "REQUESTED") {
+      panel.dataset.notified = "yes";
+      try { if ("Notification" in window && Notification.permission === "granted") new Notification(completed ? "FastRescue: Hospital reached" : "FastRescue: Driver assigned", { body: completed ? "Your ride is complete. Tap the page to view the fare." : "Your ambulance driver has accepted the request." }); } catch (_) {}
+    }
+  }
+
   // Poll the server for the authoritative booking status.
   async function checkStatus() {
     if (!state.bookingId || statusCheckInFlight) return;
@@ -1221,10 +1273,11 @@ function initPatientMap() {
       console.log("[Patient] Booking status:", data.status, "booking:", state.bookingId);
 
       if (data.status === "ASSIGNED" || data.status === "IN_TRANSIT") {
-        // A dedicated tracking page owns the assigned/in-transit experience.
-        // Keep the booking ID in localStorage so the tracking page can poll reliably.
+        // Keep the patient in index.html and render assignment details here. This avoids
+        // losing the flow if a static tracking page is missing or deployed at another path.
         saveState();
-        window.location.replace(`/tracking.html?booking_id=${encodeURIComponent(state.bookingId)}`);
+        showRidePanel(data, false);
+        if (!pollInterval) pollInterval = setInterval(checkStatus, currentPollRate);
         return;
       }
 
@@ -1234,7 +1287,7 @@ function initPatientMap() {
         if (searchInterval) clearInterval(searchInterval);
         searchInterval = null;
         saveState();
-        window.location.replace(`/receipt.html?booking_id=${encodeURIComponent(state.bookingId)}`);
+        showRidePanel(data, true);
         return;
       }
 
