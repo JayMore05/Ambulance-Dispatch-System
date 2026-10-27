@@ -1014,19 +1014,29 @@ async function uploadImageToImgBB(fileInputId) {
 }
 
 async function completeTrip() {
-      clearInterval(odometerInterval); clearInterval(missionInterval); 
-      odometerInterval = null; missionInterval = null;
-
-      const res = await fetch(`${BASE_URL}/api/driver/complete`, { 
-          method: "POST", headers: {"Content-Type":"application/json"}, 
-          body: JSON.stringify({ booking_id: driver.activeBookingId, actual_distance: totalDrivenKm }) 
-      }); 
-      const data = await res.json();
-      
-      // Use the verified billed distance returned by the server
-      document.getElementById('receiptDist').innerText = (data.billed_distance || 0) + " km"; 
-      document.getElementById('receiptCost').innerText = data.final_cost || 0; 
-      goStep(6); 
+      if (!driver.activeBookingId) { alert("No active booking is attached to this driver."); return; }
+      if (!confirm("Confirm that the patient has reached the hospital and close this ride?")) return;
+      const completeButton = document.querySelector('#phase2Box button[onclick*="completeTrip"]');
+      if (completeButton) completeButton.disabled = true;
+      try {
+        const res = await fetch(`${BASE_URL}/api/driver/complete`, {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ booking_id: driver.activeBookingId, driver_id: driver.id, actual_distance: totalDrivenKm })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success || data.status !== "COMPLETED") throw new Error(data.message || `Server could not close this ride (${res.status})`);
+        if (odometerInterval) clearInterval(odometerInterval);
+        if (missionInterval) clearInterval(missionInterval);
+        odometerInterval = null; missionInterval = null;
+        document.getElementById('receiptDist').innerText = (data.billed_distance || 0) + " km";
+        document.getElementById('receiptCost').innerText = Number(data.final_cost || 0).toFixed(2);
+        goStep(6);
+      } catch (err) {
+        console.error('[Driver complete] Failed:', err);
+        alert('Ride was not closed on the server: ' + (err.message || 'Network error') + '. Please retry and do not tell the patient the ride is complete yet.');
+      } finally {
+        if (completeButton) completeButton.disabled = false;
+      }
   }
   
 function closeReceipt() { 
