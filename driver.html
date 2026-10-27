@@ -413,6 +413,8 @@
   let driver = JSON.parse(localStorage.getItem('driver_session')) || { id: null, lat: null, lng: null, type: "ALS", activeBookingId: null, isOnline: false, status: null };
   let driverGpsReady = false; // Require a fresh browser GPS fix each session; do not trust stale/default coordinates.
   let radarInterval = null; 
+  let radarRequestInFlight = false;
+  let missionRequestInFlight = false;
   let isRegisterMode = false; 
   let lastEmergencyCount = 0; 
   let pendingAcceptData = null; 
@@ -475,7 +477,8 @@
                 driverGpsReady = true;
                 localStorage.setItem('driver_session', JSON.stringify(driver));
                 if (driverMarker) driverMarker.setLatLng([driver.lat, driver.lng]);
-                if (driver.isOnline && !driver.activeBookingId) fetchRadar(); 
+                // Radar is refreshed by its timer, not every GPS callback.
+                // Calling fetchRadar on every GPS update created excessive API traffic. 
                 
                 if (driver.isOnline && Date.now() - lastCityFetch > 300000) {
                     lastCityFetch = Date.now();
@@ -744,7 +747,7 @@ async function uploadImageToImgBB(fileInputId) {
         if (radarInterval) clearInterval(radarInterval);
         startGPSSending();
         fetchRadar();
-        radarInterval = setInterval(fetchRadar, 4000); 
+        radarInterval = setInterval(fetchRadar, 8000); 
     } else { 
         if (wakeLock) wakeLock.release(); 
         document.getElementById('radarTitle').innerText = "You are Offline"; 
@@ -762,12 +765,13 @@ async function uploadImageToImgBB(fileInputId) {
 
   // 🛡️ FRONTEND UPDATE ONLY: Formatting time and calculating elapsed minutes
  async function fetchRadar() {
-    if (!driver.isOnline || driver.activeBookingId) return;
+    if (!driver.isOnline || driver.activeBookingId || radarRequestInFlight) return;
     const list = document.getElementById('emergencyList');
     if (!driverGpsReady || !Number.isFinite(Number(driver.lat)) || !Number.isFinite(Number(driver.lng))) {
       if (list) list.innerHTML = '<p style="text-align:center;color:var(--primary);">Getting your live location… Allow location access to receive nearby requests.</p>';
       return;
     }
+    radarRequestInFlight = true;
     try {
       const url = `${BASE_URL}/api/driver/radar?driverLat=${encodeURIComponent(driver.lat)}&driverLng=${encodeURIComponent(driver.lng)}&driverType=${encodeURIComponent(driver.type || '')}&t=${Date.now()}`;
       const res = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
@@ -818,11 +822,14 @@ async function uploadImageToImgBB(fileInputId) {
     } catch (err) {
       console.error('[Driver radar] Failed:', err);
       if (list) list.innerHTML = `<p style="text-align:center;color:var(--primary);">Radar connection error: ${String(err.message || 'Please retry')}. Retrying automatically…</p>`;
+    } finally {
+      radarRequestInFlight = false;
     }
   }
 
   async function checkActiveMission() {
-    if (!driver.id) return;
+    if (!driver.id || missionRequestInFlight) return;
+    missionRequestInFlight = true;
     try {
       const url = `${BASE_URL}/api/driver/active-mission?driver_id=${encodeURIComponent(driver.id)}&t=${Date.now()}`;
       const res = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
@@ -836,13 +843,18 @@ async function uploadImageToImgBB(fileInputId) {
         driver.activeBookingId = null;
         localStorage.setItem('driver_session', JSON.stringify(driver));
         goStep(2);
-        await fetchRadar();
-        if (!radarInterval && driver.isOnline) radarInterval = setInterval(fetchRadar, 4000);
+        // Start radar once. If its interval already exists, let that timer refresh it.
+        if (!radarInterval && driver.isOnline) {
+          await fetchRadar();
+          radarInterval = setInterval(fetchRadar, 8000);
+        }
       }
     } catch (err) {
       console.error('[Driver mission] Check failed:', err);
       const list = document.getElementById('emergencyList');
       if (list) list.innerHTML = `<p style="text-align:center;color:var(--primary);">Cannot refresh driver status: ${String(err.message || 'network error')}.</p>`;
+    } finally {
+      missionRequestInFlight = false;
     }
   }
 
@@ -890,7 +902,7 @@ async function uploadImageToImgBB(fileInputId) {
     goStep(3); 
     startGPSSending(); 
     setTimeout(() => { initDriverMap(m.user_latitude, m.user_longitude); dMap.invalidateSize(); }, 200);
-    if(!missionInterval) { missionInterval = setInterval(checkActiveMission, 5000); }
+    if(!missionInterval) { missionInterval = setInterval(checkActiveMission, 8000); }
   }
 
   function sendWhatsAppToPatient() {
@@ -1033,7 +1045,7 @@ function closeReceipt() {
     stopGPSSending(); 
     fetchRadar(); 
     if(radarInterval) { clearInterval(radarInterval); } 
-    radarInterval = setInterval(fetchRadar, 5000); 
+    radarInterval = setInterval(fetchRadar, 8000); 
     document.querySelectorAll('.nav-item').forEach(btn => { btn.classList.remove('active'); }); 
     document.querySelectorAll('.nav-item')[0].classList.add('active'); 
 }
