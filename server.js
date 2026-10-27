@@ -218,6 +218,10 @@ app.post("/api/bookings", (req, res) => {
   });
 }
 
+       res.json({ success: true, booking_id: result.insertId });
+    });
+});
+
 app.post("/api/bookings/cancel", (req, res) => {
     const { booking_id } = req.body;
     
