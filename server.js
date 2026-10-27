@@ -204,14 +204,19 @@ app.post("/api/bookings", (req, res) => {
     }
     db.query(`INSERT INTO bookings (user_id, hospital_id, custom_destination, emergency_category, ambulance_type, user_latitude, user_longitude, hospital_distance_km, price_per_km, status, booked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', NOW())`,
     [user_id, hospital_id || null, custom_destination || null, emergency_type, ambulance_type, Number(user_lat), Number(user_lng), distance_km || 0, rate_per_km || 0], (err, result) => {
-        if (err) {
-            console.error("[Booking] Insert failed:", err.message);
-            return res.status(500).json({ success: false, error: "Could not create booking. Please retry." });
-        }
-        console.log(`[Booking] Created booking ${result.insertId} as REQUESTED`);
-        res.status(201).json({ success: true, booking_id: result.insertId, status: "REQUESTED" });
-    });
-});
+       if (err) {
+  console.error("[Booking] Insert failed:", {
+    message: err.message,
+    code: err.code,
+    ambulance_type_received: JSON.stringify(ambulance_type),
+    ambulance_type_js_type: typeof ambulance_type
+  });
+
+  return res.status(500).json({
+    success: false,
+    error: "Could not create booking. Please retry."
+  });
+}
 
 app.post("/api/bookings/cancel", (req, res) => {
     const { booking_id } = req.body;
