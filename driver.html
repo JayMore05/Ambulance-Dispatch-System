@@ -13,9 +13,6 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
-  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-  <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 
   <style>
     :root {
@@ -865,7 +862,7 @@ async function uploadImageToImgBB(fileInputId) {
       if (dMap) return;
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
       // 🛡️ CARTODB MAPS - NO BAN!
-      L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(dMap);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(dMap);
       driverMarker = L.marker([driver.lat, driver.lng]).addTo(dMap).bindPopup("<b>You (Ambulance)</b>").openPopup();
       patientMarker = L.marker([pLat, pLng]).addTo(dMap).bindPopup("<b>Patient Location</b>").openPopup();
       let group = new L.featureGroup([driverMarker, patientMarker]); 
@@ -1053,7 +1050,7 @@ function closeReceipt() {
     
     driver.activeBookingId = null; totalDrivenKm = 0; currentMissionHospital = null; dMap = null; driverMarker = null; patientMarker = null; 
     goStep(2); 
-    document.getElementById('radarTitle').innerText = "Scanning 15km Radius..."; 
+    document.getElementById('radarTitle').innerText = "Scanning 8 km Radius..."; 
     document.querySelector('.pulse').style.display = "flex"; 
     stopGPSSending(); 
     fetchRadar(); 
