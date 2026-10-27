@@ -634,7 +634,8 @@
   let pollInterval = null; 
   let searchTimer = 120; 
   let searchInterval = null; 
-  let currentPollRate = 5000; 
+  let currentPollRate = 8000; // Poll every 8 seconds to reduce unnecessary API traffic
+  let statusCheckInFlight = false; // Prevent overlapping status requests
   let searchDebounceTimer = null;
   let leafletMap = null; 
   let patientMarker = null; 
@@ -783,7 +784,7 @@
       if (document.visibilityState === "visible") {
           if (state.bookingId && (currentStep === 5 || currentStep === 6)) { 
               if(pollInterval) clearInterval(pollInterval);
-              pollInterval = setInterval(checkStatus, 3000); // Force active 3s polling
+              pollInterval = setInterval(checkStatus, currentPollRate); // Resume one normal polling interval
               setTimeout(checkStatus, 500); // Wait half a second for 4G/WiFi to wake up, then check
           }
       }
@@ -1203,7 +1204,8 @@ function initPatientMap() {
 
   // Poll the server for the authoritative booking status.
   async function checkStatus() {
-    if (!state.bookingId) return;
+    if (!state.bookingId || statusCheckInFlight) return;
+    statusCheckInFlight = true;
 
     try {
       const res = await fetch(`${BASE_URL}/api/user/eta?booking_id=${encodeURIComponent(state.bookingId)}&t=${Date.now()}`, {
@@ -1254,8 +1256,12 @@ function initPatientMap() {
       console.error("[Patient] Booking status check failed:", err);
       const statusText = document.getElementById("searchStatusText");
       if (statusText && (currentStep === 5 || currentStep === 6)) {
-        statusText.innerText = "Connection issue checking booking status. Retrying automatically…";
+        statusText.innerText = /429|rate limit/i.test(String(err.message))
+          ? "Status service is busy. Retrying automatically…"
+          : "Connection issue checking booking status. Retrying automatically…";
       }
+    } finally {
+      statusCheckInFlight = false;
     }
   }
 
