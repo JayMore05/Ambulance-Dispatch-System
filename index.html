@@ -574,6 +574,186 @@
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
 
+  
+    /* Full patient journey redesign: visual styles only; all labels, values, prices and handlers stay in existing markup/JS */
+    .container { max-width: 900px; }
+    #step1, #step2, #step3, #step4, #step5, #step6, #step7, #step8 {
+      position: relative;
+      isolation: isolate;
+    }
+    #step1 {
+      margin-top: clamp(14px, 3vw, 28px);
+      padding-top: clamp(26px, 4vw, 42px);
+      background:
+        radial-gradient(ellipse at 100% 0%, rgba(220,38,38,.075), transparent 24rem),
+        linear-gradient(150deg, #fff 0%, #fff 68%, #fff8f8 100%);
+    }
+    #step1::before {
+      content: "EMERGENCY CARE, MADE SIMPLE";
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin-bottom: 16px;
+      border: 1px solid #fecaca;
+      border-radius: 999px;
+      background: #fff1f2;
+      color: #b91c1c;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .11em;
+    }
+    #step1 .page-header h1 {
+      max-width: 600px;
+      font-size: clamp(1.65rem, 4vw, 2.45rem);
+      line-height: 1.08;
+      letter-spacing: -1.15px;
+    }
+    #step1 > p:first-of-type { max-width: 580px; font-size: 15px; }
+    #step1 label:not(.switch) { margin-top: 19px; }
+    #step1 #locStatus {
+      padding: 13px 15px;
+      border: 1px solid #dbeafe;
+      border-radius: 14px;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+    #step2 > div[style*="grid-template-columns"] { gap: 12px !important; }
+    #step2 .list-item {
+      min-height: 126px;
+      align-items: flex-start;
+      justify-content: center;
+      border-color: #e3eaf3;
+      background: linear-gradient(145deg, #fff, #f8fafc);
+    }
+    #step2 .list-item > span:first-child {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      margin-bottom: 5px;
+      border: 1px solid #fee2e2;
+      border-radius: 14px;
+      background: #fff1f2;
+      font-size: 23px !important;
+    }
+    #step2 .list-item b { font-size: 14px; line-height: 1.4; }
+    #step2 .list-item:hover {
+      border-color: #f87171;
+      background: #fffafa;
+      box-shadow: 0 10px 24px rgba(220,38,38,.075);
+      transform: translateY(-2px);
+    }
+    #step3 #hospSearch { margin-bottom: 18px !important; }
+    #ayushmanFilterBox {
+      background: linear-gradient(120deg, #f0fdf4, #f7fff9);
+      border-color: #bbf7d0;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+    }
+    #hospitalList { display: grid; gap: 11px; }
+    #hospitalList > .list-item,
+    #hospitalList > button,
+    #ambulanceOptions > .list-item,
+    #ambulanceOptions > button {
+      width: 100%;
+      margin-bottom: 0;
+      text-align: left;
+    }
+    #hospitalList .list-item { border-left: 4px solid #dbeafe; }
+    #hospitalList .list-item:hover { border-left-color: #dc2626; }
+    #step3 > div[style*="text-align: center"] { margin-top: 18px !important; }
+    #step3 > div[style*="text-align: center"] .btn { max-width: 100%; }
+    #costEstimate {
+      background: linear-gradient(135deg, #eff6ff, #f8fbff) !important;
+      border-color: #bfdbfe !important;
+      border-radius: 16px !important;
+      padding: 17px !important;
+    }
+    #step4 > button.list-item {
+      min-height: 104px;
+      justify-content: center;
+      border-color: #fed7aa !important;
+      border-left: 5px solid #f59e0b !important;
+      background: linear-gradient(120deg, #fffbeb, #fff 90%) !important;
+    }
+    #step4 > button.list-item .title { font-size: 16px; }
+    #ambulanceOptions { display: grid; gap: 12px; }
+    #ambulanceOptions > .list-item,
+    #ambulanceOptions > button {
+      position: relative;
+      min-height: 105px;
+      padding: 19px;
+      border: 1px solid #e0e8f2;
+      border-radius: 18px;
+      background: linear-gradient(140deg, #fff, #fbfdff);
+      box-shadow: 0 4px 14px rgba(15,23,42,.035);
+    }
+    #ambulanceOptions > .list-item:hover,
+    #ambulanceOptions > button:hover {
+      border-color: #99f6e4;
+      box-shadow: 0 12px 25px rgba(15,118,110,.09);
+      transform: translateY(-2px);
+    }
+    #ambulanceOptions .title { font-size: 16px; }
+    #ambulanceOptions .meta { font-size: 14px; }
+    #ambulanceOptions .cost-badge {
+      display: inline-block;
+      border-radius: 9px;
+      padding: 6px 10px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 850;
+    }
+    #step5 { background: linear-gradient(155deg, #fff, #fff8f8); }
+    #step5 .radar-box { padding: clamp(22px, 5vw, 42px) 8px; }
+    #step5 .pulse {
+      width: 112px;
+      height: 112px;
+      border: 1px solid #fecaca;
+      background: radial-gradient(circle, #fff 20%, #fee2e2 100%);
+      box-shadow: 0 10px 28px rgba(220,38,38,.1);
+    }
+    #timerText { font-variant-numeric: tabular-nums; }
+    #searchStatusText {
+      max-width: 480px;
+      margin-inline: auto;
+      padding: 12px 15px;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      background: #f8fafc;
+    }
+    #step6 > h1 { font-size: clamp(1.35rem, 3.5vw, 1.9rem); letter-spacing: -.6px; margin: 4px 0 18px; }
+    #step6 > div[style*="text-align: center"] { background: linear-gradient(135deg, #f8fafc, #eff6ff) !important; }
+    #step6 .btn.sos { box-shadow: 0 8px 18px rgba(15,118,110,.17); }
+    #step7, #step8 { overflow: hidden; }
+    #historyModalContent > div {
+      border-radius: 16px !important;
+      padding: 18px !important;
+      box-shadow: 0 5px 16px rgba(15,23,42,.04);
+    }
+    #historyModalContent > div strong { line-height: 1.45; }
+    .field-error { padding-left: 2px; }
+    .btn:disabled, button:disabled { cursor: not-allowed; opacity: .6; box-shadow: none; }
+
+    @media (min-width: 700px) {
+      #step1 { padding: 38px 42px; }
+      #step2, #step3, #step4, #step5, #step6, #step7, #step8 { padding: 32px; }
+      #step3 #hospitalList { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      #step3 #hospitalList > p { grid-column: 1 / -1; }
+    }
+    @media (max-width: 699px) {
+      #step1::before { font-size: 9px; }
+      #step1 .page-header h1 { font-size: 1.75rem; }
+      #step2 .list-item { min-height: 112px; }
+      #step2 .list-item > span:first-child { width: 39px; height: 39px; }
+      #step4 > button.list-item { min-height: 94px; }
+      #ambulanceOptions > .list-item,
+      #ambulanceOptions > button { min-height: 95px; padding: 15px; }
+      #step6 > div[style*="display:flex"] { flex-wrap: wrap; }
+      #step6 > div[style*="display:flex"] > * { flex: 1 1 130px; width: auto !important; }
+    }
+
   </style>
 <base target="_blank">
 </head>
