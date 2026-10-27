@@ -14,6 +14,11 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <!-- OpenFreeMap integration (no API key required) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
+
   <style>
     :root {
         --bg: #121212; --card: #1e1e1e; --border: #333;
@@ -860,12 +865,25 @@ async function uploadImageToImgBB(fileInputId) {
 
   function initDriverMap(pLat, pLng) {
       if (dMap) return;
+
       dMap = L.map('driverMap').setView([driver.lat, driver.lng], 13);
-      // 🛡️ CARTODB MAPS - NO BAN!
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(dMap);
-      driverMarker = L.marker([driver.lat, driver.lng]).addTo(dMap).bindPopup("<b>You (Ambulance)</b>").openPopup();
-      patientMarker = L.marker([pLat, pLng]).addTo(dMap).bindPopup("<b>Patient Location</b>").openPopup();
-      let group = new L.featureGroup([driverMarker, patientMarker]); 
+
+      // OpenFreeMap — no API key required
+      L.maplibreGL({
+          style: 'https://tiles.openfreemap.org/styles/liberty'
+      }).addTo(dMap);
+
+      driverMarker = L.marker([driver.lat, driver.lng])
+          .addTo(dMap)
+          .bindPopup("<b>You (Ambulance)</b>")
+          .openPopup();
+
+      patientMarker = L.marker([pLat, pLng])
+          .addTo(dMap)
+          .bindPopup("<b>Patient Location</b>")
+          .openPopup();
+
+      let group = new L.featureGroup([driverMarker, patientMarker]);
       dMap.fitBounds(group.getBounds().pad(0.5));
   }
 
