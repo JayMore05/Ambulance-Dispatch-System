@@ -57,19 +57,56 @@ const strictLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-const generalLimiter = rateLimit({ 
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200, // 200 requests per 15 min per IP
-    message: { error: "Rate limit exceeded" }
+// Frequent read-only polling endpoints get their own limiter. The patient page
+// checks booking status repeatedly while a driver is being assigned; counting
+// those checks against the 200-request general limit caused the patient UI to
+// remain on "Searching" after HTTP 429 responses.
+const patientStatusLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 900, // Separate counter for patient status checks
+    message: { success: false, error: "Patient status polling limit reached. Please retry shortly." },
+    standardHeaders: true,
+    legacyHeaders: false
 });
 
-// Apply strict limits to sensitive endpoints
+const driverPollingLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 900, // Separate counter for driver radar, mission and GPS requests
+    message: { success: false, error: "Driver polling limit reached. Please retry shortly." },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 200,
+    message: { success: false, error: "Rate limit exceeded. Please wait and retry." },
+    standardHeaders: true,
+    legacyHeaders: false,
+    // These endpoints are protected by dedicated polling limiters above. Do not count them
+    // a second time against the general API quota.
+    skip: (req) => {
+        const url = req.originalUrl.split("?")[0];
+        return url === "/api/user/eta" ||
+               url === "/api/driver/radar" ||
+               url === "/api/driver/active-mission" ||
+               url === "/api/driver/location";
+    }
+});
+
+// Apply sensitive-operation limits (booking creation/cancel remains protected).
 app.use("/api/driver/accept", strictLimiter);
 app.use("/api/driver/request-otp", strictLimiter);
 app.use("/api/save-user", strictLimiter);
 app.use("/api/bookings", strictLimiter);
 
-// General limit for everything else
+// Dedicated limits for polling endpoints must run before the general API limiter.
+app.use("/api/user/eta", patientStatusLimiter);
+app.use("/api/driver/radar", driverPollingLimiter);
+app.use("/api/driver/active-mission", driverPollingLimiter);
+app.use("/api/driver/location", driverPollingLimiter);
+
+// General limit for the remaining API endpoints.
 app.use("/api/", generalLimiter);
 
 if (!process.env.JWT_SECRET) {
@@ -211,6 +248,9 @@ app.post("/api/bookings/update-destination", (req, res) => {
 });
 
 app.get("/api/user/eta", (req, res) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
     const bookingId = Number(req.query.booking_id);
     if (!Number.isInteger(bookingId) || bookingId <= 0) {
         return res.status(400).json({ success: false, error: "A valid booking_id is required." });
@@ -239,18 +279,11 @@ app.get("/api/user/eta", (req, res) => {
             driver_name: b.driver_name || null, driver_phone: b.driver_phone || null,
             driver_ambulance_type: b.driver_ambulance_type || null,
             ambulance_number: b.ambulance_number || null,
-            driver_lat: b.driver_lat, driver_lng: b.driver_lng,
-            ambulance_type: b.ambulance_type || b.driver_ambulance_type || null,
-            emergency_category: b.emergency_category || null,
-            price_per_km: Number(b.price_per_km || 0),
-            booked_at: b.booked_at || null,
-            completed_at: b.completed_at || null
+            driver_lat: b.driver_lat, driver_lng: b.driver_lng
         };
         if (status === "COMPLETED") {
             payload.final_cost = Number(b.final_cost || 0);
-            // hospital_distance_km is the billed (rounded-up) distance saved at completion.
             payload.distance = Number(b.hospital_distance_km || 0).toFixed(2);
-            payload.billed_distance = Number(b.hospital_distance_km || 0);
             return res.json(payload);
         }
         if (b.driver_lat != null && b.driver_lng != null && Number(b.driver_lat) !== 0 && Number(b.driver_lng) !== 0 && b.user_latitude != null && b.user_longitude != null) {
@@ -409,22 +442,15 @@ app.post("/api/driver/accept", (req, res) => {
     if (!Number.isInteger(driverId) || driverId <= 0 || !Number.isInteger(bookingId) || bookingId <= 0) {
         return res.status(400).json({ success: false, message: "Valid driver and booking IDs are required." });
     }
-    // Keep the critical assignment update limited to core columns. Some existing
-    // production schemas do not have the optional accepted_at timestamp column.
-    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED' WHERE booking_id = ? AND status = 'REQUESTED'`;
+    const query = `UPDATE bookings SET driver_id = ?, status = 'ASSIGNED', accepted_at = NOW() WHERE booking_id = ? AND status = 'REQUESTED'`;
     db.query(query, [driverId, bookingId], (err, result) => {
         if (err) {
-            // Log the exact SQL error in Render logs for diagnosis; don't hide it there.
-            console.error("[Driver accept] Failed:", err.code || "DB_ERROR", err.message);
-            return res.status(500).json({ success: false, message: "Database error while accepting this request. Check the server logs." });
+            console.error("[Driver accept] Failed:", err.message);
+            return res.status(500).json({ success: false, message: "Database error while accepting this request." });
         }
         if (!result || result.affectedRows !== 1) {
-            return res.status(409).json({ success: false, message: "This request is no longer available or is not in REQUESTED status. Refresh the radar." });
+            return res.status(409).json({ success: false, message: "This request is no longer available. Refresh the radar." });
         }
-        // Optional timestamp: do not let a missing legacy column break assignment.
-        db.query(`UPDATE bookings SET accepted_at = NOW() WHERE booking_id = ?`, [bookingId], (timestampErr) => {
-            if (timestampErr) console.warn("[Driver accept] Optional accepted_at timestamp unavailable:", timestampErr.code || timestampErr.message);
-        });
         console.log(`[Driver accept] booking=${bookingId} assigned_to_driver=${driverId}`);
         return res.json({ success: true, booking_id: bookingId, status: "ASSIGNED", message: "Booking assigned to you." });
     });
